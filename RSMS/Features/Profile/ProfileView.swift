@@ -63,6 +63,12 @@ struct ProfileView: View {
 
                         // Menu items
                         VStack(spacing: 0) {
+                            if appState.isAuthenticated && !appState.isGuest {
+                                NavigationLink(destination: ClientProfileEditView()) {
+                                    profileRowContent(icon: "square.and.pencil", title: "Edit Profile", subtitle: "Update your personal details")
+                                }
+                            }
+
                             NavigationLink(destination: OrdersListView()) {
                                 profileRowContent(icon: "bag", title: "My Orders", subtitle: "Track your orders")
                             }
@@ -108,10 +114,12 @@ struct ProfileView: View {
                         .foregroundColor(AppColors.textPrimaryDark)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {}) {
-                        Image(systemName: "gearshape")
-                            .font(AppTypography.gearIcon)
-                            .foregroundColor(AppColors.textPrimaryDark)
+                    if appState.isAuthenticated && !appState.isGuest {
+                        NavigationLink(destination: ClientProfileEditView()) {
+                            Image(systemName: "square.and.pencil")
+                                .font(AppTypography.gearIcon)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                        }
                     }
                 }
             }

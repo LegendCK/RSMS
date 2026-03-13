@@ -11,7 +11,7 @@ import Foundation
 
 struct UserDTO: Codable, Identifiable {
     let id: UUID
-    let role: String                // "corporate_admin" | "boutique_manager" | "sales_associate" | "inventory_controller" | "service_technician" | "client"
+    let role: String                // "corporate_admin" | "boutique_manager" | "sales_associate" | "aftersales_specialist" | "client"
     let storeId: UUID?
     let firstName: String
     let lastName: String
@@ -46,10 +46,26 @@ struct UserDTO: Codable, Identifiable {
         case "corporate_admin":      return .corporateAdmin
         case "boutique_manager":     return .boutiqueManager
         case "sales_associate":      return .salesAssociate
+        case "aftersales_specialist": return .serviceTechnician
         case "inventory_controller": return .inventoryController
         case "service_technician":   return .serviceTechnician
         default:                     return .customer
         }
+    }
+
+    /// Creates a session profile from a `clients` table row.
+    init(clientProfile: ClientDTO) {
+        self.id = clientProfile.id
+        self.role = "client"
+        self.storeId = nil
+        self.firstName = clientProfile.firstName
+        self.lastName = clientProfile.lastName
+        self.email = clientProfile.email
+        self.phone = clientProfile.phone
+        self.avatarUrl = nil
+        self.isActive = clientProfile.isActive
+        self.createdAt = clientProfile.createdAt
+        self.updatedAt = clientProfile.updatedAt
     }
 }
 

@@ -27,7 +27,7 @@ struct ClientDTO: Codable, Identifiable {
     let state: String?
     let postalCode: String?
     let country: String?            // ISO alpha-2 country code
-    let segment: String?            // "standard" | "gold" | "platinum" | "prive"
+    let segment: String?            // "standard" | "silver" | "gold" | "vip" | "ultra_vip"
     let notes: String?
     let gdprConsent: Bool
     let marketingOptIn: Bool
@@ -70,6 +70,7 @@ struct ClientDTO: Codable, Identifiable {
 // MARK: - Insert Payload
 
 struct ClientInsertDTO: Codable {
+    let id: UUID
     let firstName: String
     let lastName: String
     let email: String
@@ -78,7 +79,10 @@ struct ClientInsertDTO: Codable {
     let nationality: String?
     let preferredLanguage: String?
     let addressLine1: String?
+    let addressLine2: String?
     let city: String?
+    let state: String?
+    let postalCode: String?
     let country: String?
     let segment: String
     let notes: String?
@@ -88,6 +92,7 @@ struct ClientInsertDTO: Codable {
     let isActive: Bool
 
     enum CodingKeys: String, CodingKey {
+        case id
         case firstName      = "first_name"
         case lastName       = "last_name"
         case email, phone
@@ -95,10 +100,45 @@ struct ClientInsertDTO: Codable {
         case nationality
         case preferredLanguage = "preferred_language"
         case addressLine1   = "address_line1"
-        case city, country, segment, notes
+        case addressLine2   = "address_line2"
+        case city, state
+        case postalCode     = "postal_code"
+        case country, segment, notes
         case gdprConsent    = "gdpr_consent"
         case marketingOptIn = "marketing_opt_in"
         case createdBy      = "created_by"
         case isActive       = "is_active"
+    }
+}
+
+struct ClientUpdateDTO: Codable {
+    let firstName: String
+    let lastName: String
+    let phone: String?
+    let dateOfBirth: String?
+    let nationality: String?
+    let preferredLanguage: String?
+    let addressLine1: String?
+    let addressLine2: String?
+    let city: String?
+    let state: String?
+    let postalCode: String?
+    let country: String?
+    let marketingOptIn: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case firstName       = "first_name"
+        case lastName        = "last_name"
+        case phone
+        case dateOfBirth     = "date_of_birth"
+        case nationality
+        case preferredLanguage = "preferred_language"
+        case addressLine1    = "address_line1"
+        case addressLine2    = "address_line2"
+        case city
+        case state
+        case postalCode      = "postal_code"
+        case country
+        case marketingOptIn  = "marketing_opt_in"
     }
 }
