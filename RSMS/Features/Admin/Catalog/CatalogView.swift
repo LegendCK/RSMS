@@ -1,6 +1,6 @@
 //
 //  CatalogView.swift
-//  infosys2
+//  RSMS
 //
 //  Enterprise catalog management — SKU management, categories, pricing rules, promotions.
 //
@@ -9,7 +9,12 @@ import SwiftUI
 import SwiftData
 
 struct CatalogView: View {
+    @Query(sort: \Category.displayOrder) private var allCategories: [Category]
+
     @State private var selectedSection = 0
+    @State private var showAddDialog   = false
+    @State private var showAddCategory = false
+    @State private var showAddProduct  = false
 
     var body: some View {
         NavigationStack {
@@ -46,12 +51,26 @@ struct CatalogView: View {
                         .foregroundColor(AppColors.textPrimaryDark)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {}) {
+                    Button(action: { showAddDialog = true }) {
                         Image(systemName: "plus.circle.fill")
                             .font(AppTypography.toolbarIcon)
                             .foregroundColor(AppColors.accent)
                     }
                 }
+            }
+            // Context-sensitive action sheet
+            .confirmationDialog("What would you like to add?", isPresented: $showAddDialog, titleVisibility: .visible) {
+                Button("New Product") { showAddProduct = true }
+                Button("New Category") { showAddCategory = true }
+                Button("Cancel", role: .cancel) {}
+            }
+            // Add Category sheet
+            .sheet(isPresented: $showAddCategory) {
+                AddCategoryView()
+            }
+            // Add Product sheet — passes current categories for the picker
+            .sheet(isPresented: $showAddProduct) {
+                AddProductView(availableCategories: allCategories)
             }
         }
     }
