@@ -2,8 +2,8 @@
 //  AppColors.swift
 //  infosys2
 //
-//  Luxury brand color palette — deep black, champagne gold, regal purple, ivory.
-//  Inspired by Tom Ford, Versace, and haute couture aesthetics.
+//  Luxury brand color palette — nude and warm tones.
+//  Inspired by Davis Humphries Design nude palette for sophisticated, minimalist aesthetics.
 //
 
 import SwiftUI
@@ -12,83 +12,84 @@ struct AppColors {
 
     // MARK: - Primary
 
-    /// Deep black — primary brand color
-    static let primary = Color(hex: "0A0A0A")
+    /// Deep maroon — primary brand color
+    static let primary = Color(hex: "6B3E3E")
 
-    /// Champagne gold — luxury accent highlight
-    static let accent = Color(hex: "C9A84C")
+    /// Maroon accent highlight
+    static let accent = Color(hex: "8B4949")
 
-    /// Lighter gold for hover / pressed states
-    static let accentLight = Color(hex: "D4BC6A")
+    /// Lighter maroon for hover / pressed states
+    static let accentLight = Color(hex: "A85555")
 
-    /// Darker gold for contrast
-    static let accentDark = Color(hex: "A8893A")
+    /// Darker maroon for contrast
+    static let accentDark = Color(hex: "4A2A2A")
 
-    // MARK: - Purple / Plum Accent
+    // MARK: - Purple / Plum Accent (replaced with warm beige)
 
-    /// Muted regal purple — secondary luxury accent
-    static let purple = Color(hex: "6B4C8A")
+    /// Warm beige — secondary luxury accent
+    static let purple = Color(hex: "D1C7BD")
 
-    /// Light lavender for subtle highlights
-    static let purpleLight = Color(hex: "8B6FAE")
+    /// Light pale beige for subtle highlights
+    static let purpleLight = Color(hex: "EBE3DB")
 
-    /// Deep plum for depth
-    static let purpleDark = Color(hex: "4A3066")
+    /// Deeper taupe for depth
+    static let purpleDark = Color(hex: "A48374")
 
     // MARK: - Backgrounds
 
-    /// Deep black — primary screen background
-    static let backgroundPrimary = Color(hex: "0A0A0A")
+    /// Off-white — primary screen background
+    static let backgroundPrimary = Color(hex: "FAFAF8")
 
-    /// Slightly lighter dark surface
-    static let backgroundSecondary = Color(hex: "151515")
+    /// Slightly warmer surface
+    static let backgroundSecondary = Color(hex: "F5F3F0")
 
-    /// Card / elevated surface with purple tint
-    static let backgroundTertiary = Color(hex: "1E1A24")
+    /// Card / elevated surface with warm undertone
+    static let backgroundTertiary = Color(hex: "EFEFEC")
 
-    /// Ivory — used for contrast highlights and text
-    static let backgroundIvory = Color(hex: "FFFFF0")
+    /// Deep maroon — used for contrast highlights and text
+    static let backgroundIvory = Color(hex: "6B3E3E")
 
     /// Warm white for light accents
-    static let backgroundWarmWhite = Color(hex: "FAF8F5")
+    static let backgroundWarmWhite = Color(hex: "FAFAF8")
 
     // MARK: - Neutrals
 
-    static let neutral900 = Color(hex: "1A1A1A")
-    static let neutral800 = Color(hex: "2D2D2D")
-    static let neutral700 = Color(hex: "3D3D3D")
-    static let neutral600 = Color(hex: "555555")
-    static let neutral500 = Color(hex: "737373")
-    static let neutral400 = Color(hex: "9A9A9A")
-    static let neutral300 = Color(hex: "BFBFBF")
-    static let neutral200 = Color(hex: "E0E0E0")
-    static let neutral100 = Color(hex: "F0F0F0")
+    static let neutral900 = Color(hex: "3A2D28")
+    static let neutral800 = Color(hex: "5A4D48")
+    static let neutral700 = Color(hex: "8B7B73")
+    static let neutral600 = Color(hex: "A48374")
+    static let neutral500 = Color(hex: "B5A5A0")
+    static let neutral400 = Color(hex: "CBAD8D")
+    static let neutral300 = Color(hex: "D1C7BD")
+    static let neutral200 = Color(hex: "EBE3DB")
+    static let neutral100 = Color(hex: "F1EDE6")
 
     // MARK: - Text
 
-    /// Ivory / off-white — primary text on dark backgrounds
-    static let textPrimaryDark = Color(hex: "FAF8F0")
+    /// Deep brown — primary text on light backgrounds
+    static let textPrimaryDark = Color(hex: "3A2D28")
 
-    /// Muted light grey — secondary text on dark backgrounds
-    static let textSecondaryDark = Color(hex: "9A9A9A")
+    /// Warm taupe — secondary text on light backgrounds
+    static let textSecondaryDark = Color(hex: "8B7B73")
 
-    /// Dark text for any light surfaces
-    static let textPrimaryLight = Color(hex: "1A1A1A")
+    /// Light text for any dark surfaces
+    static let textPrimaryLight = Color(hex: "F1EDE6")
 
-    /// Secondary dark text
-    static let textSecondaryLight = Color(hex: "555555")
+    /// Secondary light text
+    static let textSecondaryLight = Color(hex: "D1C7BD")
+
 
     // MARK: - Semantic
 
-    static let success = Color(hex: "4CAF7D")
-    static let error = Color(hex: "E05555")
-    static let warning = Color(hex: "D4A84C")
-    static let info = Color(hex: "5C9BD6")
+    static let success = Color(hex: "6B9B5C")
+    static let error = Color(hex: "A5605A")
+    static let warning = Color(hex: "A48374")
+    static let info = Color(hex: "8B8B9A")
 
     // MARK: - Divider / Border
 
-    static let divider = Color(hex: "2A2A2A")
-    static let dividerLight = Color(hex: "E0E0E0")
-    static let border = Color(hex: "333333")
+    static let divider = Color(hex: "D1C7BD")
+    static let dividerLight = Color(hex: "EBE3DB")
+    static let border = Color(hex: "CBAD8D")
 }
 
