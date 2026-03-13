@@ -32,8 +32,8 @@ struct TaxRateDTO: Codable, Identifiable {
     let id: UUID
     let taxCategoryId: UUID
     let country: String             // ISO alpha-2, e.g. "US", "FR", "JP"
-    let rate: Double                // e.g. 8.875 for 8.875%
-    let label: String?              // e.g. "NY Sales Tax", "TVA", "Consumption Tax"
+    let rate: Double                // Stored as decimal: 0.28 = 28%, 0.18 = 18%
+    let label: String?              // e.g. "GST 28%", "NY Sales Tax", "TVA"
     let isActive: Bool
     let createdAt: Date
     let updatedAt: Date
@@ -51,11 +51,13 @@ struct TaxRateDTO: Codable, Identifiable {
 
     // MARK: - Convenience
 
-    var ratePercent: String { String(format: "%.3g%%", rate) }
+    /// Rate as percentage string (e.g., "28%" for rate=0.28)
+    var ratePercent: String { String(format: "%.0f%%", rate * 100) }
 
     /// Calculates tax amount for a given subtotal.
+    /// Rate is stored as decimal (0.28 = 28%), so multiply directly.
     func taxAmount(for subtotal: Double) -> Double {
-        subtotal * (rate / 100.0)
+        subtotal * rate
     }
 }
 

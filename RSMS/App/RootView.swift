@@ -44,7 +44,10 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.5), value: appState.currentFlow)
         .task {
-            // Attempt to restore a live Supabase session on every launch
+            // Attempt to restore a live Supabase session on every launch.
+            // This runs concurrently with the splash animation.
+            // If a session is found, it sets sessionRestored = true which
+            // prevents completeSplash() from overriding the routed flow.
             if appState.currentFlow == .splash {
                 await appState.tryRestoreSession()
             }

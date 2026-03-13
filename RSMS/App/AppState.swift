@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-enum AppFlow {
+enum AppFlow: Equatable {
     case splash
     case onboarding
     case authentication
@@ -34,10 +34,13 @@ class AppState {
     var currentUserRole: UserRole = .customer
     var currentStoreId: UUID? = nil          // nil for corporate_admin and client
     var currentUserProfile: UserDTO? = nil   // Full Supabase profile
+    var sessionRestored: Bool = false        // Prevents splash from overriding restored session
 
     // MARK: - Splash / Onboarding
 
     func completeSplash() {
+        // If session was already restored (user is logged in), don't override the flow
+        guard !sessionRestored else { return }
         withAnimation(.easeInOut(duration: 0.5)) {
             currentFlow = hasCompletedOnboarding ? .authentication : .onboarding
         }
@@ -119,7 +122,10 @@ class AppState {
 
     func tryRestoreSession() async {
         if let profile = await AuthService.shared.restoreSession() {
-            await MainActor.run { login(profile: profile) }
+            await MainActor.run {
+                sessionRestored = true
+                login(profile: profile)
+            }
         }
     }
 }

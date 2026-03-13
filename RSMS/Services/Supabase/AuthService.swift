@@ -5,6 +5,9 @@
 //  Handles all Supabase Auth operations:
 //  signIn, signUp (customer), signOut, resetPassword, fetchProfile.
 //
+//  Uses the server-side `get_my_profile()` RPC function which runs
+//  as SECURITY DEFINER to bypass RLS and auto-sync placeholder UUIDs.
+//
 
 import Foundation
 import Supabase
@@ -16,6 +19,22 @@ final class AuthService {
     private let client = SupabaseManager.shared.client
     private init() {}
 
+    // MARK: - Fetch Profile via RPC
+
+    /// Calls the `get_my_profile()` Postgres function (SECURITY DEFINER).
+    /// This bypasses RLS and auto-syncs placeholder UUIDs from seed.sql.
+    private func fetchMyProfile() async throws -> UserDTO {
+        let profiles: [UserDTO] = try await client
+            .rpc("get_my_profile")
+            .execute()
+            .value
+
+        guard let profile = profiles.first else {
+            throw AuthError.profileNotFound
+        }
+        return profile
+    }
+
     // MARK: - Sign In
 
     /// Authenticates with Supabase Auth then fetches the user's profile row.
@@ -26,16 +45,11 @@ final class AuthService {
             email: email,
             password: password
         )
+        print("[AuthService] signIn succeeded for user: \(session.user.id)")
 
-        // 2. Fetch profile row from public.users
-        let profile: UserDTO = try await client
-            .from("users")
-            .select()
-            .eq("id", value: session.user.id.uuidString)
-            .single()
-            .execute()
-            .value
-
+        // 2. Fetch profile using RPC (handles UUID mismatch automatically)
+        let profile = try await fetchMyProfile()
+        print("[AuthService] Profile loaded: \(profile.email) (\(profile.role))")
         return profile
     }
 
@@ -99,16 +113,14 @@ final class AuthService {
     /// Returns the UserDTO if a session exists, nil otherwise.
     func restoreSession() async -> UserDTO? {
         do {
-            let session = try await client.auth.session
-            let profile: UserDTO = try await client
-                .from("users")
-                .select()
-                .eq("id", value: session.user.id.uuidString)
-                .single()
-                .execute()
-                .value
+            _ = try await client.auth.session
+            print("[AuthService] restoreSession: valid session found")
+
+            let profile = try await fetchMyProfile()
+            print("[AuthService] restoreSession: profile loaded: \(profile.email)")
             return profile
         } catch {
+            print("[AuthService] restoreSession: failed — \(error.localizedDescription)")
             return nil
         }
     }

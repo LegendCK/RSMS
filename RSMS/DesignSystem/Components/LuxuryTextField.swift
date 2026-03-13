@@ -13,6 +13,7 @@ struct LuxuryTextField: View {
     var isSecure: Bool = false
     var icon: String? = nil
     @FocusState private var isFocused: Bool
+    @State private var isPasswordVisible: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
@@ -34,12 +35,33 @@ struct LuxuryTextField: View {
                 }
 
                 if isSecure {
-                    SecureField("", text: $text, prompt: promptText)
-                        .focused($isFocused)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                        .font(AppTypography.bodyLarge)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                    // Password field with toggle visibility
+                    if isPasswordVisible {
+                        TextField("", text: $text, prompt: promptText)
+                            .focused($isFocused)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                            .font(AppTypography.bodyLarge)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    } else {
+                        SecureField("", text: $text, prompt: promptText)
+                            .focused($isFocused)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                            .font(AppTypography.bodyLarge)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                    
+                    // Eye toggle button
+                    Button {
+                        isPasswordVisible.toggle()
+                    } label: {
+                        Image(systemName: isPasswordVisible ? "eye.fill" : "eye.slash.fill")
+                            .foregroundColor(AppColors.neutral500)
+                            .font(.system(size: 18))
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.plain)
                 } else {
                     TextField("", text: $text, prompt: promptText)
                         .focused($isFocused)
