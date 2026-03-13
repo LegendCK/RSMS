@@ -170,7 +170,7 @@ struct MgrProductInsightsSubview: View {
                 sLabel("CATEGORY MIX")
 
                 catBar(name: "Watches", pct: 0.34, color: AppColors.accent)
-                catBar(name: "Jewelry", pct: 0.26, color: AppColors.purple)
+                catBar(name: "Jewelry", pct: 0.26, color: AppColors.secondary)
                 catBar(name: "Handbags", pct: 0.22, color: AppColors.info)
                 catBar(name: "Accessories", pct: 0.12, color: AppColors.success)
                 catBar(name: "Limited Ed.", pct: 0.06, color: AppColors.warning)

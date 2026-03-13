@@ -1,8 +1,8 @@
 //
 //  PrimaryButton.swift
-//  infosys2
+//  RSMS
 //
-//  Champagne gold filled CTA button with luxury styling.
+//  Maroon filled CTA button with professional styling.
 //
 
 import SwiftUI
@@ -17,7 +17,7 @@ struct PrimaryButton: View {
             HStack(spacing: AppSpacing.xs) {
                 if isLoading {
                     ProgressView()
-                        .tint(AppColors.primary)
+                        .tint(AppColors.textPrimaryLight)
                         .scaleEffect(0.8)
                 }
                 Text(title.uppercased())
@@ -26,12 +26,14 @@ struct PrimaryButton: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: AppSpacing.touchTarget + 8)
-            .foregroundColor(AppColors.primary)
+            .foregroundColor(AppColors.textPrimaryLight)
             .background(AppColors.accent)
             .cornerRadius(AppSpacing.radiusMedium)
+            .liquidShadow(LiquidShadow.subtle)
         }
         .disabled(isLoading)
-        .opacity(isLoading ? 0.7 : 1.0)
+        .opacity(isLoading ? 0.8 : 1.0)
+        .scaleEffect(isLoading ? 0.99 : 1.0)
     }
 }
 

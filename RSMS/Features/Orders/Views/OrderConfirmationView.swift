@@ -96,7 +96,7 @@ struct OrderConfirmationView: View {
                         NavigationLink(destination: OrderDetailView(order: order)) {
                             Text("View Order Details")
                                 .font(AppTypography.buttonPrimary)
-                                .foregroundColor(AppColors.primary)
+                                .foregroundColor(AppColors.textPrimaryLight)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: AppSpacing.touchTarget)
                                 .background(AppColors.accent)

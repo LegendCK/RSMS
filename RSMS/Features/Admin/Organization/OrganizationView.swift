@@ -64,7 +64,7 @@ struct OrgBoutiquesSubview: View {
                 // Stats
                 HStack(spacing: AppSpacing.sm) {
                     statPill(value: "4", label: "Active", color: AppColors.success)
-                    statPill(value: "35", label: "Staff", color: AppColors.purple)
+                    statPill(value: "35", label: "Staff", color: AppColors.secondary)
                     statPill(value: "$2.4M", label: "Revenue", color: AppColors.accent)
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -92,7 +92,7 @@ struct OrgBoutiquesSubview: View {
             }
             Divider().background(AppColors.border)
             HStack(spacing: AppSpacing.xl) {
-                detailCol(label: "Manager", value: manager, color: AppColors.purple)
+                detailCol(label: "Manager", value: manager, color: AppColors.secondary)
                 detailCol(label: "Revenue", value: revenue, color: AppColors.accent)
                 detailCol(label: "Staff", value: "\(staff)", color: AppColors.textPrimaryDark)
             }
@@ -224,7 +224,7 @@ struct OrgStaffSubview: View {
     private func roleColor(_ role: UserRole) -> Color {
         switch role {
         case .corporateAdmin: return AppColors.accent
-        case .boutiqueManager: return AppColors.purple
+        case .boutiqueManager: return AppColors.secondary
         case .salesAssociate: return AppColors.info
         case .inventoryController: return AppColors.success
         case .serviceTechnician: return AppColors.warning
@@ -256,7 +256,7 @@ struct OrgRolesSubview: View {
             VStack(spacing: AppSpacing.md) {
                 roleCard(role: "Corporate Admin", color: AppColors.accent, icon: "shield.checkered",
                          permissions: ["Full system access", "Create/manage all accounts", "Product catalog CRUD", "Pricing & tax config", "All reports & analytics"])
-                roleCard(role: "Boutique Manager", color: AppColors.purple, icon: "building.2",
+                roleCard(role: "Boutique Manager", color: AppColors.secondary, icon: "building.2",
                          permissions: ["Manage boutique staff", "View boutique inventory", "Process returns", "View boutique reports", "Customer management"])
                 roleCard(role: "Sales Associate", color: AppColors.info, icon: "person.fill",
                          permissions: ["Process sales", "View product catalog", "Customer lookup", "Appointment booking"])

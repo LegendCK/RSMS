@@ -1,8 +1,8 @@
 //
 //  SupabaseManager.swift
-//  infosys2
+//  RSMS
 //
-//  Singleton manager for the Supabase client instance.
+//  Singleton manager for the Supabase client instance with auth configuration.
 //
 
 import Foundation
@@ -15,6 +15,7 @@ final class SupabaseManager {
     let client: SupabaseClient
 
     private init() {
+        // Configure Supabase client
         client = SupabaseClient(
             supabaseURL: SupabaseConfig.projectURL,
             supabaseKey: SupabaseConfig.anonKey

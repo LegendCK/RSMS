@@ -119,7 +119,7 @@ struct InsightsAnalyticsSubview: View {
                     HStack {
                         Text("In-Store").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
                         Spacer()
-                        Text("$980K (41%)").font(AppTypography.caption).foregroundColor(AppColors.purple)
+                        Text("$980K (41%)").font(AppTypography.caption).foregroundColor(AppColors.secondary)
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
                     HStack {
@@ -134,7 +134,7 @@ struct InsightsAnalyticsSubview: View {
                 VStack(alignment: .leading, spacing: AppSpacing.sm) {
                     sLabel("CATEGORY PERFORMANCE")
                     catBar(name: "Watches", value: "$890K", pct: 0.37, color: AppColors.accent)
-                    catBar(name: "Jewelry", value: "$680K", pct: 0.28, color: AppColors.purple)
+                    catBar(name: "Jewelry", value: "$680K", pct: 0.28, color: AppColors.secondary)
                     catBar(name: "Handbags", value: "$520K", pct: 0.22, color: AppColors.info)
                     catBar(name: "Accessories", value: "$190K", pct: 0.08, color: AppColors.success)
                     catBar(name: "Limited Ed.", value: "$132K", pct: 0.05, color: AppColors.warning)
@@ -185,12 +185,12 @@ struct InsightsReportsSubview: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.xs) {
                 reportRow(icon: "chart.bar.doc.horizontal", title: "Sales Report", sub: "Transaction history & breakdowns", color: AppColors.accent)
-                reportRow(icon: "person.2.fill", title: "Staff Performance", sub: "Employee sales metrics & rankings", color: AppColors.purple)
+                reportRow(icon: "person.2.fill", title: "Staff Performance", sub: "Employee sales metrics & rankings", color: AppColors.secondary)
                 reportRow(icon: "shippingbox.fill", title: "Inventory Report", sub: "Stock levels, turnover & aging", color: AppColors.success)
                 reportRow(icon: "building.2.fill", title: "Boutique Comparison", sub: "Cross-location revenue & KPIs", color: AppColors.info)
                 reportRow(icon: "creditcard.fill", title: "Financial Summary", sub: "Revenue, costs, margins", color: AppColors.accent)
                 reportRow(icon: "chart.pie.fill", title: "Product Mix Analysis", sub: "Category contribution & trends", color: AppColors.warning)
-                reportRow(icon: "person.crop.circle.fill", title: "Customer Analytics", sub: "Segments, lifetime value, retention", color: AppColors.purpleLight)
+                reportRow(icon: "person.crop.circle.fill", title: "Customer Analytics", sub: "Segments, lifetime value, retention", color: AppColors.secondaryLight)
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.sm)
@@ -301,7 +301,7 @@ struct InsightsComplianceSubview: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(user).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
                 HStack(spacing: 4) {
-                    Text(action).font(AppTypography.caption).foregroundColor(AppColors.purple)
+                    Text(action).font(AppTypography.caption).foregroundColor(AppColors.secondary)
                     Text("•").foregroundColor(AppColors.neutral600)
                     Text(ip).font(AppTypography.caption).foregroundColor(AppColors.neutral500)
                 }

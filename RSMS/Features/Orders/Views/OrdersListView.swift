@@ -181,7 +181,7 @@ struct OrdersListView: View {
         switch status {
         case .pending: return AppColors.neutral600
         case .confirmed, .processing: return AppColors.accent
-        case .shipped, .readyForPickup: return AppColors.purple
+        case .shipped, .readyForPickup: return AppColors.secondary
         case .delivered, .completed: return AppColors.success
         case .cancelled: return AppColors.error
         }

@@ -24,7 +24,7 @@ struct ProfileView: View {
                             // Avatar
                             ZStack {
                                 Circle()
-                                    .stroke(AppColors.purple.opacity(0.2), lineWidth: 1)
+                                    .stroke(AppColors.secondary.opacity(0.2), lineWidth: 1)
                                     .frame(width: 116, height: 116)
 
                                 Circle()

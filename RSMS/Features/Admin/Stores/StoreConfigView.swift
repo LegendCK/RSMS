@@ -134,7 +134,7 @@ struct StoreConfigView: View {
                         .foregroundColor(AppColors.textSecondaryDark)
                     Text(manager)
                         .font(AppTypography.bodySmall)
-                        .foregroundColor(AppColors.purple)
+                        .foregroundColor(AppColors.secondary)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Revenue")

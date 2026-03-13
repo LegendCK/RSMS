@@ -99,10 +99,10 @@ struct ManagerProfileView: View {
     private var profileHeader: some View {
         VStack(spacing: AppSpacing.md) {
             ZStack {
-                Circle().stroke(AppColors.purple.opacity(0.2), lineWidth: 1).frame(width: 116, height: 116)
+                Circle().stroke(AppColors.secondary.opacity(0.2), lineWidth: 1).frame(width: 116, height: 116)
                 Circle().fill(AppColors.backgroundTertiary).frame(width: 100, height: 100)
-                Circle().stroke(AppColors.purple, lineWidth: 2).frame(width: 100, height: 100)
-                Text(initials).font(AppTypography.displayMedium).foregroundColor(AppColors.purple)
+                Circle().stroke(AppColors.secondary, lineWidth: 2).frame(width: 100, height: 100)
+                Text(initials).font(AppTypography.displayMedium).foregroundColor(AppColors.secondary)
             }
             VStack(spacing: AppSpacing.xxs) {
                 Text(appState.currentUserName).font(AppTypography.heading1).foregroundColor(AppColors.textPrimaryDark)
@@ -111,7 +111,7 @@ struct ManagerProfileView: View {
                     Image(systemName: "building.2").font(AppTypography.storeIcon)
                     Text("BOUTIQUE MANAGER").font(AppTypography.overline).tracking(2)
                 }
-                .foregroundColor(AppColors.purple).padding(.top, AppSpacing.xxs)
+                .foregroundColor(AppColors.secondary).padding(.top, AppSpacing.xxs)
             }
         }
         .padding(.top, AppSpacing.xxl)
@@ -145,7 +145,7 @@ struct ManagerProfileView: View {
     private func navRow(icon: String, title: String, subtitle: String) -> some View {
         Button(action: {}) {
             HStack(spacing: AppSpacing.md) {
-                Image(systemName: icon).font(AppTypography.menuIcon).foregroundColor(AppColors.purple).frame(width: 28)
+                Image(systemName: icon).font(AppTypography.menuIcon).foregroundColor(AppColors.secondary).frame(width: 28)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
                     Text(subtitle).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)

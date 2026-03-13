@@ -71,7 +71,7 @@ struct CategoriesView: View {
                 // Icon
                 ZStack {
                     Circle()
-                        .stroke(AppColors.purple.opacity(0.15), lineWidth: 1)
+                        .stroke(AppColors.secondary.opacity(0.15), lineWidth: 1)
                         .frame(width: 85, height: 85)
 
                     Circle()

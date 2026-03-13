@@ -1,15 +1,14 @@
 //
 //  MainTabView.swift
-//  infosys2
+//  RSMS
 //
-//  Primary tab bar navigation with luxury styling.
-//
+//  iOS 26 Tab-based API with Liquid Glass tab bar matching Apple Music design.
+//  Dark background container with glass pill styling. Search button positioned outside.
 
 import SwiftUI
 import SwiftData
 
 struct MainTabView: View {
-    @State private var selectedTab = 0
     @Environment(AppState.self) private var appState
     @Query private var allCartItems: [CartItem]
 
@@ -17,66 +16,92 @@ struct MainTabView: View {
         allCartItems.filter { $0.customerEmail == appState.currentUserEmail }.count
     }
 
-    init() {
-        // Style the tab bar
-        let appearance = UITabBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(Color(hex: "0A0A0A"))
-
-        // Normal state — muted grey
-        appearance.stackedLayoutAppearance.normal.iconColor = UIColor(Color(hex: "555555"))
-        appearance.stackedLayoutAppearance.normal.titleTextAttributes = [
-            .foregroundColor: UIColor(Color(hex: "555555"))
-        ]
-
-        // Selected state — champagne gold
-        appearance.stackedLayoutAppearance.selected.iconColor = UIColor(Color(hex: "C9A84C"))
-        appearance.stackedLayoutAppearance.selected.titleTextAttributes = [
-            .foregroundColor: UIColor(Color(hex: "C9A84C"))
-        ]
-
-        UITabBar.appearance().standardAppearance = appearance
-        UITabBar.appearance().scrollEdgeAppearance = appearance
-    }
-
     var body: some View {
-        TabView(selection: $selectedTab) {
-            HomeView()
-                .tabItem {
-                    Image(systemName: selectedTab == 0 ? "house.fill" : "house")
-                    Text("Home")
-                }
-                .tag(0)
+        ZStack {
+            // Dark blurred background
+            AppColors.backgroundPrimary
+                .ignoresSafeArea()
 
-            CategoriesView()
-                .tabItem {
-                    Image(systemName: selectedTab == 1 ? "square.grid.2x2.fill" : "square.grid.2x2")
-                    Text("Categories")
+            TabView {
+                // Home Tab
+                Tab("Home", systemImage: "house.fill") {
+                    NavigationStack {
+                        HomeView()
+                    }
                 }
-                .tag(1)
 
-            CartView()
-                .tabItem {
-                    Image(systemName: selectedTab == 2 ? "bag.fill" : "bag")
-                    Text("Bag")
+                // Categories Tab
+                Tab("Categories", systemImage: "square.grid.2x2") {
+                    NavigationStack {
+                        CategoriesView()
+                    }
                 }
-                .tag(2)
-                .badge(cartBadgeCount > 0 ? cartBadgeCount : 0)
 
-            WishlistView()
-                .tabItem {
-                    Image(systemName: selectedTab == 3 ? "heart.fill" : "heart")
-                    Text("Wishlist")
+                // Profile Tab
+                Tab("Profile", systemImage: "person.fill") {
+                    NavigationStack {
+                        ProfileView()
+                    }
                 }
-                .tag(3)
 
-            ProfileView()
-                .tabItem {
-                    Image(systemName: selectedTab == 4 ? "person.fill" : "person")
-                    Text("Profile")
+                // Search Tab (system renders this as a separate search control)
+                Tab(role: .search) {
+                    NavigationStack {
+                        SearchView()
+                    }
                 }
-                .tag(4)
+            }
+            .tint(AppColors.accent)  // Active tab tint (maroon)
+            .tabBarMinimizeBehavior(.onScrollDown)  // Collapse on scroll
+            .toolbarColorScheme(.dark, for: .tabBar)  // Dark styling
+            .modifier(AppleMusicTabBarModifier())  // Apply Apple Music glass design
         }
+    }
+}
+
+/// Custom modifier to apply Apple Music-style glass effect to the tab bar
+struct AppleMusicTabBarModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                // Configure tab bar appearance with dark glass effect
+                let tabBar = UITabBar.appearance()
+                
+                // Create dark glass appearance
+                let appearance = UITabBarAppearance()
+                appearance.configureWithDefaultBackground()
+                
+                // Dark semi-transparent background
+                let backgroundColor = UIColor.black.withAlphaComponent(0.3)
+                appearance.backgroundColor = backgroundColor
+                
+                // Blur effect using shadow for depth
+                appearance.shadowColor = UIColor.black.withAlphaComponent(0.2)
+                appearance.shadowImage = nil
+                
+                // Configure item appearance (light text)
+                let itemAppearance = UITabBarItemAppearance()
+                itemAppearance.normal.iconColor = UIColor.white.withAlphaComponent(0.6)
+                itemAppearance.normal.titleTextAttributes = [
+                    .foregroundColor: UIColor.white.withAlphaComponent(0.6),
+                    .font: UIFont.systemFont(ofSize: 10, weight: .medium)
+                ]
+                
+                // Selected state - maroon tint
+                itemAppearance.selected.iconColor = UIColor(red: 0.5, green: 0, blue: 0, alpha: 1)  // Maroon
+                itemAppearance.selected.titleTextAttributes = [
+                    .foregroundColor: UIColor(red: 0.5, green: 0, blue: 0, alpha: 1),  // Maroon
+                    .font: UIFont.systemFont(ofSize: 10, weight: .bold)
+                ]
+                
+                appearance.stackedLayoutAppearance = itemAppearance
+                appearance.inlineLayoutAppearance = itemAppearance
+                appearance.compactInlineLayoutAppearance = itemAppearance
+                
+                tabBar.standardAppearance = appearance
+                tabBar.scrollEdgeAppearance = appearance
+                tabBar.tintColor = UIColor(red: 0.5, green: 0, blue: 0, alpha: 1)  // Maroon tint
+            }
     }
 }
 
