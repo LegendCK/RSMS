@@ -1,0 +1,35 @@
+# Xcode user-specific state (causes branch-switching conflicts)
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+
+# Xcode derived/build artifacts
+DerivedData/
+build/
+*.moved-aside
+*.xccheckout
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# CocoaPods (not used here, but good to have)
+Pods/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Crash logs
+*.crash

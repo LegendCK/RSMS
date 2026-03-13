@@ -29,6 +29,7 @@ class AppState {
 
     // MARK: - Session state
     var isAuthenticated: Bool = false
+    var isGuest: Bool = false                // true when browsing without an account
     var currentUserName: String = ""
     var currentUserEmail: String = ""
     var currentUserRole: UserRole = .customer
@@ -53,9 +54,21 @@ class AppState {
         }
     }
 
+    // MARK: - Guest Access
+
+    func continueAsGuest() {
+        isGuest = true
+        currentUserName = "Guest"
+        currentUserRole = .customer
+        withAnimation(.easeInOut(duration: 0.5)) {
+            currentFlow = .main
+        }
+    }
+
     // MARK: - Login (called after Supabase Auth succeeds)
 
     func login(profile: UserDTO) {
+        isGuest            = false
         currentUserProfile = profile
         currentUserName    = profile.fullName
         currentUserEmail   = profile.email
@@ -79,6 +92,7 @@ class AppState {
 
     /// Legacy convenience — keeps local SwiftData login working during transition.
     func login(name: String, email: String, role: UserRole = .customer) {
+        isGuest          = false
         currentUserName  = name
         currentUserEmail = email
         currentUserRole  = role
@@ -102,6 +116,7 @@ class AppState {
 
     func logout() {
         isAuthenticated    = false
+        isGuest            = false
         currentUserName    = ""
         currentUserEmail   = ""
         currentUserRole    = .customer
