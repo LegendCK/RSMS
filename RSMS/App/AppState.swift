@@ -35,6 +35,7 @@ class AppState {
     var currentUserRole: UserRole = .customer
     var currentStoreId: UUID? = nil          // nil for corporate_admin and client
     var currentUserProfile: UserDTO? = nil   // Full Supabase profile
+    var currentClientProfile: ClientDTO? = nil
     var sessionRestored: Bool = false        // Prevents splash from overriding restored session
 
     // MARK: - Splash / Onboarding
@@ -59,7 +60,10 @@ class AppState {
     func continueAsGuest() {
         isGuest = true
         currentUserName = "Guest"
+        currentUserEmail = ""
         currentUserRole = .customer
+        currentUserProfile = nil
+        currentClientProfile = nil
         withAnimation(.easeInOut(duration: 0.5)) {
             currentFlow = .main
         }
@@ -75,6 +79,7 @@ class AppState {
         currentUserRole    = profile.userRole
         currentStoreId     = profile.storeId
         isAuthenticated    = true
+        currentClientProfile = nil
 
         withAnimation(.easeInOut(duration: 0.5)) {
             switch profile.userRole {
@@ -97,6 +102,8 @@ class AppState {
         currentUserEmail = email
         currentUserRole  = role
         isAuthenticated  = true
+        currentUserProfile = nil
+        currentClientProfile = nil
 
         withAnimation(.easeInOut(duration: 0.5)) {
             switch role {
@@ -112,6 +119,16 @@ class AppState {
         }
     }
 
+    /// Updates in-memory identity fields after editing the authenticated client profile.
+    func updateCurrentClientProfile(_ profile: ClientDTO) {
+        currentClientProfile = profile
+        currentUserProfile = UserDTO(clientProfile: profile)
+        currentUserName = profile.fullName
+        currentUserEmail = profile.email
+        currentUserRole = .customer
+        currentStoreId = nil
+    }
+
     // MARK: - Logout
 
     func logout() {
@@ -122,6 +139,7 @@ class AppState {
         currentUserRole    = .customer
         currentStoreId     = nil
         currentUserProfile = nil
+        currentClientProfile = nil
 
         withAnimation(.easeInOut(duration: 0.5)) {
             currentFlow = .authentication
