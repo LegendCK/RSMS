@@ -26,6 +26,8 @@ struct RSMSApp: App {
             Transfer.self,
             Event.self,
             AppNotification.self,
+            InventoryByLocation.self,
+            StoreLocation.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

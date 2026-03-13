@@ -2,7 +2,7 @@
 //  InventorySyncService.swift
 //  infosys2
 //
-//  Syncs InventoryByLocation between local SwiftData and Supabase `inventory`.
+//  Syncs InventoryByLocation between local SwiftData and Supabase ⁠ inventory ⁠.
 //
 
 import Foundation

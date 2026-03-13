@@ -119,11 +119,32 @@ struct LoginView: View {
                             .padding(.horizontal, AppSpacing.screenHorizontal)
                         }
 
+                        // Guest access
+                        VStack(spacing: AppSpacing.xs) {
+                            HStack(spacing: AppSpacing.md) {
+                                GoldDivider(opacity: 0.15)
+                                Text("OR")
+                                    .font(AppTypography.caption)
+                                    .tracking(2)
+                                    .foregroundColor(AppColors.neutral500)
+                                GoldDivider(opacity: 0.15)
+                            }
+                            .padding(.horizontal, AppSpacing.screenHorizontal)
+
+                            Button(action: { appState.continueAsGuest() }) {
+                                Text("Browse as Guest")
+                                    .font(AppTypography.bodySmall)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                                    .underline()
+                            }
+                        }
+                        .padding(.top, AppSpacing.lg)
+
                         // Staff note
                         Text("Staff accounts are provisioned by management")
                             .font(AppTypography.caption)
                             .foregroundColor(AppColors.neutral600)
-                            .padding(.top, AppSpacing.xl)
+                            .padding(.top, AppSpacing.lg)
                             .padding(.bottom, AppSpacing.xxl)
                     }
                 }

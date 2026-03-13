@@ -13,7 +13,8 @@ struct CartView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var allCartItems: [CartItem]
 
-    @State private var navigateToCheckout = false
+    @State private var navigateToCheckout  = false
+    @State private var showGuestAuthGate   = false
 
     private var cartItems: [CartItem] {
         allCartItems.filter { $0.customerEmail == appState.currentUserEmail }
@@ -30,7 +31,9 @@ struct CartView: View {
             ZStack {
                 AppColors.backgroundPrimary.ignoresSafeArea()
 
-                if cartItems.isEmpty {
+                if appState.isGuest {
+                    guestState
+                } else if cartItems.isEmpty {
                     emptyState
                 } else {
                     cartContent
@@ -47,7 +50,46 @@ struct CartView: View {
             .navigationDestination(isPresented: $navigateToCheckout) {
                 CheckoutView()
             }
+            .sheet(isPresented: $showGuestAuthGate) {
+                GuestAuthGateView(pendingAction: "Add to Bag")
+                    .presentationDetents([.large])
+            }
         }
+    }
+
+    // MARK: - Guest State
+
+    private var guestState: some View {
+        VStack(spacing: AppSpacing.xl) {
+            Image(systemName: "lock")
+                .font(AppTypography.iconDecorative)
+                .foregroundColor(AppColors.neutral600)
+
+            VStack(spacing: AppSpacing.xs) {
+                Text("Sign In to Shop")
+                    .font(AppTypography.heading2)
+                    .foregroundColor(AppColors.textPrimaryDark)
+
+                Text("Create an account or sign in to add\nitems to your bag and checkout.")
+                    .font(AppTypography.bodyMedium)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+            }
+
+            VStack(spacing: AppSpacing.sm) {
+                PrimaryButton(title: "Sign In") {
+                    showGuestAuthGate = true
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+
+                SecondaryButton(title: "Create Account") {
+                    showGuestAuthGate = true
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+            }
+        }
+        .padding(.horizontal, AppSpacing.xxl)
     }
 
     // MARK: - Empty State
