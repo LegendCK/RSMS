@@ -75,7 +75,7 @@ struct InvStockSubview: View {
             // Stats
             HStack(spacing: AppSpacing.sm) {
                 invStat(value: "\(totalUnits)", label: "Units", color: AppColors.accent)
-                invStat(value: "\(allProducts.count)", label: "SKUs", color: AppColors.purple)
+                invStat(value: "\(allProducts.count)", label: "SKUs", color: AppColors.secondary)
                 invStat(value: "\(lowCount)", label: "Low", color: AppColors.warning)
                 invStat(value: "\(outCount)", label: "Out", color: AppColors.error)
             }
@@ -253,7 +253,7 @@ struct InvFlaggedSubview: View {
             }
             Text(reason).font(AppTypography.bodySmall).foregroundColor(AppColors.textSecondaryDark)
             HStack {
-                Text(flaggedBy).font(AppTypography.micro).foregroundColor(AppColors.purple)
+                Text(flaggedBy).font(AppTypography.micro).foregroundColor(AppColors.secondary)
                 Text("•").foregroundColor(AppColors.neutral600)
                 Text(time).font(AppTypography.caption).foregroundColor(AppColors.neutral500)
                 Spacer()

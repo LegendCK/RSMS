@@ -1,8 +1,8 @@
 //
 //  SecondaryButton.swift
-//  infosys2
+//  RSMS
 //
-//  Outlined variant button with champagne gold border.
+//  iOS 26 outlined button with Liquid Glass optional background.
 //
 
 import SwiftUI
@@ -10,6 +10,7 @@ import SwiftUI
 struct SecondaryButton: View {
     let title: String
     let action: () -> Void
+    var useGlass: Bool = true
 
     var body: some View {
         Button(action: action) {
@@ -19,19 +20,26 @@ struct SecondaryButton: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: AppSpacing.touchTarget + 4)
                 .foregroundColor(AppColors.accent)
-                .background(Color.clear)
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                        .stroke(AppColors.accent, lineWidth: 1.5)
-                )
         }
+        .if(useGlass) { view in
+            view.background(Material.thinMaterial)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                .stroke(AppColors.accent, lineWidth: 1.5)
+        )
+        .cornerRadius(AppSpacing.radiusMedium)
+        .liquidShadow(LiquidShadow.subtle)
     }
 }
 
 #Preview {
     ZStack {
         AppColors.backgroundPrimary.ignoresSafeArea()
-        SecondaryButton(title: "Create Account") { }
-            .padding()
+        VStack(spacing: 16) {
+            SecondaryButton(title: "Create Account", action: { })
+            SecondaryButton(title: "Glass Less", action: { }, useGlass: false)
+        }
+        .padding()
     }
 }

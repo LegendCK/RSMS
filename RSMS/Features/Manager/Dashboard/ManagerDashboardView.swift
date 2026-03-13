@@ -64,7 +64,7 @@ struct ManagerDashboardView: View {
                         Button(action: { showProfile = true }) {
                             ZStack {
                                 Circle().fill(AppColors.backgroundTertiary).frame(width: 30, height: 30)
-                                Text(managerInitials).font(AppTypography.avatarSmall).foregroundColor(AppColors.purple)
+                                Text(managerInitials).font(AppTypography.avatarSmall).foregroundColor(AppColors.secondary)
                             }
                         }
                     }
@@ -94,7 +94,7 @@ struct ManagerDashboardView: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text("BOUTIQUE MANAGER")
-                    .font(AppTypography.overline).tracking(2).foregroundColor(AppColors.purple)
+                    .font(AppTypography.overline).tracking(2).foregroundColor(AppColors.secondary)
                 Text(Date(), style: .date)
                     .font(AppTypography.caption).foregroundColor(AppColors.neutral500)
             }
@@ -117,7 +117,7 @@ struct ManagerDashboardView: View {
             HStack(spacing: 0) {
                 salesPill(value: "$42,800", label: "Today", icon: "dollarsign.circle.fill", color: AppColors.accent)
                 vertDivider
-                salesPill(value: "7", label: "Transactions", icon: "creditcard.fill", color: AppColors.purple)
+                salesPill(value: "7", label: "Transactions", icon: "creditcard.fill", color: AppColors.secondary)
                 vertDivider
                 salesPill(value: "$6,114", label: "Avg. Ticket", icon: "chart.line.uptrend.xyaxis", color: AppColors.success)
             }
@@ -152,7 +152,7 @@ struct ManagerDashboardView: View {
                                 GridItem(.flexible(), spacing: AppSpacing.sm)], spacing: AppSpacing.sm) {
                 kpiCard(icon: "chart.bar.fill", iconColor: AppColors.accent,
                         value: "$248K", label: "MTD Revenue", badge: "+8.2%", positive: true)
-                kpiCard(icon: "person.2.fill", iconColor: AppColors.purple,
+                kpiCard(icon: "person.2.fill", iconColor: AppColors.secondary,
                         value: "\(storeStaff.count)", label: "Staff On Duty", badge: "of \(storeStaff.count + 1)", positive: true)
                 kpiCard(icon: "shippingbox.fill", iconColor: AppColors.info,
                         value: "\(totalStoreUnits)", label: "Store Units", badge: "\(allProducts.count) SKUs", positive: true)
@@ -190,7 +190,7 @@ struct ManagerDashboardView: View {
             HStack {
                 sectionLabel("ALERTS")
                 Spacer()
-                Text("3").font(AppTypography.trendBadge).foregroundColor(AppColors.primary)
+                Text("3").font(AppTypography.trendBadge).foregroundColor(AppColors.textPrimaryLight)
                     .padding(.horizontal, 7).padding(.vertical, 3).background(AppColors.warning).cornerRadius(10)
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -305,7 +305,7 @@ struct ManagerDashboardView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: AppSpacing.sm) {
                 actionTile(icon: "checkmark.circle.fill", label: "Approve", color: AppColors.success)
                 actionTile(icon: "arrow.left.arrow.right", label: "Transfer", color: AppColors.info)
-                actionTile(icon: "calendar.badge.plus", label: "VIP Event", color: AppColors.purple)
+                actionTile(icon: "calendar.badge.plus", label: "VIP Event", color: AppColors.secondary)
                 actionTile(icon: "person.badge.clock", label: "Shift", color: AppColors.accent)
                 actionTile(icon: "doc.text.fill", label: "Report", color: AppColors.warning)
                 actionTile(icon: "exclamationmark.bubble.fill", label: "Flag Item", color: AppColors.error)

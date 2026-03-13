@@ -73,7 +73,7 @@ struct OperationsView: View {
                 // Summary strip
                 HStack(spacing: AppSpacing.sm) {
                     inventoryStat(value: "\(totalUnits)", label: "Total Units", color: AppColors.accent)
-                    inventoryStat(value: "\(allProducts.count)", label: "SKUs", color: AppColors.purple)
+                    inventoryStat(value: "\(allProducts.count)", label: "SKUs", color: AppColors.secondary)
                     inventoryStat(value: "\(lowStockProducts.count)", label: "Low", color: AppColors.warning)
                     inventoryStat(value: "\(outOfStockProducts.count)", label: "Out", color: AppColors.error)
                 }

@@ -201,7 +201,7 @@ struct AdminReportsView: View {
 
             VStack(spacing: AppSpacing.xs) {
                 categoryBar(name: "Watches", value: "$890K", percent: 0.37, color: AppColors.accent)
-                categoryBar(name: "Jewelry", value: "$680K", percent: 0.28, color: AppColors.purple)
+                categoryBar(name: "Jewelry", value: "$680K", percent: 0.28, color: AppColors.secondary)
                 categoryBar(name: "Handbags", value: "$520K", percent: 0.22, color: AppColors.info)
                 categoryBar(name: "Accessories", value: "$190K", percent: 0.08, color: AppColors.success)
                 categoryBar(name: "Limited Ed.", value: "$132K", percent: 0.05, color: AppColors.warning)
@@ -261,11 +261,11 @@ struct AdminReportsView: View {
         HStack(spacing: AppSpacing.md) {
             ZStack {
                 RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
-                    .fill(AppColors.purple.opacity(0.15))
+                    .fill(AppColors.secondary.opacity(0.15))
                     .frame(width: 40, height: 40)
                 Image(systemName: icon)
                     .font(AppTypography.iconMedium)
-                    .foregroundColor(AppColors.purple)
+                    .foregroundColor(AppColors.secondary)
             }
 
             VStack(alignment: .leading, spacing: 2) {

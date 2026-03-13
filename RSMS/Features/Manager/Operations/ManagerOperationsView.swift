@@ -53,7 +53,7 @@ struct ManagerOperationsView: View {
                 // Today summary
                 HStack(spacing: AppSpacing.sm) {
                     miniStat(value: "$42.8K", label: "Today", color: AppColors.accent)
-                    miniStat(value: "7", label: "Txns", color: AppColors.purple)
+                    miniStat(value: "7", label: "Txns", color: AppColors.secondary)
                     miniStat(value: "$6.1K", label: "Avg", color: AppColors.success)
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal).padding(.top, AppSpacing.sm)
@@ -81,7 +81,7 @@ struct ManagerOperationsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(customer).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
                     Text(items).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark).lineLimit(1)
-                    Text(associate).font(AppTypography.micro).foregroundColor(AppColors.purple)
+                    Text(associate).font(AppTypography.micro).foregroundColor(AppColors.secondary)
                 }
                 Spacer()
                 Text(amount).font(AppTypography.label).foregroundColor(AppColors.accent)
@@ -141,7 +141,7 @@ struct ManagerOperationsView: View {
                 }
             }
             HStack {
-                Text("Flagged by \(flaggedBy)").font(AppTypography.caption).foregroundColor(AppColors.purple)
+                Text("Flagged by \(flaggedBy)").font(AppTypography.caption).foregroundColor(AppColors.secondary)
                 Text("•").foregroundColor(AppColors.neutral600)
                 Text(time).font(AppTypography.caption).foregroundColor(AppColors.neutral500)
                 Spacer()
@@ -185,7 +185,7 @@ struct ManagerOperationsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(client).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                    Text(type).font(AppTypography.caption).foregroundColor(AppColors.purple)
+                    Text(type).font(AppTypography.caption).foregroundColor(AppColors.secondary)
                 }
                 Spacer()
                 let sc = status == "Confirmed" ? AppColors.success : AppColors.warning
@@ -239,7 +239,7 @@ struct ManagerOperationsView: View {
                     Text(time).font(AppTypography.iconCompact).foregroundColor(AppColors.neutral500)
                 }
                 Text(detail).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark).lineLimit(1)
-                Text(by).font(AppTypography.micro).foregroundColor(AppColors.purple)
+                Text(by).font(AppTypography.micro).foregroundColor(AppColors.secondary)
             }
         }
         .padding(.horizontal, AppSpacing.sm).padding(.vertical, AppSpacing.xs + 2)

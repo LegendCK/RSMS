@@ -50,7 +50,7 @@ struct SalesDashboardView: View {
 
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AppSpacing.md) {
                                 quickActionCard(title: "New Client", icon: "person.badge.plus", color: AppColors.accent)
-                                quickActionCard(title: "Book Appointment", icon: "calendar.badge.plus", color: AppColors.purple)
+                                quickActionCard(title: "Book Appointment", icon: "calendar.badge.plus", color: AppColors.secondary)
                                 quickActionCard(title: "Start Sale", icon: "bag.badge.plus", color: AppColors.success)
                                 quickActionCard(title: "Create AST", icon: "wrench.and.screwdriver", color: AppColors.info)
                             }

@@ -70,7 +70,7 @@ struct WishlistView: View {
         VStack(spacing: AppSpacing.lg) {
             ZStack {
                 Circle()
-                    .stroke(AppColors.purple.opacity(0.15), lineWidth: 1)
+                    .stroke(AppColors.secondary.opacity(0.15), lineWidth: 1)
                     .frame(width: 120, height: 120)
 
                 Circle()

@@ -103,7 +103,7 @@ struct ProductDetailView: View {
                                     Text("LIMITED EDITION")
                                         .font(AppTypography.overline)
                                         .tracking(2)
-                                        .foregroundColor(AppColors.primary)
+                                        .foregroundColor(AppColors.textPrimaryLight)
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 6)
                                         .background(AppColors.accent)

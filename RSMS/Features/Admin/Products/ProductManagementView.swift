@@ -147,7 +147,7 @@ struct ProductManagementView: View {
                 HStack(spacing: AppSpacing.xs) {
                     Text(product.categoryName)
                         .font(AppTypography.caption)
-                        .foregroundColor(AppColors.purple)
+                        .foregroundColor(AppColors.secondary)
 
                     if product.isLimitedEdition {
                         Text("LIMITED")

@@ -142,7 +142,7 @@ struct AddCategoryView: View {
                                 }
                             }
                             .font(AppTypography.buttonPrimary)
-                            .foregroundColor(AppColors.primary)
+                            .foregroundColor(AppColors.textPrimaryLight)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, AppSpacing.md)
                             .background(name.trimmingCharacters(in: .whitespaces).isEmpty ? AppColors.accent.opacity(0.4) : AppColors.accent)

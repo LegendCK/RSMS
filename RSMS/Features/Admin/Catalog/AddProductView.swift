@@ -258,7 +258,7 @@ struct AddProductView: View {
                                 }
                             }
                             .font(AppTypography.buttonPrimary)
-                            .foregroundColor(AppColors.primary)
+                            .foregroundColor(AppColors.textPrimaryLight)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, AppSpacing.md)
                             .background(

@@ -130,7 +130,7 @@ struct AdminDashboardView: View {
                                 GridItem(.flexible(), spacing: AppSpacing.sm)], spacing: AppSpacing.sm) {
                 metricCard(icon: "chart.line.uptrend.xyaxis", iconColor: AppColors.accent,
                            value: "$2.4M", label: "Total Revenue", badge: "+12.5%", badgePositive: true)
-                metricCard(icon: "shippingbox.fill", iconColor: AppColors.purple,
+                metricCard(icon: "shippingbox.fill", iconColor: AppColors.secondary,
                            value: "\(allProducts.count)", label: "Active SKUs", badge: "\(allCategories.count) cat.", badgePositive: true)
                 metricCard(icon: "person.2.fill", iconColor: AppColors.info,
                            value: "\(allUsers.count)", label: "Total Users", badge: "\(staffCount) staff", badgePositive: true)
@@ -138,7 +138,7 @@ struct AdminDashboardView: View {
                            value: "4", label: "Boutiques", badge: "All live", badgePositive: true)
                 metricCard(icon: "exclamationmark.triangle.fill", iconColor: AppColors.warning,
                            value: "\(lowStockCount)", label: "Low Stock", badge: "\(outOfStockCount) out", badgePositive: false)
-                metricCard(icon: "cube.box.fill", iconColor: AppColors.purpleLight,
+                metricCard(icon: "cube.box.fill", iconColor: AppColors.secondaryLight,
                            value: "\(totalInventoryUnits)", label: "Total Units", badge: "\(limitedCount) limited", badgePositive: true)
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -209,7 +209,7 @@ struct AdminDashboardView: View {
                 Spacer()
                 Text("3")
                     .font(AppTypography.nano)
-                    .foregroundColor(AppColors.primary)
+                    .foregroundColor(AppColors.textPrimaryLight)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(AppColors.warning)
@@ -270,11 +270,11 @@ struct AdminDashboardView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
                       spacing: AppSpacing.sm) {
                 actionTile(icon: "plus.square.fill", label: "Add SKU", color: AppColors.accent)
-                actionTile(icon: "person.badge.plus", label: "Add Staff", color: AppColors.purple)
+                actionTile(icon: "person.badge.plus", label: "Add Staff", color: AppColors.secondary)
                 actionTile(icon: "building.2.fill", label: "Add Store", color: AppColors.info)
                 actionTile(icon: "arrow.left.arrow.right", label: "Transfer", color: AppColors.success)
                 actionTile(icon: "percent", label: "Promotion", color: AppColors.warning)
-                actionTile(icon: "doc.text.fill", label: "Report", color: AppColors.purpleLight)
+                actionTile(icon: "doc.text.fill", label: "Report", color: AppColors.secondaryLight)
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
         }
@@ -348,7 +348,7 @@ struct AdminDashboardView: View {
                     .lineLimit(1)
                 Text(by)
                     .font(AppTypography.micro)
-                    .foregroundColor(AppColors.purple)
+                    .foregroundColor(AppColors.secondary)
             }
         }
         .padding(.horizontal, AppSpacing.sm)
