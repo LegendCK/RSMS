@@ -11,6 +11,7 @@ import SwiftData
 struct SalesDashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var showingProfile = false
+    @State private var showingCreateClient = false
 
     var body: some View {
         NavigationStack {
@@ -49,10 +50,26 @@ struct SalesDashboardView: View {
                                 .padding(.horizontal, AppSpacing.screenHorizontal)
 
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AppSpacing.md) {
-                                quickActionCard(title: "New Client", icon: "person.badge.plus", color: AppColors.accent)
-                                quickActionCard(title: "Book Appointment", icon: "calendar.badge.plus", color: AppColors.purple)
-                                quickActionCard(title: "Start Sale", icon: "bag.badge.plus", color: AppColors.success)
-                                quickActionCard(title: "Create AST", icon: "wrench.and.screwdriver", color: AppColors.info)
+                                Button {
+                                    showingCreateClient = true
+                                } label: {
+                                    quickActionCard(title: "New Client", icon: "person.badge.plus", color: AppColors.accent)
+                                }
+                                
+                                Button {
+                                } label: {
+                                    quickActionCard(title: "Book Appt", icon: "calendar.badge.plus", color: AppColors.purple)
+                                }
+                                
+                                Button {
+                                } label: {
+                                    quickActionCard(title: "Start Sale", icon: "bag.badge.plus", color: AppColors.success)
+                                }
+                                
+                                Button {
+                                } label: {
+                                    quickActionCard(title: "Create AST", icon: "wrench.and.screwdriver", color: AppColors.info)
+                                }
                             }
                             .padding(.horizontal, AppSpacing.screenHorizontal)
                         }
@@ -94,6 +111,9 @@ struct SalesDashboardView: View {
             }
             .sheet(isPresented: $showingProfile) {
                 SalesProfileView()
+            }
+            .navigationDestination(isPresented: $showingCreateClient) {
+                CreateClientProfileView()
             }
         }
     }
