@@ -2,7 +2,7 @@
 //  OrganizationView.swift
 //  infosys2
 //
-//  Enterprise organization — boutique locations, staff management, role-based access.
+//  Enterprise organization — boutique locations, staff management, role access templates.
 //
 
 import SwiftUI
@@ -10,6 +10,10 @@ import SwiftData
 
 struct OrganizationView: View {
     @State private var selectedSection = 0
+
+    @State private var showCreateBoutique = false
+    @State private var showCreateStaff = false
+    @State private var showCreateRole = false
 
     var body: some View {
         NavigationStack {
@@ -29,10 +33,14 @@ struct OrganizationView: View {
                     .padding(.bottom, AppSpacing.sm)
 
                     switch selectedSection {
-                    case 0: OrgBoutiquesSubview()
-                    case 1: OrgStaffSubview()
-                    case 2: OrgRolesSubview()
-                    default: OrgBoutiquesSubview()
+                    case 0:
+                        OrgBoutiquesSubview(showCreateBoutique: $showCreateBoutique)
+                    case 1:
+                        OrgStaffSubview(showCreateStaff: $showCreateStaff)
+                    case 2:
+                        OrgRolesSubview(showCreateRole: $showCreateRole)
+                    default:
+                        OrgBoutiquesSubview(showCreateBoutique: $showCreateBoutique)
                     }
                 }
             }
@@ -44,7 +52,7 @@ struct OrganizationView: View {
                         .foregroundColor(AppColors.textPrimaryDark)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {}) {
+                    Button(action: handleCreateTap) {
                         Image(systemName: "plus.circle.fill")
                             .font(AppTypography.toolbarIcon)
                             .foregroundColor(AppColors.accent)
@@ -53,61 +61,156 @@ struct OrganizationView: View {
             }
         }
     }
+
+    private func handleCreateTap() {
+        switch selectedSection {
+        case 0: showCreateBoutique = true
+        case 1: showCreateStaff = true
+        case 2: showCreateRole = true
+        default: break
+        }
+    }
 }
 
 // MARK: - Boutiques
 
 struct OrgBoutiquesSubview: View {
+    @Binding var showCreateBoutique: Bool
+    @Query(sort: \StoreLocation.name) private var stores: [StoreLocation]
+    @Environment(\.modelContext) private var modelContext
+
+    @State private var editingStore: StoreLocation?
+    @State private var syncMessage: String?
+    @State private var isSyncing = false
+
+    private var boutiqueStores: [StoreLocation] {
+        stores.filter { $0.type == .boutique }
+    }
+
+    private var activeStores: [StoreLocation] {
+        boutiqueStores.filter { $0.isOperational }
+    }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
-                // Stats
                 HStack(spacing: AppSpacing.sm) {
-                    statPill(value: "4", label: "Active", color: AppColors.success)
-                    statPill(value: "35", label: "Staff", color: AppColors.secondary)
-                    statPill(value: "$2.4M", label: "Revenue", color: AppColors.accent)
+                    statPill(value: "\(activeStores.count)", label: "Active", color: AppColors.success)
+                    statPill(value: "\(boutiqueStores.reduce(0) { $0 + max(1, $1.capacityUnits / 100) })", label: "Capacity", color: AppColors.secondary)
+                    statPill(value: "\(boutiqueStores.count)", label: "Total", color: AppColors.accent)
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
                 .padding(.top, AppSpacing.sm)
 
-                boutiqueCard(name: "Fifth Avenue", city: "New York, NY", manager: "James Beaumont", staff: 12, revenue: "$890K", status: "Operational")
-                boutiqueCard(name: "Rodeo Drive", city: "Beverly Hills, CA", manager: "Sophia Laurent", staff: 9, revenue: "$720K", status: "Operational")
-                boutiqueCard(name: "Champs-Élysées", city: "Paris, France", manager: "—", staff: 8, revenue: "$540K", status: "Operational")
-                boutiqueCard(name: "Ginza", city: "Tokyo, Japan", manager: "—", staff: 6, revenue: "$250K", status: "Operational")
+                if isSyncing {
+                    HStack(spacing: AppSpacing.xs) {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .tint(AppColors.accent)
+                        Text("Syncing boutiques with Supabase...")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if let syncMessage {
+                    Text(syncMessage)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if boutiqueStores.isEmpty {
+                    emptyCard
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                } else {
+                    ForEach(boutiqueStores) { store in
+                        NavigationLink {
+                            OrgBoutiqueDetailView(store: store) {
+                                editingStore = store
+                            } onDelete: {
+                                Task { await deleteStore(store) }
+                            }
+                        } label: {
+                            boutiqueCard(store: store)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                    }
+                }
             }
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .task { await syncStores() }
+        .sheet(isPresented: $showCreateBoutique) {
+            OrgStoreEditorSheet(store: nil) { created in
+                editingStore = created
+            }
+        }
+        .sheet(item: $editingStore) { store in
+            OrgStoreEditorSheet(store: store) { _ in }
+        }
     }
 
-    private func boutiqueCard(name: String, city: String, manager: String, staff: Int, revenue: String, status: String) -> some View {
+    private var emptyCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Maison Luxe — \(name)").font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                    Text(city).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                }
-                Spacer()
-                Text(status.uppercased()).font(AppTypography.nano).foregroundColor(AppColors.success)
-                    .padding(.horizontal, 8).padding(.vertical, 3).background(AppColors.success.opacity(0.12)).cornerRadius(4)
-            }
-            Divider().background(AppColors.border)
-            HStack(spacing: AppSpacing.xl) {
-                detailCol(label: "Manager", value: manager, color: AppColors.secondary)
-                detailCol(label: "Revenue", value: revenue, color: AppColors.accent)
-                detailCol(label: "Staff", value: "\(staff)", color: AppColors.textPrimaryDark)
-            }
+            Text("No boutiques configured")
+                .font(AppTypography.heading3)
+                .foregroundColor(AppColors.textPrimaryDark)
+            Text("Tap + to add your first boutique and sync it to Supabase.")
+                .font(AppTypography.bodySmall)
+                .foregroundColor(AppColors.textSecondaryDark)
         }
         .padding(AppSpacing.cardPadding)
         .background(AppColors.backgroundSecondary)
         .cornerRadius(AppSpacing.radiusLarge)
-        .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge).stroke(AppColors.border, lineWidth: 0.5))
-        .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    private func boutiqueCard(store: StoreLocation) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Maison Luxe — \(store.name)")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("\(store.city), \(store.country)")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                Spacer()
+                Text(store.isOperational ? "OPERATIONAL" : "PAUSED")
+                    .font(AppTypography.nano)
+                    .foregroundColor(store.isOperational ? AppColors.success : AppColors.warning)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background((store.isOperational ? AppColors.success : AppColors.warning).opacity(0.12))
+                    .cornerRadius(4)
+            }
+
+            Divider().background(AppColors.border)
+
+            HStack(spacing: AppSpacing.xl) {
+                detailCol(label: "Manager", value: store.managerName, color: AppColors.secondary)
+                detailCol(label: "Code", value: store.code, color: AppColors.accent)
+                detailCol(label: "Units", value: "\(store.capacityUnits)", color: AppColors.textPrimaryDark)
+            }
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(.regularMaterial)
+        .cornerRadius(AppSpacing.radiusLarge)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+        )
     }
 
     private func detailCol(label: String, value: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-            Text(value).font(AppTypography.bodySmall).foregroundColor(color)
+            Text(value).font(AppTypography.bodySmall).foregroundColor(color).lineLimit(1)
         }
     }
 
@@ -121,32 +224,417 @@ struct OrgBoutiquesSubview: View {
         .background(AppColors.backgroundSecondary)
         .cornerRadius(AppSpacing.radiusMedium)
     }
+
+    private func syncStores() async {
+        isSyncing = true
+        defer { isSyncing = false }
+        do {
+            // Pull active staff first so boutique manager picker stays current.
+            try await StaffSyncService.shared.syncStaff(modelContext: modelContext)
+            try await StoreSyncService.shared.syncStores(modelContext: modelContext)
+            syncMessage = "Synced with Supabase."
+        } catch {
+            syncMessage = "Supabase sync failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func deleteStore(_ store: StoreLocation) async {
+        do {
+            try await StoreSyncService.shared.deleteStore(id: store.id)
+            modelContext.delete(store)
+            try? modelContext.save()
+            syncMessage = "Boutique deleted and synced."
+        } catch {
+            syncMessage = "Delete failed: \(error.localizedDescription)"
+        }
+    }
+}
+
+struct OrgBoutiqueDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    let store: StoreLocation
+    let onManage: () -> Void
+    let onDelete: () -> Void
+    @State private var showDeleteConfirm = false
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: AppSpacing.md) {
+                card("Overview", icon: "building.2.fill") {
+                    row("Store", store.name)
+                    row("Code", store.code)
+                    row("Type", store.type == .boutique ? "Boutique" : "Distribution")
+                    row("Status", store.isOperational ? "Operational" : "Paused")
+                }
+
+                card("Location", icon: "mappin.and.ellipse") {
+                    row("Address", store.addressLine1)
+                    row("City", store.city)
+                    row("State", store.stateProvince)
+                    row("Postal", store.postalCode)
+                    row("Country", store.country)
+                    row("Region", store.region)
+                }
+
+                card("Operations", icon: "person.2.fill") {
+                    row("Manager", store.managerName)
+                    row("Capacity", "\(store.capacityUnits) units")
+                }
+            }
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.top, AppSpacing.sm)
+            .padding(.bottom, AppSpacing.xxxl)
+        }
+        .navigationTitle(store.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Manage") { onManage() }
+                    .foregroundColor(AppColors.accent)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(role: .destructive) { showDeleteConfirm = true } label: {
+                    Image(systemName: "trash")
+                }
+            }
+        }
+        .confirmationDialog("Delete this boutique?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("Delete Boutique", role: .destructive) {
+                onDelete()
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This removes the boutique locally and in Supabase stores.")
+        }
+    }
+
+    private func card<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Label(title, systemImage: icon)
+                .font(AppTypography.overline)
+                .foregroundColor(AppColors.accent)
+            content()
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(.regularMaterial)
+        .cornerRadius(AppSpacing.radiusXL)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusXL)
+                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+        )
+    }
+
+    private func row(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label.uppercased())
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+            Spacer()
+            Text(value)
+                .font(AppTypography.bodySmall)
+                .foregroundColor(AppColors.textPrimaryDark)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+}
+
+struct OrgStoreEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \User.name) private var allUsers: [User]
+    @Query(sort: \StoreLocation.name) private var allStores: [StoreLocation]
+
+    let store: StoreLocation?
+    let onSaved: (StoreLocation) -> Void
+
+    @State private var code: String
+    @State private var name: String
+    @State private var type: LocationType
+    @State private var country: String
+    @State private var city: String
+    @State private var addressLine1: String
+    @State private var stateProvince: String
+    @State private var postalCode: String
+    @State private var region: String
+    @State private var managerName: String
+    @State private var selectedManagerName: String
+    @State private var capacityText: String
+    @State private var isOperational: Bool
+    @State private var isSaving = false
+    @State private var syncMessage: String?
+
+    init(store: StoreLocation?, onSaved: @escaping (StoreLocation) -> Void) {
+        self.store = store
+        self.onSaved = onSaved
+        _code = State(initialValue: store?.code ?? "")
+        _name = State(initialValue: store?.name ?? "")
+        _type = State(initialValue: store?.type ?? .boutique)
+        _country = State(initialValue: store?.country ?? "")
+        _city = State(initialValue: store?.city ?? "")
+        _addressLine1 = State(initialValue: store?.addressLine1 ?? "")
+        _stateProvince = State(initialValue: store?.stateProvince ?? "")
+        _postalCode = State(initialValue: store?.postalCode ?? "")
+        _region = State(initialValue: store?.region ?? "")
+        _managerName = State(initialValue: store?.managerName ?? "")
+        _selectedManagerName = State(initialValue: store?.managerName ?? "")
+        _capacityText = State(initialValue: "\(store?.capacityUnits ?? 0)")
+        _isOperational = State(initialValue: store?.isOperational ?? true)
+    }
+
+    private var capacityUnits: Int? { Int(capacityText) }
+    private var isFormValid: Bool {
+        !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !country.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !selectedManagerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        capacityUnits != nil &&
+        isCodeUnique
+    }
+
+    private var availableManagers: [User] {
+        allUsers.filter { $0.role == .boutiqueManager && $0.isActive }
+    }
+
+    private var isCodeUnique: Bool {
+        let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !normalized.isEmpty else { return false }
+        return allStores
+            .filter { current in
+                guard let store else { return true }
+                return current.id != store.id
+            }
+            .allSatisfy { $0.code.uppercased() != normalized }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppSpacing.lg) {
+                    card("Store Identity", icon: "building.2.fill") {
+                        row("Code", text: $code)
+                        row("Store Name", text: $name)
+                        Picker("Type", selection: $type) {
+                            Text("Boutique").tag(LocationType.boutique)
+                            Text("Distribution").tag(LocationType.distributionCenter)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    card("Location", icon: "mappin.and.ellipse") {
+                        row("Address", text: $addressLine1)
+                        row("City", text: $city)
+                        row("State / Province", text: $stateProvince)
+                        row("Postal Code", text: $postalCode)
+                        row("Country", text: $country)
+                        row("Region", text: $region)
+                    }
+
+                    card("Operations", icon: "person.2.fill") {
+                        managerPickerRow
+                        row("Capacity Units", text: $capacityText, keyboard: .numberPad)
+                        Toggle("Operational", isOn: $isOperational)
+                            .tint(AppColors.accent)
+                    }
+
+                    if let syncMessage {
+                        Text(syncMessage)
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if !isCodeUnique {
+                        Text("Code already used by another boutique. Choose a unique code.")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.error)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.sm)
+                .padding(.bottom, AppSpacing.xxxl)
+            }
+            .navigationTitle(store == nil ? "New Boutique" : "Manage Boutique")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                if selectedManagerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   let firstManager = availableManagers.first {
+                    selectedManagerName = firstManager.name
+                    managerName = firstManager.name
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(AppColors.accent)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        if isSaving { ProgressView().tint(AppColors.accent) } else { Text("Save") }
+                    }
+                    .disabled(!isFormValid || isSaving)
+                    .foregroundColor((isFormValid && !isSaving) ? AppColors.accent : AppColors.neutral400)
+                }
+            }
+        }
+    }
+
+    private func card<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Label(title, systemImage: icon)
+                .font(AppTypography.overline)
+                .foregroundColor(AppColors.accent)
+            content()
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(.regularMaterial)
+        .cornerRadius(AppSpacing.radiusXL)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusXL)
+                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+        )
+    }
+
+    private func row(_ label: String, text: Binding<String>, keyboard: UIKeyboardType = .default) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text(label)
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+            TextField(label, text: text)
+                .keyboardType(keyboard)
+                .font(AppTypography.bodyMedium)
+                .foregroundColor(AppColors.textPrimaryDark)
+                .padding(AppSpacing.sm)
+                .background(AppColors.backgroundWhite)
+                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        }
+    }
+
+    private var managerPickerRow: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text("Manager")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+
+            Menu {
+                if availableManagers.isEmpty {
+                    Text("No active boutique managers found")
+                } else {
+                    ForEach(availableManagers) { manager in
+                        Button {
+                            selectedManagerName = manager.name
+                            managerName = manager.name
+                        } label: {
+                            Text(manager.name)
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(selectedManagerName.isEmpty ? "Select manager" : selectedManagerName)
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(selectedManagerName.isEmpty ? AppColors.neutral500 : AppColors.textPrimaryDark)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.neutral500)
+                }
+                .padding(AppSpacing.sm)
+                .background(AppColors.backgroundWhite)
+                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+            }
+        }
+    }
+
+    private func save() async {
+        guard isFormValid, let capacityUnits else { return }
+        isSaving = true
+        defer { isSaving = false }
+
+        let target: StoreLocation
+        if let store {
+            target = store
+            target.updatedAt = Date()
+        } else {
+            target = StoreLocation(
+                code: code,
+                name: name,
+                type: type,
+                addressLine1: addressLine1,
+                city: city,
+                stateProvince: stateProvince,
+                postalCode: postalCode,
+                country: country,
+                region: region,
+                managerName: managerName,
+                capacityUnits: capacityUnits,
+                isOperational: isOperational
+            )
+            modelContext.insert(target)
+        }
+
+        target.code = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.type = type
+        target.country = country.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.city = city.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.addressLine1 = addressLine1.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.stateProvince = stateProvince.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.postalCode = postalCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.region = region.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.managerName = selectedManagerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.capacityUnits = capacityUnits
+        target.isOperational = isOperational
+
+        do {
+            try modelContext.save()
+            _ = try await StoreSyncService.shared.upsertStore(target)
+            syncMessage = "Saved and synced with Supabase."
+            onSaved(target)
+            dismiss()
+        } catch {
+            syncMessage = "Saved locally. Supabase sync failed: \(error.localizedDescription)"
+        }
+    }
 }
 
 // MARK: - Staff Management
 
 struct OrgStaffSubview: View {
+    @Binding var showCreateStaff: Bool
     @Query(sort: \User.createdAt, order: .reverse) private var allUsers: [User]
     @Environment(\.modelContext) private var modelContext
-    @State private var showCreateUser = false
     @State private var selectedRoleFilter: UserRole? = nil
     @State private var searchText = ""
+    @State private var editingUser: User?
+    @State private var isSyncing = false
+    @State private var syncMessage: String?
 
     private var filtered: [User] {
-        var u = allUsers.filter { $0.role != .customer }
-        if let r = selectedRoleFilter { u = u.filter { $0.role == r } }
-        if !searchText.isEmpty { u = u.filter { $0.name.localizedCaseInsensitiveContains(searchText) || $0.email.localizedCaseInsensitiveContains(searchText) } }
-        return u
+        var users = allUsers.filter { $0.role != .customer }
+        if let selectedRoleFilter { users = users.filter { $0.role == selectedRoleFilter } }
+        if !searchText.isEmpty {
+            users = users.filter {
+                $0.name.localizedCaseInsensitiveContains(searchText) ||
+                $0.email.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+        return users
     }
 
     private let staffRoles: [UserRole?] = [nil, .boutiqueManager, .salesAssociate, .inventoryController, .serviceTechnician]
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search
             HStack(spacing: AppSpacing.sm) {
                 Image(systemName: "magnifyingglass").foregroundColor(AppColors.neutral500)
-                TextField("Search staff...", text: $searchText).font(AppTypography.bodyMedium).foregroundColor(AppColors.textPrimaryDark)
+                TextField("Search staff...", text: $searchText)
+                    .font(AppTypography.bodyMedium)
+                    .foregroundColor(AppColors.textPrimaryDark)
             }
             .padding(AppSpacing.sm)
             .background(AppColors.backgroundSecondary)
@@ -156,7 +644,9 @@ struct OrgStaffSubview: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppSpacing.xs) {
                     ForEach(staffRoles, id: \.self) { role in
-                        chipBtn(label: role?.rawValue ?? "All", selected: selectedRoleFilter == role) { selectedRoleFilter = role }
+                        chipBtn(label: role?.rawValue ?? "All", selected: selectedRoleFilter == role) {
+                            selectedRoleFilter = role
+                        }
                     }
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -164,12 +654,47 @@ struct OrgStaffSubview: View {
             .padding(.vertical, AppSpacing.xs)
 
             HStack {
-                Text("\(filtered.count) staff members").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+                Text("\(filtered.count) staff members")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
                 Spacer()
-                Text("\(filtered.filter { $0.isActive }.count) active").font(AppTypography.caption).foregroundColor(AppColors.success)
+                Text("\(filtered.filter { $0.isActive }.count) active")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.success)
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.bottom, AppSpacing.xs)
+
+            if isSyncing {
+                HStack(spacing: AppSpacing.xs) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .tint(AppColors.accent)
+                    Text("Syncing staff with Supabase...")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    Spacer()
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.bottom, AppSpacing.xs)
+            } else if let syncMessage {
+                HStack(alignment: .top, spacing: AppSpacing.xs) {
+                    Image(systemName: syncMessage.lowercased().contains("synced") ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(AppTypography.infoIcon)
+                        .foregroundColor(syncMessage.lowercased().contains("synced") ? AppColors.success : AppColors.warning)
+                        .padding(.top, 2)
+                    Text(syncMessage)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                }
+                .padding(AppSpacing.sm)
+                .background(AppColors.backgroundSecondary)
+                .cornerRadius(AppSpacing.radiusMedium)
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.bottom, AppSpacing.xs)
+            }
 
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: AppSpacing.xs) {
@@ -181,40 +706,55 @@ struct OrgStaffSubview: View {
                 .padding(.bottom, AppSpacing.xxxl)
             }
         }
-        .sheet(isPresented: $showCreateUser) {
-            CreateUserSheet(modelContext: modelContext)
+        .task { await syncStaff() }
+        .sheet(isPresented: $showCreateStaff) {
+            OrgCreateStaffSheet { newUser in
+                Task { await pushSingleUser(newUser) }
+            }
+        }
+        .sheet(item: $editingUser) { user in
+            OrgManageStaffSheet(user: user)
         }
     }
 
     private func staffRow(_ user: User) -> some View {
         HStack(spacing: AppSpacing.sm) {
             ZStack {
-                Circle().fill(roleColor(user.role).opacity(0.15)).frame(width: 40, height: 40)
-                Text(initials(user.name)).font(AppTypography.editLink).foregroundColor(roleColor(user.role))
+                Circle()
+                    .fill(roleColor(user.role).opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Text(initials(user.name))
+                    .font(AppTypography.editLink)
+                    .foregroundColor(roleColor(user.role))
             }
+
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(user.name).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
                     if !user.isActive {
-                        Text("INACTIVE").font(AppTypography.pico).foregroundColor(AppColors.error)
-                            .padding(.horizontal, 4).padding(.vertical, 1).background(AppColors.error.opacity(0.12)).cornerRadius(3)
+                        Text("INACTIVE")
+                            .font(AppTypography.pico)
+                            .foregroundColor(AppColors.error)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(AppColors.error.opacity(0.12))
+                            .cornerRadius(3)
                     }
                 }
                 Text(user.email).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
                 Text(user.role.rawValue).font(AppTypography.roleTag).foregroundColor(roleColor(user.role))
             }
             Spacer()
-            Menu {
-                Button(action: {}) { Label("Edit", systemImage: "pencil") }
-                Button(action: {}) { Label("Reset Password", systemImage: "key") }
-                Divider()
-                Button(role: .destructive, action: { user.isActive.toggle(); try? modelContext.save() }) {
-                    Label(user.isActive ? "Deactivate" : "Reactivate", systemImage: user.isActive ? "person.slash" : "person.badge.plus")
-                }
+
+            Button {
+                editingUser = user
             } label: {
-                Image(systemName: "ellipsis").font(AppTypography.iconSmall).foregroundColor(AppColors.neutral500)
+                Image(systemName: "chevron.right")
+                    .font(AppTypography.chevron)
+                    .foregroundColor(AppColors.neutral600)
                     .frame(width: 28, height: AppSpacing.touchTarget)
             }
+            .buttonStyle(.plain)
         }
         .padding(AppSpacing.sm)
         .background(AppColors.backgroundSecondary)
@@ -239,64 +779,540 @@ struct OrgStaffSubview: View {
 
     private func chipBtn(label: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(label).font(AppTypography.caption)
-                .foregroundColor(selected ? AppColors.primary : AppColors.textSecondaryDark)
-                .padding(.horizontal, AppSpacing.sm).padding(.vertical, AppSpacing.xs)
+            Text(label)
+                .font(selected ? AppTypography.label : AppTypography.bodySmall)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .foregroundColor(selected ? AppColors.textPrimaryLight : AppColors.textSecondaryDark)
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, 10)
                 .background(selected ? AppColors.accent : AppColors.backgroundTertiary)
-                .cornerRadius(AppSpacing.radiusSmall)
+                .cornerRadius(AppSpacing.radiusMedium)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func syncStaff() async {
+        isSyncing = true
+        defer { isSyncing = false }
+        do {
+            try await StaffSyncService.shared.syncStaff(modelContext: modelContext)
+            syncMessage = "Synced with Supabase."
+        } catch {
+            syncMessage = "Supabase sync failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func pushSingleUser(_ user: User) async {
+        do {
+            _ = try await StaffSyncService.shared.updateStaffIfExists(user)
+            syncMessage = "Staff profile updated in Supabase."
+        } catch {
+            syncMessage = "Saved locally only. No matching auth/staff profile exists in Supabase yet."
+        }
+    }
+}
+
+struct OrgManageStaffSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var user: User
+
+    @State private var name: String
+    @State private var email: String
+    @State private var phone: String
+    @State private var role: UserRole
+    @State private var isActive: Bool
+
+    init(user: User) {
+        self.user = user
+        _name = State(initialValue: user.name)
+        _email = State(initialValue: user.email)
+        _phone = State(initialValue: user.phone)
+        _role = State(initialValue: user.role)
+        _isActive = State(initialValue: user.isActive)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppSpacing.lg) {
+                    card("Staff Details", icon: "person.fill") {
+                        field("Full Name", text: $name)
+                        field("Email", text: $email, keyboard: .emailAddress)
+                        field("Phone", text: $phone, keyboard: .phonePad)
+                    }
+
+                    card("Access", icon: "shield.fill") {
+                        Picker("Role", selection: $role) {
+                            Text(UserRole.boutiqueManager.rawValue).tag(UserRole.boutiqueManager)
+                            Text(UserRole.salesAssociate.rawValue).tag(UserRole.salesAssociate)
+                            Text(UserRole.inventoryController.rawValue).tag(UserRole.inventoryController)
+                            Text(UserRole.serviceTechnician.rawValue).tag(UserRole.serviceTechnician)
+                            Text(UserRole.corporateAdmin.rawValue).tag(UserRole.corporateAdmin)
+                        }
+                        .pickerStyle(.menu)
+
+                        Toggle("Active", isOn: $isActive)
+                            .tint(AppColors.accent)
+                    }
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.vertical, AppSpacing.md)
+            }
+            .navigationTitle("Manage Staff")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }.foregroundColor(AppColors.accent)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        user.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                        user.email = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                        user.phone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
+                        user.role = role
+                        user.isActive = isActive
+                        try? modelContext.save()
+                        Task {
+                            _ = try? await StaffSyncService.shared.updateStaffIfExists(user)
+                            dismiss()
+                        }
+                    }
+                    .foregroundColor(AppColors.accent)
+                }
+            }
+        }
+    }
+
+    private func card<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Label(title, systemImage: icon)
+                .font(AppTypography.overline)
+                .foregroundColor(AppColors.accent)
+            content()
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(.regularMaterial)
+        .cornerRadius(AppSpacing.radiusXL)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusXL)
+                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+        )
+    }
+
+    private func field(_ label: String, text: Binding<String>, keyboard: UIKeyboardType = .default) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text(label).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+            TextField(label, text: text)
+                .keyboardType(keyboard)
+                .font(AppTypography.bodyMedium)
+                .padding(AppSpacing.sm)
+                .background(AppColors.backgroundWhite)
+                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        }
+    }
+}
+
+struct OrgCreateStaffSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    let onCreated: (User) -> Void
+
+    @State private var name = ""
+    @State private var email = ""
+    @State private var phone = ""
+    @State private var password = ""
+    @State private var selectedRole: UserRole = .boutiqueManager
+    @State private var errorMessage: String?
+
+    private let creatableRoles: [UserRole] = [
+        .boutiqueManager,
+        .salesAssociate,
+        .inventoryController,
+        .serviceTechnician
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppSpacing.lg) {
+                    card("Role", icon: "person.badge.key.fill") {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: AppSpacing.xs) {
+                                ForEach(creatableRoles, id: \.self) { role in
+                                    roleChip(role)
+                                }
+                            }
+                        }
+                    }
+
+                    card("Staff Profile", icon: "person.fill") {
+                        field("Full Name", text: $name)
+                        field("Email", text: $email, keyboard: .emailAddress)
+                        field("Phone", text: $phone, keyboard: .phonePad)
+                        secureField("Temporary Password", text: $password)
+                    }
+
+                    card("Sync Logic", icon: "arrow.triangle.2.circlepath") {
+                        Text("New staff created here is saved to local app data immediately.")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                        Text("Supabase sync works only when a matching staff auth/profile already exists remotely.")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.error)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.sm)
+                .padding(.bottom, AppSpacing.xxxl)
+            }
+            .navigationTitle("Create Staff")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(AppColors.accent)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Create") { createStaff() }
+                        .disabled(!isFormValid)
+                        .opacity(isFormValid ? 1 : 0.45)
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+        }
+    }
+
+    private var isFormValid: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        password.count >= 6
+    }
+
+    private func createStaff() {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              password.count >= 6 else {
+            errorMessage = "Name, email, and a 6+ char password are required."
+            return
+        }
+
+        let newUser = User(
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+            email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            phone: phone.trimmingCharacters(in: .whitespacesAndNewlines),
+            passwordHash: password,
+            role: selectedRole
+        )
+        modelContext.insert(newUser)
+        try? modelContext.save()
+        onCreated(newUser)
+        dismiss()
+    }
+
+    private func roleChip(_ role: UserRole) -> some View {
+        Button {
+            selectedRole = role
+        } label: {
+            Text(role.rawValue)
+                .font(selectedRole == role ? AppTypography.label : AppTypography.bodySmall)
+                .foregroundColor(selectedRole == role ? AppColors.textPrimaryLight : AppColors.textSecondaryDark)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, 10)
+                .background(selectedRole == role ? AppColors.accent : AppColors.backgroundTertiary)
+                .cornerRadius(AppSpacing.radiusMedium)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func card<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Label(title, systemImage: icon)
+                .font(AppTypography.overline)
+                .foregroundColor(AppColors.accent)
+            content()
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(.regularMaterial)
+        .cornerRadius(AppSpacing.radiusXL)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusXL)
+                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+        )
+    }
+
+    private func field(_ label: String, text: Binding<String>, keyboard: UIKeyboardType = .default) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text(label).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+            TextField(label, text: text)
+                .keyboardType(keyboard)
+                .font(AppTypography.bodyMedium)
+                .padding(AppSpacing.sm)
+                .background(AppColors.backgroundWhite)
+                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        }
+    }
+
+    private func secureField(_ label: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text(label).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+            SecureField(label, text: text)
+                .font(AppTypography.bodyMedium)
+                .padding(AppSpacing.sm)
+                .background(AppColors.backgroundWhite)
+                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
         }
     }
 }
 
 // MARK: - Roles & Permissions
 
+struct OrgRoleTemplate: Identifiable, Codable, Hashable {
+    let id: UUID
+    var name: String
+    var icon: String
+    var palette: String
+    var permissions: [String]
+    var isSystem: Bool
+}
+
 struct OrgRolesSubview: View {
+    @Binding var showCreateRole: Bool
+    @AppStorage("org_role_templates_json") private var storedRolesJSON = ""
+
+    @State private var roles: [OrgRoleTemplate] = []
+    @State private var editingRole: OrgRoleTemplate?
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
-                roleCard(role: "Corporate Admin", color: AppColors.accent, icon: "shield.checkered",
-                         permissions: ["Full system access", "Create/manage all accounts", "Product catalog CRUD", "Pricing & tax config", "All reports & analytics"])
-                roleCard(role: "Boutique Manager", color: AppColors.secondary, icon: "building.2",
-                         permissions: ["Manage boutique staff", "View boutique inventory", "Process returns", "View boutique reports", "Customer management"])
-                roleCard(role: "Sales Associate", color: AppColors.info, icon: "person.fill",
-                         permissions: ["Process sales", "View product catalog", "Customer lookup", "Appointment booking"])
-                roleCard(role: "Inventory Controller", color: AppColors.success, icon: "shippingbox",
-                         permissions: ["Stock receiving", "Inventory counts", "Transfer requests", "Damage reporting"])
-                roleCard(role: "Service Technician", color: AppColors.warning, icon: "wrench.and.screwdriver",
-                         permissions: ["Service ticket management", "Repair logging", "Parts requisition"])
+                ForEach(roles) { role in
+                    roleCard(role)
+                }
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.sm)
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .onAppear {
+            if roles.isEmpty { roles = loadRoles() }
+        }
+        .onChange(of: roles) {
+            saveRoles(roles)
+        }
+        .sheet(isPresented: $showCreateRole) {
+            OrgRoleEditorSheet(role: nil) { newRole in
+                roles.append(newRole)
+            }
+        }
+        .sheet(item: $editingRole) { role in
+            OrgRoleEditorSheet(role: role) { updatedRole in
+                if let index = roles.firstIndex(where: { $0.id == updatedRole.id }) {
+                    roles[index] = updatedRole
+                }
+            }
+        }
     }
 
-    private func roleCard(role: String, color: Color, icon: String, permissions: [String]) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+    private func roleCard(_ role: OrgRoleTemplate) -> some View {
+        let color = paletteColor(role.palette)
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack(spacing: AppSpacing.sm) {
-                Image(systemName: icon).font(AppTypography.orgIcon).foregroundColor(color)
-                Text(role).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
+                Image(systemName: role.icon).font(AppTypography.orgIcon).foregroundColor(color)
+                Text(role.name).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
                 Spacer()
-                Button(action: {}) {
+                Button(action: { editingRole = role }) {
                     Text("Edit").font(AppTypography.editLink).foregroundColor(AppColors.accent)
                 }
             }
+
             Divider().background(AppColors.border)
-            ForEach(permissions, id: \.self) { perm in
+
+            ForEach(role.permissions, id: \.self) { permission in
                 HStack(spacing: AppSpacing.xs) {
                     Image(systemName: "checkmark").font(AppTypography.checkmarkSmall).foregroundColor(color)
-                    Text(perm).font(AppTypography.bodySmall).foregroundColor(AppColors.textSecondaryDark)
+                    Text(permission).font(AppTypography.bodySmall).foregroundColor(AppColors.textSecondaryDark)
+                }
+            }
+
+            if !role.isSystem {
+                HStack {
+                    Spacer()
+                    Button(role: .destructive) {
+                        roles.removeAll { $0.id == role.id }
+                    } label: {
+                        Text("Delete")
+                            .font(AppTypography.caption)
+                    }
                 }
             }
         }
         .padding(AppSpacing.cardPadding)
-        .background(AppColors.backgroundSecondary)
+        .background(.regularMaterial)
         .cornerRadius(AppSpacing.radiusLarge)
-        .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge).stroke(AppColors.border, lineWidth: 0.5))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+        )
+    }
+
+    private func loadRoles() -> [OrgRoleTemplate] {
+        if let data = storedRolesJSON.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode([OrgRoleTemplate].self, from: data),
+           !decoded.isEmpty {
+            return decoded
+        }
+        return defaultRoles()
+    }
+
+    private func saveRoles(_ roles: [OrgRoleTemplate]) {
+        guard let data = try? JSONEncoder().encode(roles),
+              let json = String(data: data, encoding: .utf8) else { return }
+        storedRolesJSON = json
+    }
+
+    private func defaultRoles() -> [OrgRoleTemplate] {
+        [
+            .init(id: UUID(), name: "Corporate Admin", icon: "shield.checkered", palette: "accent", permissions: ["Full system access", "Create/manage all accounts", "Product catalog CRUD", "Pricing & tax config", "All reports & analytics"], isSystem: true),
+            .init(id: UUID(), name: "Boutique Manager", icon: "building.2", palette: "secondary", permissions: ["Manage boutique staff", "View boutique inventory", "Process returns", "View boutique reports", "Customer management"], isSystem: true),
+            .init(id: UUID(), name: "Sales Associate", icon: "person.fill", palette: "info", permissions: ["Process sales", "View product catalog", "Customer lookup", "Appointment booking"], isSystem: true),
+            .init(id: UUID(), name: "Inventory Controller", icon: "shippingbox", palette: "success", permissions: ["Stock receiving", "Inventory counts", "Transfer requests", "Damage reporting"], isSystem: true),
+            .init(id: UUID(), name: "Service Technician", icon: "wrench.and.screwdriver", palette: "warning", permissions: ["Service ticket management", "Repair logging", "Parts requisition"], isSystem: true)
+        ]
+    }
+
+    private func paletteColor(_ key: String) -> Color {
+        switch key {
+        case "accent": return AppColors.accent
+        case "secondary": return AppColors.secondary
+        case "success": return AppColors.success
+        case "warning": return AppColors.warning
+        case "info": return AppColors.info
+        default: return AppColors.secondary
+        }
+    }
+}
+
+struct OrgRoleEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let role: OrgRoleTemplate?
+    let onSave: (OrgRoleTemplate) -> Void
+
+    @State private var name: String
+    @State private var icon: String
+    @State private var palette: String
+    @State private var permissionsRaw: String
+
+    init(role: OrgRoleTemplate?, onSave: @escaping (OrgRoleTemplate) -> Void) {
+        self.role = role
+        self.onSave = onSave
+        _name = State(initialValue: role?.name ?? "")
+        _icon = State(initialValue: role?.icon ?? "person.badge.key.fill")
+        _palette = State(initialValue: role?.palette ?? "accent")
+        _permissionsRaw = State(initialValue: role?.permissions.joined(separator: ", ") ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppSpacing.lg) {
+                    card("Role Identity", icon: "person.badge.key.fill") {
+                        input("Role Name", text: $name)
+                        input("SF Symbol Icon", text: $icon, placeholder: "e.g. person.fill")
+                        Picker("Palette", selection: $palette) {
+                            Text("Accent").tag("accent")
+                            Text("Secondary").tag("secondary")
+                            Text("Success").tag("success")
+                            Text("Warning").tag("warning")
+                            Text("Info").tag("info")
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    card("Permissions", icon: "checkmark.shield.fill") {
+                        TextField("Comma separated permissions", text: $permissionsRaw, axis: .vertical)
+                            .lineLimit(3...8)
+                            .font(AppTypography.bodyMedium)
+                            .padding(AppSpacing.sm)
+                            .background(AppColors.backgroundWhite)
+                            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+                    }
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.sm)
+                .padding(.bottom, AppSpacing.xxxl)
+            }
+            .navigationTitle(role == nil ? "New Role" : "Edit Role")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(AppColors.accent)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        let permissions = permissionsRaw
+                            .split(separator: ",")
+                            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                            .filter { !$0.isEmpty }
+
+                        let payload = OrgRoleTemplate(
+                            id: role?.id ?? UUID(),
+                            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                            icon: icon.trimmingCharacters(in: .whitespacesAndNewlines),
+                            palette: palette,
+                            permissions: permissions,
+                            isSystem: role?.isSystem ?? false
+                        )
+                        onSave(payload)
+                        dismiss()
+                    }
+                    .foregroundColor(AppColors.accent)
+                }
+            }
+        }
+    }
+
+    private func card<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Label(title, systemImage: icon)
+                .font(AppTypography.overline)
+                .foregroundColor(AppColors.accent)
+            content()
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(.regularMaterial)
+        .cornerRadius(AppSpacing.radiusXL)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusXL)
+                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+        )
+    }
+
+    private func input(_ label: String, text: Binding<String>, placeholder: String = "") -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text(label).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+            TextField(placeholder.isEmpty ? label : placeholder, text: text)
+                .font(AppTypography.bodyMedium)
+                .padding(AppSpacing.sm)
+                .background(AppColors.backgroundWhite)
+                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        }
     }
 }
 
 #Preview {
     OrganizationView()
-        .modelContainer(for: [User.self, Product.self, Category.self], inMemory: true)
+        .modelContainer(for: [User.self, Product.self, Category.self, StoreLocation.self], inMemory: true)
 }

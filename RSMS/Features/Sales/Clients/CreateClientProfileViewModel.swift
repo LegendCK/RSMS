@@ -141,7 +141,7 @@ final class CreateClientProfileViewModel {
         let notesJson = blob.toJSONString() ?? ""
         
         let insertDTO = ClientInsertDTO(
-            id: nil,
+            id: UUID(),
             firstName: trimmedFirst,
             lastName: trimmedLast,
             email: trimmedEmail,

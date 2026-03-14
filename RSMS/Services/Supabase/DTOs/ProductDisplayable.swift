@@ -69,6 +69,6 @@ extension ProductDTO: ProductDisplayable {
     var displayRating: Double               { 0 }
     var displayStockCount: Int              { isActive ? 1 : 0 }
     var displayAttributes: [String: String] { [:] }
-    var displayImageURLs: [URL]             { imageUrls?.compactMap { URL(string: $0) } ?? [] }
+    var displayImageURLs: [URL]             { resolvedImageURLs }
     var displayFallbackIcon: String         { "bag.fill" }
 }

@@ -50,6 +50,38 @@ struct ProductDTO: Codable, Identifiable {
     /// First image URL, or nil if none uploaded yet.
     var primaryImageUrl: String? { imageUrls?.first }
 
+    /// Normalized image URLs that can be rendered by SwiftUI.
+    /// Supports:
+    /// - fully qualified URLs
+    /// - `/storage/v1/object/public/...` paths
+    /// - `storage/v1/object/public/...` paths
+    /// - raw object paths like `products/{id}/1.jpg` (assumes `product-images` bucket)
+    var resolvedImageURLs: [URL] {
+        (imageUrls ?? []).compactMap { raw in
+            let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else { return nil }
+
+            // Absolute URL
+            if let absolute = URL(string: value), absolute.scheme != nil {
+                return absolute
+            }
+
+            let base = SupabaseConfig.projectURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+
+            // Path that already includes storage public prefix
+            if value.hasPrefix("/storage/v1/object/public/") {
+                return URL(string: "\(base)\(value)")
+            }
+            if value.hasPrefix("storage/v1/object/public/") {
+                return URL(string: "\(base)/\(value)")
+            }
+
+            // Raw object path in `product-images` bucket
+            let encodedPath = value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
+            return URL(string: "\(base)/storage/v1/object/public/product-images/\(encodedPath)")
+        }
+    }
+
     /// Formatted price string in USD.
     var formattedPrice: String {
         let formatter = NumberFormatter()
@@ -83,5 +115,26 @@ struct ProductInsertDTO: Codable {
         case imageUrls     = "image_urls"
         case isActive      = "is_active"
         case createdBy     = "created_by"
+    }
+}
+
+// MARK: - Update Payload
+
+struct ProductUpdateDTO: Codable {
+    let sku: String
+    let barcode: String?
+    let name: String
+    let brand: String?
+    let categoryId: UUID?
+    let description: String?
+    let price: Double
+    let costPrice: Double?
+    let isActive: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case sku, barcode, name, brand, description, price
+        case categoryId = "category_id"
+        case costPrice = "cost_price"
+        case isActive = "is_active"
     }
 }

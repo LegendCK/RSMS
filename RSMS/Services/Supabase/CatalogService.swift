@@ -165,6 +165,42 @@ final class CatalogService {
         }
     }
 
+    func updateProduct(
+        id: UUID,
+        sku: String,
+        name: String,
+        brand: String?,
+        categoryId: UUID?,
+        price: Double,
+        costPrice: Double?,
+        description: String?,
+        barcode: String?,
+        isActive: Bool
+    ) async throws -> ProductDTO {
+        let payload = ProductUpdateDTO(
+            sku: sku,
+            barcode: barcode.flatMap { $0.isEmpty ? nil : $0 },
+            name: name,
+            brand: brand.flatMap { $0.isEmpty ? nil : $0 },
+            categoryId: categoryId,
+            description: description.flatMap { $0.isEmpty ? nil : $0 },
+            price: price,
+            costPrice: costPrice,
+            isActive: isActive
+        )
+
+        return try await withRetry(label: "updateProduct") {
+            try await client
+                .from("products")
+                .update(payload)
+                .eq("id", value: id.uuidString)
+                .select()
+                .single()
+                .execute()
+                .value
+        }
+    }
+
     // MARK: - Storage
 
     private func uploadImage(data: Data, storagePath: String) async throws -> String {
