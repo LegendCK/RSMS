@@ -70,7 +70,7 @@ struct ClientDTO: Codable, Identifiable {
 // MARK: - Insert Payload
 
 struct ClientInsertDTO: Codable {
-    var id: UUID?
+    let id: UUID
     let firstName: String
     let lastName: String
     let email: String
