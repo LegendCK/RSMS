@@ -79,22 +79,38 @@ struct CatalogView: View {
 // MARK: - Products Sub-view (SKU Management)
 
 struct CatalogProductsSubview: View {
-    @Query(sort: \Product.createdAt, order: .reverse) private var allProducts: [Product]
-    @Query(sort: \Category.displayOrder) private var allCategories: [Category]
+    // Remote products from Supabase
+    @State private var remoteProducts: [ProductDTO] = []
+    @State private var remoteCategories: [CategoryDTO] = []
+    @State private var isLoading = false
+ 
+    // Keep local SwiftData categories for the chip filter labels
+    @Query(sort: \Category.displayOrder) private var localCategories: [Category]
     @Environment(\.modelContext) private var modelContext
+ 
     @State private var searchText = ""
-    @State private var selectedCategory: String? = nil
-
-    private var filtered: [Product] {
-        var list = allProducts
-        if let c = selectedCategory { list = list.filter { $0.categoryName == c } }
-        if !searchText.isEmpty { list = list.filter { $0.name.localizedCaseInsensitiveContains(searchText) || $0.brand.localizedCaseInsensitiveContains(searchText) } }
+    @State private var selectedCategoryId: UUID? = nil   // filter by Supabase category UUID
+ 
+    private var filtered: [ProductDTO] {
+        var list = remoteProducts
+        if let catId = selectedCategoryId {
+            list = list.filter { $0.categoryId == catId }
+        }
+        if !searchText.isEmpty {
+            let q = searchText.lowercased()
+            list = list.filter {
+                $0.name.lowercased().contains(q) ||
+                $0.sku.lowercased().contains(q) ||
+                ($0.brand?.lowercased().contains(q) == true)
+            }
+        }
         return list
     }
-
+ 
     var body: some View {
         VStack(spacing: 0) {
-            // Search
+ 
+            // Search bar
             HStack(spacing: AppSpacing.sm) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(AppColors.neutral500)
@@ -106,19 +122,23 @@ struct CatalogProductsSubview: View {
             .background(AppColors.backgroundSecondary)
             .cornerRadius(AppSpacing.radiusMedium)
             .padding(.horizontal, AppSpacing.screenHorizontal)
-
-            // Category chips
+ 
+            // Category chips — built from remote categories
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppSpacing.xs) {
-                    chipButton(label: "All", selected: selectedCategory == nil) { selectedCategory = nil }
-                    ForEach(allCategories) { cat in
-                        chipButton(label: cat.name, selected: selectedCategory == cat.name) { selectedCategory = cat.name }
+                    chipButton(label: "All", selected: selectedCategoryId == nil) {
+                        selectedCategoryId = nil
+                    }
+                    ForEach(remoteCategories) { cat in
+                        chipButton(label: cat.name, selected: selectedCategoryId == cat.id) {
+                            selectedCategoryId = cat.id
+                        }
                     }
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
             }
             .padding(.vertical, AppSpacing.xs)
-
+ 
             // Count
             HStack {
                 Text("\(filtered.count) products")
@@ -128,81 +148,131 @@ struct CatalogProductsSubview: View {
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.bottom, AppSpacing.xs)
-
-            // List
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: AppSpacing.xs) {
-                    ForEach(filtered) { product in
-                        productRow(product)
+ 
+            // Loading / list
+            if isLoading && remoteProducts.isEmpty {
+                Spacer()
+                ProgressView().progressViewStyle(.circular).tint(AppColors.accent)
+                Spacer()
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: AppSpacing.xs) {
+                        ForEach(filtered) { product in
+                            NavigationLink(destination: ProductDetailView(product: product)) {
+                                productRow(product)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.bottom, AppSpacing.xxxl)
                 }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
-                .padding(.bottom, AppSpacing.xxxl)
+                .refreshable { await loadAll() }
             }
         }
+        .task { await loadAll() }
     }
-
-    private func productRow(_ product: Product) -> some View {
+ 
+    // MARK: - Product row
+ 
+    private func productRow(_ product: ProductDTO) -> some View {
         HStack(spacing: AppSpacing.sm) {
+ 
+            // Thumbnail — AsyncImage from Supabase Storage
             ZStack {
-                RoundedRectangle(cornerRadius: 6).fill(AppColors.backgroundTertiary).frame(width: 44, height: 44)
-                Image(systemName: product.imageName).font(AppTypography.productRowIcon).foregroundColor(AppColors.neutral600)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(product.name).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark).lineLimit(1)
-                    if product.isLimitedEdition {
-                        Text("LTD").font(AppTypography.pico).foregroundColor(AppColors.accent)
-                            .padding(.horizontal, 4).padding(.vertical, 1).background(AppColors.accent.opacity(0.15)).cornerRadius(3)
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(AppColors.backgroundTertiary)
+                    .frame(width: 44, height: 44)
+ 
+                if let urlString = product.primaryImageUrl, let url = URL(string: urlString) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let img):
+                            img.resizable().scaledToFill()
+                               .frame(width: 44, height: 44).clipped()
+                               .cornerRadius(6)
+                        default:
+                            Image(systemName: "bag.fill")
+                                .font(AppTypography.productRowIcon)
+                                .foregroundColor(AppColors.neutral600)
+                        }
                     }
+                } else {
+                    Image(systemName: "bag.fill")
+                        .font(AppTypography.productRowIcon)
+                        .foregroundColor(AppColors.neutral600)
                 }
-                Text(product.categoryName).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
             }
+ 
+            // Name + brand
+            VStack(alignment: .leading, spacing: 2) {
+                Text(product.name)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                    .lineLimit(1)
+                Text(product.brand ?? "Maison Luxe")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+ 
             Spacer()
-
+ 
+            // Price + active dot
             VStack(alignment: .trailing, spacing: 2) {
-                Text(product.formattedPrice).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                stockLabel(product.stockCount)
-            }
-
-            Menu {
-                Button(action: {}) { Label("Edit", systemImage: "pencil") }
-                Button(action: {}) { Label("Price", systemImage: "dollarsign.circle") }
-                Button(action: {}) { Label("Stock", systemImage: "shippingbox") }
-                Divider()
-                Button(role: .destructive, action: { modelContext.delete(product); try? modelContext.save() }) {
-                    Label("Delete", systemImage: "trash")
+                Text(product.formattedPrice)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                HStack(spacing: 3) {
+                    Circle()
+                        .fill(product.isActive ? AppColors.success : AppColors.error)
+                        .frame(width: 5, height: 5)
+                    Text(product.isActive ? "Active" : "Inactive")
+                        .font(AppTypography.caption)
+                        .foregroundColor(product.isActive ? AppColors.success : AppColors.error)
                 }
-            } label: {
-                Image(systemName: "ellipsis").font(AppTypography.iconSmall).foregroundColor(AppColors.neutral500)
-                    .frame(width: 28, height: AppSpacing.touchTarget)
             }
+ 
+            Image(systemName: "ellipsis")
+                .font(AppTypography.iconSmall)
+                .foregroundColor(AppColors.neutral500)
+                .frame(width: 28, height: AppSpacing.touchTarget)
         }
         .padding(AppSpacing.sm)
         .background(AppColors.backgroundSecondary)
         .cornerRadius(AppSpacing.radiusMedium)
     }
-
-    private func stockLabel(_ count: Int) -> some View {
-        let color = count > 5 ? AppColors.success : count > 0 ? AppColors.warning : AppColors.error
-        return HStack(spacing: 3) {
-            Circle().fill(color).frame(width: 5, height: 5)
-            Text("\(count)").font(AppTypography.caption).foregroundColor(color)
-        }
-    }
-
+ 
+    // MARK: - Chip button
+ 
     private func chipButton(label: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(label).font(AppTypography.caption)
+            Text(label)
+                .font(AppTypography.caption)
                 .foregroundColor(selected ? AppColors.primary : AppColors.textSecondaryDark)
-                .padding(.horizontal, AppSpacing.sm).padding(.vertical, AppSpacing.xs)
+                .padding(.horizontal, AppSpacing.sm)
+                .padding(.vertical, AppSpacing.xs)
                 .background(selected ? AppColors.accent : AppColors.backgroundTertiary)
                 .cornerRadius(AppSpacing.radiusSmall)
         }
     }
+ 
+    // MARK: - Data loading
+ 
+    private func loadAll() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            async let cats  = CatalogService.shared.fetchCategories()
+            async let prods = CatalogService.shared.fetchProducts()
+            let (c, p) = try await (cats, prods)
+            remoteCategories = c
+            remoteProducts   = p
+        } catch {
+            print("[CatalogProductsSubview] Load failed: \(error)")
+        }
+    }
 }
-
+ 
 // MARK: - Categories Sub-view
 
 struct CatalogCategoriesSubview: View {
