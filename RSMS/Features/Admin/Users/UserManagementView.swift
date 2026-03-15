@@ -237,7 +237,7 @@ struct UserManagementView: View {
     private func roleBadgeColor(_ role: UserRole) -> Color {
         switch role {
         case .corporateAdmin: return AppColors.accent
-        case .boutiqueManager: return AppColors.purple
+        case .boutiqueManager: return AppColors.secondary
         case .salesAssociate: return AppColors.info
         case .inventoryController: return AppColors.success
         case .serviceTechnician: return AppColors.warning

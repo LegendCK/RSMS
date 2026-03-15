@@ -116,7 +116,7 @@ struct AdminProfileView: View {
         VStack(spacing: AppSpacing.md) {
             ZStack {
                 Circle()
-                    .stroke(AppColors.purple.opacity(0.2), lineWidth: 1)
+                    .stroke(AppColors.secondary.opacity(0.2), lineWidth: 1)
                     .frame(width: 116, height: 116)
 
                 Circle()
@@ -179,7 +179,7 @@ struct AdminProfileView: View {
             HStack(spacing: AppSpacing.md) {
                 Image(systemName: icon)
                     .font(AppTypography.menuIcon)
-                    .foregroundColor(AppColors.purple)
+                    .foregroundColor(AppColors.secondary)
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 2) {

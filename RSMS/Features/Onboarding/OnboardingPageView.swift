@@ -38,9 +38,9 @@ struct OnboardingPageView: View {
                     )
                     .frame(width: 280, height: 280)
 
-                // Outer decorative ring — purple
+                // Outer decorative ring — secondary
                 Circle()
-                    .stroke(AppColors.purple.opacity(0.15), lineWidth: 1)
+                    .stroke(AppColors.secondary.opacity(0.15), lineWidth: 1)
                     .frame(width: 200, height: 200)
 
                 // Middle decorative ring — gold

@@ -142,7 +142,7 @@ struct ProductListView: View {
                                 Text("LIMITED")
                                     .font(AppTypography.overline)
                                     .tracking(1)
-                                    .foregroundColor(AppColors.primary)
+                                    .foregroundColor(AppColors.textPrimaryLight)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
                                     .background(AppColors.accent)

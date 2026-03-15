@@ -1,16 +1,11 @@
 //
 //  ProductDetailView.swift
-//  infosys2
+//  RSMS
 //
-//  Modified to accept any ProductDisplayable — works with both the local
-//  SwiftData `Product` and the remote `ProductDTO` from Supabase.
-//
-//  Changes from original:
-//   1. `@Bindable var product: Product` → `let product: any ProductDisplayable`
-//   2. All property accesses use `display*` protocol properties
-//   3. Image section: shows AsyncImage gallery if displayImageURLs is non-empty,
-//      otherwise falls back to the original SF Symbol placeholder
-//   4. Wishlist toggle only appears for local SwiftData Product (needs @Bindable)
+//  Works with both local SwiftData `Product` and remote `ProductDTO`.
+//  Only change from original: accepts `any ProductDisplayable` instead
+//  of `@Bindable var product: Product`, and image section shows
+//  AsyncImage when Supabase URLs are present.
 //
 
 import SwiftUI
@@ -87,16 +82,13 @@ struct ProductDetailView: View {
 
                     VStack(alignment: .leading, spacing: AppSpacing.lg) {
 
-                        // Brand, name, rating
                         VStack(alignment: .leading, spacing: AppSpacing.xs) {
                             Text(product.displayBrand.uppercased())
                                 .font(AppTypography.overline).tracking(3)
                                 .foregroundColor(AppColors.accent)
-
                             Text(product.displayName)
                                 .font(AppTypography.displaySmall)
                                 .foregroundColor(AppColors.textPrimaryDark)
-
                             if product.displayRating > 0 {
                                 HStack(spacing: AppSpacing.xxs) {
                                     ForEach(0..<5) { i in
@@ -111,7 +103,6 @@ struct ProductDetailView: View {
                             }
                         }
 
-                        // Price + stock status
                         HStack(alignment: .bottom) {
                             Text(product.displayPrice)
                                 .font(AppTypography.priceDisplay)
@@ -145,7 +136,6 @@ struct ProductDetailView: View {
                             }
                         }
 
-                        // Size picker
                         if needsSizeSelector {
                             VStack(alignment: .leading, spacing: AppSpacing.sm) {
                                 Text("SIZE")
@@ -163,7 +153,6 @@ struct ProductDetailView: View {
 
                         GoldDivider()
 
-                        // Description
                         VStack(alignment: .leading, spacing: AppSpacing.sm) {
                             Text("DESCRIPTION")
                                 .font(AppTypography.overline).tracking(2)
@@ -176,18 +165,16 @@ struct ProductDetailView: View {
 
                         GoldDivider()
 
-                        // Details
                         VStack(alignment: .leading, spacing: AppSpacing.sm) {
                             Text("DETAILS")
                                 .font(AppTypography.overline).tracking(2)
                                 .foregroundColor(AppColors.accent)
-
-                            detailRow(label: "Brand", value: product.displayBrand)
+                            detailRow(label: "Brand",    value: product.displayBrand)
                             if !product.displayProductType.isEmpty {
                                 detailRow(label: "Type", value: product.displayProductType)
                             }
                             if !product.displaySKU.isEmpty {
-                                detailRow(label: "SKU", value: product.displaySKU)
+                                detailRow(label: "SKU",  value: product.displaySKU)
                             }
                             if !product.displayMaterial.isEmpty {
                                 detailRow(label: "Material", value: product.displayMaterial)
@@ -202,7 +189,6 @@ struct ProductDetailView: View {
                             }
                         }
 
-                        // Specifications
                         if !product.displayAttributes.isEmpty {
                             GoldDivider()
                             VStack(alignment: .leading, spacing: AppSpacing.sm) {
@@ -249,10 +235,10 @@ struct ProductDetailView: View {
                         }
 
                         PrimaryButton(
-                            title: addedToBag ? "Added to Bag ✓" : (variantStockCount > 0 ? "Add to Bag" : "Out of Stock")
-                        ) {
-                            handleAddToBag()
-                        }
+                            title: addedToBag
+                                ? "Added to Bag ✓"
+                                : (variantStockCount > 0 ? "Add to Bag" : "Out of Stock")
+                        ) { handleAddToBag() }
                         .opacity(variantStockCount > 0 ? 1.0 : 0.5)
                         .disabled(variantStockCount == 0 && !appState.isGuest)
                     }
@@ -282,19 +268,18 @@ struct ProductDetailView: View {
     }
 
     // MARK: - Image section
-    // Remote URLs → AsyncImage gallery. No URLs → original SF Symbol.
 
     @ViewBuilder
     private var imageSection: some View {
         let urls = product.displayImageURLs
 
         if urls.isEmpty {
+            // Original SF Symbol placeholder — unchanged from before
             ZStack {
                 AppColors.backgroundSecondary.frame(height: 380)
                 Image(systemName: product.displayFallbackIcon)
                     .font(AppTypography.iconDecorative)
                     .foregroundColor(AppColors.neutral600)
-
                 if product.displayIsLimitedEdition {
                     VStack {
                         HStack {
@@ -312,6 +297,7 @@ struct ProductDetailView: View {
                 }
             }
         } else {
+            // Supabase Storage image gallery
             VStack(spacing: AppSpacing.sm) {
                 ZStack {
                     AppColors.backgroundSecondary.frame(height: 380)
@@ -329,7 +315,6 @@ struct ProductDetailView: View {
                             EmptyView()
                         }
                     }
-
                     if product.displayIsLimitedEdition {
                         VStack {
                             HStack {
@@ -348,7 +333,6 @@ struct ProductDetailView: View {
                 }
                 .frame(height: 380)
 
-                // Thumbnail strip — only when > 1 image
                 if urls.count > 1 {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: AppSpacing.xs) {
@@ -457,8 +441,6 @@ struct ProductDetailView: View {
         withAnimation(.spring(response: 0.3)) { addedToBag = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { addedToBag = false } }
     }
-
-    // MARK: - Helpers
 
     private func detailRow(label: String, value: String) -> some View {
         HStack {
