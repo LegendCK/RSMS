@@ -112,12 +112,24 @@ final class Product {
     }
 
     /// All image sources for the product gallery.
-    /// Uses `imageNames` (comma-separated) when populated, otherwise falls back to `imageName`.
+    /// Uses `imageNames` when populated (JSON array preferred, comma-separated legacy supported),
+    /// otherwise falls back to `imageName`.
     var imageList: [String] {
-        let extra = imageNames
+        let jsonParsed: [String] = {
+            guard let data = imageNames.data(using: .utf8),
+                  let values = try? JSONDecoder().decode([String].self, from: data)
+            else { return [] }
+            return values
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }()
+
+        let legacyParsed = imageNames
             .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+
+        let extra = jsonParsed.isEmpty ? legacyParsed : jsonParsed
         if !extra.isEmpty { return extra }
         return imageName.isEmpty ? [] : [imageName]
     }

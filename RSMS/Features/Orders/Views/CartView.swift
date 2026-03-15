@@ -175,17 +175,20 @@ struct CartView: View {
                 // Quantity stepper
                 HStack(spacing: AppSpacing.sm) {
                     Button {
-                        if item.quantity > 1 {
-                            item.quantity -= 1
+                        withAnimation(.spring(response: 0.25)) {
+                            if item.quantity > 1 {
+                                item.quantity -= 1
+                            } else {
+                                modelContext.delete(item)
+                            }
                             try? modelContext.save()
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     } label: {
-                        Image(systemName: "minus.circle.fill")
+                        Image(systemName: item.quantity > 1 ? "minus.circle.fill" : "trash.circle.fill")
                             .font(.system(size: 22))
-                            .foregroundColor(item.quantity > 1 ? AppColors.accent : AppColors.neutral600)
+                            .foregroundColor(item.quantity > 1 ? AppColors.accent : AppColors.error)
                     }
-                    .disabled(item.quantity <= 1)
 
                     Text("\(item.quantity)")
                         .font(AppTypography.label)

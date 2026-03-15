@@ -8,10 +8,16 @@
 
 import SwiftUI
 
+enum ProductArtworkContentMode: Equatable {
+    case fill
+    case fit
+}
+
 struct ProductArtworkView: View {
     let imageSource: String
     let fallbackSymbol: String
     var cornerRadius: CGFloat = 12
+    var contentMode: ProductArtworkContentMode = .fit
 
     var body: some View {
         ZStack {
@@ -22,9 +28,18 @@ struct ProductArtworkView: View {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
+                        Group {
+                            if contentMode == .fill {
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                            } else {
+                                image
+                                    .resizable()
+                                    .scaledToFit()
+                                    .padding(6)
+                            }
+                        }
                     case .failure:
                         fallback
                     case .empty:

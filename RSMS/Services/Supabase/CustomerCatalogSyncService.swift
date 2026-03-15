@@ -96,7 +96,8 @@ final class CustomerCatalogSyncService {
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty } ?? []
             let resolvedImageSource = normalizedImages.first ?? fallbackIcon
-            let serializedImageNames = normalizedImages.joined(separator: ",")
+            let serializedImageNames = (try? JSONEncoder().encode(normalizedImages))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? ""
 
             if let local = localById[dto.id] {
                 local.name = dto.name

@@ -252,7 +252,8 @@ struct ProductDetailView: View {
                                     ProductArtworkView(
                                         imageSource: galleryImages[idx],
                                         fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock.fill" : "bag.fill",
-                                        cornerRadius: 12
+                                        cornerRadius: 12,
+                                        contentMode: .fill
                                     )
                                     .frame(width: 58, height: 76)
                                     .overlay(
@@ -323,7 +324,8 @@ struct ProductDetailView: View {
         ProductArtworkView(
             imageSource: source,
             fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock.fill" : "bag.fill",
-            cornerRadius: 0
+            cornerRadius: 0,
+            contentMode: .fill
         )
         .frame(maxWidth: .infinity)
         .frame(height: 470)
@@ -577,6 +579,20 @@ struct ProductDetailView: View {
                 .disabled(variantStockCount == 0 && !appState.isGuest)
 
                 if cartItemQuantity > 0 {
+                    Button(action: { removeProductFromCart() }) {
+                        Text("Remove")
+                            .font(AppTypography.buttonSecondary)
+                            .foregroundColor(AppColors.error)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
+                            .background(AppColors.backgroundTertiary)
+                            .cornerRadius(AppSpacing.radiusMedium)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                                    .stroke(AppColors.error.opacity(0.35), lineWidth: 1)
+                            )
+                    }
+
                     Button(action: { navigateToCart = true }) {
                         Text("View Bag")
                             .font(AppTypography.buttonSecondary)
@@ -706,6 +722,23 @@ struct ProductDetailView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             withAnimation(.easeOut(duration: 0.2)) { addedToBag = false }
         }
+    }
+
+    private func removeProductFromCart() {
+        let email = appState.currentUserEmail
+        guard let existing = allCartItems.first(where: { $0.customerEmail == email && $0.productId == product.id }) else {
+            return
+        }
+
+        withAnimation(.spring(response: 0.25)) {
+            if existing.quantity > 1 {
+                existing.quantity -= 1
+            } else {
+                modelContext.delete(existing)
+            }
+            try? modelContext.save()
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     // MARK: - Helpers
