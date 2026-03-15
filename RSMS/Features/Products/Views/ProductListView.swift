@@ -105,6 +105,11 @@ struct ProductListView: View {
         }
         .navigationTitle(productTypeFilter ?? categoryFilter ?? "All Products")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                CartShortcutButton()
+            }
+        }
     }
 
     private func productTile(_ product: Product) -> some View {

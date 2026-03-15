@@ -74,6 +74,8 @@ struct SearchView: View {
                             .cornerRadius(AppSpacing.radiusMedium)
 
                             Spacer()
+
+                            CartShortcutButton()
                         }
                         .padding(.horizontal, AppSpacing.screenHorizontal)
                         .padding(.top, AppSpacing.md)

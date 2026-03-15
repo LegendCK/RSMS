@@ -22,6 +22,7 @@ struct ProductDetailView: View {
     // Bag/buy state
     @State private var addedToBag  = false
     @State private var showBuyNow  = false
+    @State private var navigateToCart = false
 
     // Variant selection
     @State private var selectedColorIndex = 0
@@ -84,13 +85,18 @@ struct ProductDetailView: View {
                                  AppColors.error
     }
 
-    // Demo gallery images — use the product's real images when available,
-    // otherwise synthesise a multi-image set using category-appropriate SF symbols.
+    private var cartItemQuantity: Int {
+        allCartItems
+            .first(where: { $0.customerEmail == appState.currentUserEmail && $0.productId == product.id })?
+            .quantity ?? 0
+    }
+
+    // Product gallery images from synced catalog data.
+    // Falls back to `imageName` when no multi-image payload exists.
     private var galleryImages: [String] {
         let list = product.imageList
-        if list.count > 1 { return list }
-        // Return the single real image repeated with category art for demo
-        return list
+        if !list.isEmpty { return list }
+        return [product.imageName]
     }
 
     // MARK: - Body
@@ -136,17 +142,25 @@ struct ProductDetailView: View {
                             specificationsSection
                         }
 
-                        Spacer().frame(height: 110)
+                        Spacer().frame(height: 28)
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
                     .padding(.top, AppSpacing.xl)
                 }
             }
-
-            // ── Bottom Action Bar ────────────────────────────────────
-            bottomActionBar
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                CartShortcutButton()
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            bottomActionBar
+        }
+        .navigationDestination(isPresented: $navigateToCart) {
+            CartView()
+        }
         .fullScreenCover(isPresented: $showGallery) {
             ProductImageGalleryView(
                 images: galleryImages,
@@ -182,7 +196,7 @@ struct ProductDetailView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 420)
+            .frame(height: 470)
             .background(AppColors.backgroundSecondary)
 
             // Limited edition badge
@@ -223,6 +237,65 @@ struct ProductDetailView: View {
             }
             .padding(.bottom, 14)
 
+            // Thumbnail strip for quick angle selection
+            if galleryImages.count > 1 {
+                VStack {
+                    Spacer()
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(galleryImages.indices, id: \.self) { idx in
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        currentImageIndex = idx
+                                    }
+                                } label: {
+                                    ProductArtworkView(
+                                        imageSource: galleryImages[idx],
+                                        fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock.fill" : "bag.fill",
+                                        cornerRadius: 12
+                                    )
+                                    .frame(width: 58, height: 76)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(
+                                                idx == currentImageIndex ? AppColors.accent : Color.white.opacity(0.3),
+                                                lineWidth: idx == currentImageIndex ? 2 : 1
+                                            )
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                    }
+                    .padding(.bottom, 44)
+                }
+            }
+
+            // Rich overlay for legibility and premium contrast
+            LinearGradient(
+                colors: [Color.black.opacity(0.32), .clear, Color.black.opacity(0.35)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+
+            // Page counter pill
+            VStack {
+                HStack {
+                    Spacer()
+                    Text("\(min(currentImageIndex + 1, galleryImages.count)) / \(galleryImages.count)")
+                        .font(AppTypography.caption)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .padding(.top, 14)
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                Spacer()
+            }
+
             // Expand icon (tap gesture area hint)
             HStack {
                 Spacer()
@@ -237,6 +310,13 @@ struct ProductDetailView: View {
             }
         }
         .clipped()
+        .onChange(of: galleryImages.count) { _, newCount in
+            if newCount > 0 {
+                currentImageIndex = min(currentImageIndex, newCount - 1)
+            } else {
+                currentImageIndex = 0
+            }
+        }
     }
 
     private func imageCell(source: String) -> some View {
@@ -246,7 +326,7 @@ struct ProductDetailView: View {
             cornerRadius: 0
         )
         .frame(maxWidth: .infinity)
-        .frame(height: 420)
+        .frame(height: 470)
         .contentShape(Rectangle())
     }
 
@@ -422,63 +502,71 @@ struct ProductDetailView: View {
     // MARK: - Bottom Action Bar
 
     private var bottomActionBar: some View {
-        VStack {
-            Spacer()
-            VStack(spacing: AppSpacing.xs) {
-                HStack(spacing: AppSpacing.md) {
-
-                    // Wishlist
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3)) {
-                            product.isWishlisted.toggle()
-                            try? modelContext.save()
-                        }
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    }) {
-                        Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
-                            .font(AppTypography.toolbarIcon)
-                            .foregroundColor(product.isWishlisted ? AppColors.error : AppColors.textPrimaryDark)
-                            .frame(width: AppSpacing.touchTarget + 8, height: AppSpacing.touchTarget + 8)
-                            .background(AppColors.backgroundTertiary)
-                            .cornerRadius(AppSpacing.radiusMedium)
-                    }
-
-                    // Add to Bag
-                    Button(action: { handleAddToBag() }) {
-                        HStack(spacing: 8) {
-                            if addedToBag {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .transition(.scale.combined(with: .opacity))
-                            } else {
-                                Image(systemName: "bag.fill")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .scaleEffect(bagIconScale)
-                                    .transition(.scale.combined(with: .opacity))
-                            }
-                            Text(addedToBag
-                                 ? "Added to Bag"
-                                 : (variantStockCount > 0 ? "Add to Bag" : "Out of Stock"))
-                                .font(AppTypography.buttonPrimary)
-                        }
-                        .foregroundColor(AppColors.textPrimaryLight)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: AppSpacing.touchTarget)
-                        .background(addedToBag ? AppColors.success : AppColors.accent)
-                        .cornerRadius(AppSpacing.radiusMedium)
-                        .animation(.spring(response: 0.3), value: addedToBag)
-                    }
-                    .opacity(variantStockCount > 0 ? 1.0 : 0.5)
-                    .disabled(variantStockCount == 0 && !appState.isGuest)
+        VStack(spacing: AppSpacing.sm) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(stockColor)
+                    .frame(width: 7, height: 7)
+                Text(stockLabel)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                Spacer()
+                if cartItemQuantity > 0 {
+                    Text("\(cartItemQuantity) in bag")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(AppColors.accent.opacity(0.08), in: Capsule())
                 }
+            }
 
-                // Buy Now
+            HStack(spacing: AppSpacing.sm) {
+                Button(action: {
+                    withAnimation(.spring(response: 0.3)) {
+                        product.isWishlisted.toggle()
+                        try? modelContext.save()
+                    }
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }) {
+                    Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
+                        .font(AppTypography.toolbarIcon)
+                        .foregroundColor(product.isWishlisted ? AppColors.error : AppColors.textPrimaryDark)
+                        .frame(width: AppSpacing.touchTarget, height: AppSpacing.touchTarget)
+                        .background(AppColors.backgroundTertiary, in: RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: { handleAddToBag() }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: cartItemQuantity > 0 ? "plus.circle.fill" : "bag.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .scaleEffect(bagIconScale)
+                        Text(
+                            variantStockCount > 0
+                            ? (cartItemQuantity > 0 ? "Add Another" : "Add to Bag")
+                            : "Out of Stock"
+                        )
+                        .font(AppTypography.buttonPrimary)
+                    }
+                    .foregroundColor(AppColors.textPrimaryLight)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: AppSpacing.touchTarget)
+                    .background(addedToBag ? AppColors.success : AppColors.accent)
+                    .cornerRadius(AppSpacing.radiusMedium)
+                    .animation(.spring(response: 0.3), value: addedToBag)
+                }
+                .opacity(variantStockCount > 0 ? 1.0 : 0.5)
+                .disabled(variantStockCount == 0 && !appState.isGuest)
+            }
+
+            HStack(spacing: AppSpacing.sm) {
                 Button(action: { handleBuyNow() }) {
                     Text("Buy Now")
                         .font(AppTypography.buttonSecondary)
                         .foregroundColor(variantStockCount > 0 ? AppColors.accent : AppColors.neutral600)
                         .frame(maxWidth: .infinity)
-                        .frame(height: AppSpacing.touchTarget)
+                        .frame(height: 46)
                         .background(AppColors.backgroundTertiary)
                         .cornerRadius(AppSpacing.radiusMedium)
                         .overlay(
@@ -487,14 +575,38 @@ struct ProductDetailView: View {
                         )
                 }
                 .disabled(variantStockCount == 0 && !appState.isGuest)
+
+                if cartItemQuantity > 0 {
+                    Button(action: { navigateToCart = true }) {
+                        Text("View Bag")
+                            .font(AppTypography.buttonSecondary)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
+                            .background(AppColors.backgroundSecondary)
+                            .cornerRadius(AppSpacing.radiusMedium)
+                    }
+                }
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
-            .padding(.vertical, AppSpacing.md)
-            .background(
-                AppColors.backgroundPrimary
-                    .shadow(color: .black.opacity(0.2), radius: 12, y: -6)
-            )
         }
+        .padding(.horizontal, AppSpacing.screenHorizontal)
+        .padding(.top, AppSpacing.sm)
+        .padding(.bottom, AppSpacing.sm)
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
+                .stroke(Color.white.opacity(0.3), lineWidth: 0.7)
+        )
+        .padding(.horizontal, AppSpacing.screenHorizontal)
+        .padding(.top, 8)
+        .shadow(color: .black.opacity(0.08), radius: 10, y: -2)
+        .background(
+            AppColors.backgroundPrimary.opacity(0.9)
+                .ignoresSafeArea(edges: .bottom)
+        )
     }
 
     // MARK: - Variant Chips
@@ -591,9 +703,8 @@ struct ProductDetailView: View {
         // Bounce the bag icon
         withAnimation(.spring(response: 0.2)) { bagIconScale = 1.3 }
         withAnimation(.spring(response: 0.2).delay(0.15)) { bagIconScale = 1.0 }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            withAnimation { addedToBag = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation(.easeOut(duration: 0.2)) { addedToBag = false }
         }
     }
 
