@@ -92,8 +92,11 @@ final class CustomerCatalogSyncService {
         for dto in remote {
             let categoryName = dto.categoryId.flatMap { categoryNamesByID[$0] } ?? "Uncategorized"
             let fallbackIcon = fallbackIcon(forCategory: categoryName)
-            let imageSource = dto.primaryImageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let resolvedImageSource = (imageSource?.isEmpty == false) ? imageSource! : fallbackIcon
+            let normalizedImages = dto.imageUrls?
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty } ?? []
+            let resolvedImageSource = normalizedImages.first ?? fallbackIcon
+            let serializedImageNames = normalizedImages.joined(separator: ",")
 
             if let local = localById[dto.id] {
                 local.name = dto.name
@@ -102,6 +105,7 @@ final class CustomerCatalogSyncService {
                 local.price = dto.price
                 local.categoryName = categoryName
                 local.imageName = resolvedImageSource
+                local.imageNames = serializedImageNames
                 local.sku = dto.sku
                 local.barcode = dto.barcode ?? ""
                 local.stockCount = max(local.stockCount, 1)
@@ -125,6 +129,7 @@ final class CustomerCatalogSyncService {
                     certificateRef: "",
                     productTypeName: "",
                     attributes: "{}",
+                    imageNames: serializedImageNames,
                     material: "",
                     countryOfOrigin: "",
                     weight: 0,

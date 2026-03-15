@@ -69,6 +69,9 @@ struct CategoriesView: View {
                         .font(AppTypography.navTitle)
                         .foregroundColor(Color.primary)
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    CartShortcutButton()
+                }
             }
         }
     }
