@@ -1,8 +1,8 @@
 //
 //  CheckoutView.swift
-//  infosys2
+//  RSMS
 //
-//  Multi-step checkout: Fulfillment → Payment → Review → Confirmation.
+//  Premium multi-step checkout: Delivery (saved addresses) → Payment → Review → Confirmation.
 //
 
 import SwiftUI
@@ -13,53 +13,71 @@ struct CheckoutView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query private var allCartItems: [CartItem]
+    @Query private var allAddresses: [SavedAddress]
 
     @State private var currentStep = 0
+
+    // Delivery
     @State private var selectedFulfillment: FulfillmentType = .standard
+    @State private var selectedAddress:     SavedAddress?   = nil
+    @State private var showAddressManager  = false
+    @State private var showAddNewAddress   = false
+
+    // Inline address fallback
     @State private var addressLine1 = ""
     @State private var addressLine2 = ""
-    @State private var city = ""
-    @State private var state = ""
-    @State private var zip = ""
-    @State private var selectedPayment = "Credit Card"
-    @State private var createdOrder: Order?
-    @State private var showConfirmation = false
+    @State private var city         = ""
+    @State private var addrState    = ""
+    @State private var zip          = ""
+
+    // Payment
+    @State private var selectedPayment: CheckoutPayment = .applePay
+    @State private var cardNumber  = ""
+    @State private var cardExpiry  = ""
+    @State private var cardCVV     = ""
+
+    // Order
+    @State private var createdOrder:      Order? = nil
+    @State private var showConfirmation   = false
+    @State private var isPlacing          = false
 
     private let steps = ["Delivery", "Payment", "Review"]
-    private let paymentOptions = ["Credit Card", "Apple Pay", "Pay In Store"]
 
     private var cartItems: [CartItem] {
         allCartItems.filter { $0.customerEmail == appState.currentUserEmail }
     }
+    private var savedAddresses: [SavedAddress] {
+        allAddresses
+            .filter { $0.customerEmail == appState.currentUserEmail }
+            .sorted { $0.isDefault && !$1.isDefault }
+    }
 
     private var subtotal: Double { cartItems.reduce(0) { $0 + $1.lineTotal } }
-    private var tax: Double { subtotal * 0.08 }
-    private var total: Double { subtotal + tax }
+    private var tax:      Double { subtotal * 0.08 }
+    private var shipping: Double { selectedFulfillment == .bopis ? 0 : (subtotal > 500 ? 0 : 25) }
+    private var total:    Double { subtotal + tax + shipping }
 
     var body: some View {
         ZStack {
             AppColors.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Step indicator
                 stepIndicator
                     .padding(.vertical, AppSpacing.md)
 
-                // Step content
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: AppSpacing.lg) {
                         switch currentStep {
-                        case 0: fulfillmentStep
+                        case 0: deliveryStep
                         case 1: paymentStep
                         case 2: reviewStep
                         default: EmptyView()
                         }
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
-                    .padding(.bottom, 100)
+                    .padding(.bottom, 110)
                 }
 
-                // Navigation buttons
                 bottomBar
             }
         }
@@ -70,76 +88,104 @@ struct CheckoutView: View {
                 OrderConfirmationView(order: order)
             }
         }
+        .sheet(isPresented: $showAddressManager) {
+            AddressManagerView(onSelect: { addr in selectedAddress = addr })
+        }
+        .sheet(isPresented: $showAddNewAddress) {
+            AddressEditView()
+                .onDisappear {
+                    if selectedAddress == nil {
+                        selectedAddress = savedAddresses.first(where: { $0.isDefault }) ?? savedAddresses.first
+                    }
+                }
+        }
+        .onAppear {
+            selectedAddress = savedAddresses.first(where: { $0.isDefault }) ?? savedAddresses.first
+        }
     }
 
     // MARK: - Step Indicator
 
     private var stepIndicator: some View {
-        HStack(spacing: AppSpacing.sm) {
-            ForEach(0..<steps.count, id: \.self) { index in
-                HStack(spacing: AppSpacing.xxs) {
+        HStack(spacing: 0) {
+            ForEach(steps.indices, id: \.self) { idx in
+                HStack(spacing: 6) {
                     ZStack {
                         Circle()
-                            .fill(index <= currentStep ? AppColors.accent : AppColors.neutral700)
+                            .fill(idx <= currentStep ? AppColors.accent : AppColors.backgroundSecondary)
                             .frame(width: 28, height: 28)
-
-                        if index < currentStep {
+                        if idx < currentStep {
                             Image(systemName: "checkmark")
-                                .font(AppTypography.trendArrow)
-                                .foregroundColor(AppColors.primary)
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(AppColors.textPrimaryLight)
                         } else {
-                            Text("\(index + 1)")
-                                .font(AppTypography.caption)
-                                .foregroundColor(index <= currentStep ? AppColors.primary : AppColors.textSecondaryDark)
+                            Text("\(idx + 1)")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(idx <= currentStep ? AppColors.textPrimaryLight : AppColors.neutral600)
                         }
                     }
-
-                    Text(steps[index])
+                    Text(steps[idx])
                         .font(AppTypography.caption)
-                        .foregroundColor(index <= currentStep ? AppColors.accent : AppColors.textSecondaryDark)
+                        .foregroundColor(idx <= currentStep ? AppColors.accent : AppColors.neutral600)
                 }
-
-                if index < steps.count - 1 {
+                if idx < steps.count - 1 {
                     Rectangle()
-                        .fill(index < currentStep ? AppColors.accent : AppColors.neutral700)
+                        .fill(idx < currentStep ? AppColors.accent : AppColors.neutral700.opacity(0.4))
                         .frame(height: 1)
+                        .padding(.horizontal, 8)
                 }
             }
         }
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 
-    // MARK: - Step 1: Fulfillment
+    // MARK: - Step 0: Delivery
 
-    private var fulfillmentStep: some View {
+    private var deliveryStep: some View {
         VStack(alignment: .leading, spacing: AppSpacing.lg) {
-            Text("DELIVERY METHOD")
-                .font(AppTypography.overline)
-                .tracking(2)
-                .foregroundColor(AppColors.accent)
 
-            // Fulfillment options
-            fulfillmentOption(type: .standard, title: "Standard Delivery", subtitle: "5-7 business days", icon: "shippingbox.fill")
-            fulfillmentOption(type: .bopis, title: "Pick Up In Store", subtitle: "Ready within 2 hours", icon: "building.2.fill")
+            // Fulfillment type
+            sectionHeader("FULFILLMENT")
+            VStack(spacing: AppSpacing.sm) {
+                fulfillmentOption(.standard, title: "Standard Delivery",   subtitle: subtotal > 500 ? "Free · 5–7 days" : "$25 · 5–7 days", icon: "shippingbox.fill")
+                fulfillmentOption(.bopis,    title: "Pick Up In Store",     subtitle: "Free · Ready in 2 hours", icon: "building.2.fill")
+            }
 
-            // Address form (for delivery)
+            // Address section (delivery only)
             if selectedFulfillment == .standard {
-                VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                    Text("SHIPPING ADDRESS")
-                        .font(AppTypography.overline)
-                        .tracking(2)
-                        .foregroundColor(AppColors.accent)
-                        .padding(.top, AppSpacing.md)
+                sectionHeader("SHIPPING ADDRESS")
 
-                    LuxuryTextField(placeholder: "Address Line 1", text: $addressLine1)
-                    LuxuryTextField(placeholder: "Address Line 2 (Optional)", text: $addressLine2)
+                if savedAddresses.isEmpty {
+                    // Inline form
+                    VStack(spacing: AppSpacing.sm) {
+                        LuxuryTextField(placeholder: "Address Line 1*", text: $addressLine1)
+                        LuxuryTextField(placeholder: "Address Line 2 (optional)", text: $addressLine2)
+                        HStack(spacing: AppSpacing.sm) {
+                            LuxuryTextField(placeholder: "City*", text: $city)
+                            LuxuryTextField(placeholder: "State*", text: $addrState).frame(maxWidth: 90)
+                        }
+                        LuxuryTextField(placeholder: "ZIP*", text: $zip).keyboardType(.numberPad)
 
-                    HStack(spacing: AppSpacing.sm) {
-                        LuxuryTextField(placeholder: "City", text: $city)
-                        LuxuryTextField(placeholder: "State", text: $state)
-                            .frame(width: 80)
+                        Button("Save this address") { showAddNewAddress = true }
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.accent)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
-                    LuxuryTextField(placeholder: "ZIP Code", text: $zip)
+                } else {
+                    // Saved addresses
+                    VStack(spacing: AppSpacing.sm) {
+                        ForEach(savedAddresses.prefix(3)) { addr in
+                            checkoutAddressRow(addr)
+                        }
+                        HStack(spacing: AppSpacing.lg) {
+                            Button("Manage") { showAddressManager = true }
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.accent)
+                            Button("+ Add New") { showAddNewAddress = true }
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.accent)
+                        }
+                    }
                 }
             }
 
@@ -149,7 +195,6 @@ struct CheckoutView: View {
                         Image(systemName: "mappin.circle.fill")
                             .font(.title2)
                             .foregroundColor(AppColors.accent)
-
                         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                             Text("Maison Luxe Flagship")
                                 .font(AppTypography.label)
@@ -157,6 +202,9 @@ struct CheckoutView: View {
                             Text("123 Luxury Avenue, New York, NY 10001")
                                 .font(AppTypography.caption)
                                 .foregroundColor(AppColors.textSecondaryDark)
+                            Text("Ready within 2 hours")
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.success)
                         }
                         Spacer()
                     }
@@ -166,15 +214,17 @@ struct CheckoutView: View {
         }
     }
 
-    private func fulfillmentOption(type: FulfillmentType, title: String, subtitle: String, icon: String) -> some View {
-        Button {
-            selectedFulfillment = type
-        } label: {
+    private func fulfillmentOption(_ type: FulfillmentType, title: String, subtitle: String, icon: String) -> some View {
+        Button { selectedFulfillment = type } label: {
             HStack(spacing: AppSpacing.md) {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundColor(selectedFulfillment == type ? AppColors.accent : AppColors.neutral600)
-
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(selectedFulfillment == type ? AppColors.accent.opacity(0.1) : AppColors.backgroundSecondary)
+                        .frame(width: 44, height: 44)
+                    Image(systemName: icon)
+                        .font(.system(size: 20))
+                        .foregroundColor(selectedFulfillment == type ? AppColors.accent : AppColors.neutral600)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(AppTypography.label)
@@ -183,101 +233,148 @@ struct CheckoutView: View {
                         .font(AppTypography.caption)
                         .foregroundColor(AppColors.textSecondaryDark)
                 }
-
                 Spacer()
-
                 Image(systemName: selectedFulfillment == type ? "checkmark.circle.fill" : "circle")
                     .foregroundColor(selectedFulfillment == type ? AppColors.accent : AppColors.neutral600)
             }
             .padding(AppSpacing.cardPadding)
             .background(AppColors.backgroundSecondary)
+            .cornerRadius(AppSpacing.radiusMedium)
             .overlay(
                 RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                    .stroke(selectedFulfillment == type ? AppColors.accent : Color.clear, lineWidth: 1)
+                    .stroke(selectedFulfillment == type ? AppColors.accent : Color.clear, lineWidth: 1.5)
             )
-            .cornerRadius(AppSpacing.radiusMedium)
         }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - Step 2: Payment
+    private func checkoutAddressRow(_ addr: SavedAddress) -> some View {
+        let selected = selectedAddress?.id == addr.id
+        return Button(action: { withAnimation { selectedAddress = addr } }) {
+            HStack(spacing: AppSpacing.md) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(selected ? AppColors.accent : AppColors.neutral600)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(addr.label)
+                            .font(AppTypography.label)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        if addr.isDefault {
+                            Text("DEFAULT")
+                                .font(AppTypography.pico).tracking(1)
+                                .foregroundColor(AppColors.accent)
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(AppColors.accent.opacity(0.1))
+                                .cornerRadius(3)
+                        }
+                    }
+                    Text(addr.shortSummary)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                Spacer()
+            }
+            .padding(AppSpacing.cardPadding)
+            .background(AppColors.backgroundSecondary)
+            .cornerRadius(AppSpacing.radiusMedium)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                    .stroke(selected ? AppColors.accent : Color.clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Step 1: Payment
 
     private var paymentStep: some View {
         VStack(alignment: .leading, spacing: AppSpacing.lg) {
-            Text("PAYMENT METHOD")
-                .font(AppTypography.overline)
-                .tracking(2)
-                .foregroundColor(AppColors.accent)
+            sectionHeader("PAYMENT METHOD")
 
-            ForEach(paymentOptions, id: \.self) { option in
-                Button {
-                    selectedPayment = option
-                } label: {
-                    HStack(spacing: AppSpacing.md) {
-                        Image(systemName: paymentIcon(for: option))
-                            .font(.title2)
-                            .foregroundColor(selectedPayment == option ? AppColors.accent : AppColors.neutral600)
-
-                        Text(option)
-                            .font(AppTypography.label)
-                            .foregroundColor(AppColors.textPrimaryDark)
-
-                        Spacer()
-
-                        Image(systemName: selectedPayment == option ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(selectedPayment == option ? AppColors.accent : AppColors.neutral600)
-                    }
-                    .padding(AppSpacing.cardPadding)
-                    .background(AppColors.backgroundSecondary)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                            .stroke(selectedPayment == option ? AppColors.accent : Color.clear, lineWidth: 1)
-                    )
-                    .cornerRadius(AppSpacing.radiusMedium)
+            VStack(spacing: AppSpacing.sm) {
+                ForEach(CheckoutPayment.allCases, id: \.self) { method in
+                    checkoutPaymentRow(method)
                 }
             }
 
-            if selectedPayment == "Credit Card" {
-                LuxuryCardView {
-                    HStack(spacing: AppSpacing.md) {
-                        Image(systemName: "creditcard.fill")
-                            .foregroundColor(AppColors.accent)
-                        Text("Visa ending in 4242")
-                            .font(AppTypography.bodyMedium)
-                            .foregroundColor(AppColors.textPrimaryDark)
-                        Spacer()
+            if selectedPayment == .creditCard {
+                VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                    sectionHeader("CARD DETAILS")
+                    LuxuryTextField(placeholder: "Card Number", text: $cardNumber)
+                        .keyboardType(.numberPad)
+                    HStack(spacing: AppSpacing.sm) {
+                        LuxuryTextField(placeholder: "MM / YY", text: $cardExpiry)
+                            .keyboardType(.numberPad)
+                        LuxuryTextField(placeholder: "CVV", text: $cardCVV)
+                            .keyboardType(.numberPad)
+                            .frame(maxWidth: 100)
                     }
-                    .padding(AppSpacing.cardPadding)
                 }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
 
-    private func paymentIcon(for option: String) -> String {
-        switch option {
-        case "Credit Card": return "creditcard.fill"
-        case "Apple Pay": return "apple.logo"
-        case "Pay In Store": return "banknote.fill"
-        default: return "creditcard"
+    private func checkoutPaymentRow(_ method: CheckoutPayment) -> some View {
+        let selected = selectedPayment == method
+        return Button(action: { withAnimation { selectedPayment = method } }) {
+            HStack(spacing: AppSpacing.md) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(selected ? AppColors.accent.opacity(0.1) : AppColors.backgroundSecondary)
+                        .frame(width: 44, height: 44)
+                    Image(systemName: method.icon)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(selected ? AppColors.accent : AppColors.neutral600)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(method.title)
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(method.subtitle)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                Spacer()
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(selected ? AppColors.accent : AppColors.neutral600)
+            }
+            .padding(AppSpacing.cardPadding)
+            .background(AppColors.backgroundSecondary)
+            .cornerRadius(AppSpacing.radiusMedium)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                    .stroke(selected ? AppColors.accent : Color.clear, lineWidth: 1.5)
+            )
         }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - Step 3: Review
+    // MARK: - Step 2: Review
 
     private var reviewStep: some View {
         VStack(alignment: .leading, spacing: AppSpacing.lg) {
-            Text("REVIEW YOUR ORDER")
-                .font(AppTypography.overline)
-                .tracking(2)
-                .foregroundColor(AppColors.accent)
+            sectionHeader("ORDER REVIEW")
 
             // Items
             VStack(spacing: AppSpacing.sm) {
                 ForEach(cartItems) { item in
-                    HStack {
+                    HStack(spacing: AppSpacing.md) {
+                        ProductArtworkView(
+                            imageSource: item.productImageName,
+                            fallbackSymbol: "bag.fill",
+                            cornerRadius: AppSpacing.radiusSmall
+                        )
+                        .frame(width: 56, height: 56)
+
                         VStack(alignment: .leading, spacing: 2) {
+                            Text(item.productBrand.uppercased())
+                                .font(AppTypography.overline).tracking(1)
+                                .foregroundColor(AppColors.accent)
                             Text(item.productName)
                                 .font(AppTypography.label)
                                 .foregroundColor(AppColors.textPrimaryDark)
+                                .lineLimit(2)
                             Text("Qty: \(item.quantity)")
                                 .font(AppTypography.caption)
                                 .foregroundColor(AppColors.textSecondaryDark)
@@ -292,22 +389,26 @@ struct CheckoutView: View {
 
             GoldDivider()
 
-            // Delivery info
-            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                Text("DELIVERY")
-                    .font(AppTypography.overline)
-                    .tracking(2)
-                    .foregroundColor(AppColors.accent)
-
-                Text(selectedFulfillment == .bopis ? "Pick Up In Store — Maison Luxe Flagship" : "Standard Delivery")
-                    .font(AppTypography.bodyMedium)
-                    .foregroundColor(AppColors.textPrimaryDark)
-
-                if selectedFulfillment == .standard && !addressLine1.isEmpty {
-                    Text("\(addressLine1)\(addressLine2.isEmpty ? "" : ", \(addressLine2)")")
+            // Delivery summary
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                sectionHeader("DELIVERY")
+                if selectedFulfillment == .bopis {
+                    Text("Pick Up In Store — Maison Luxe Flagship")
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                } else if let addr = selectedAddress {
+                    Text("Standard Delivery · \(addr.label)")
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(addr.fullAddress)
                         .font(AppTypography.bodySmall)
                         .foregroundColor(AppColors.textSecondaryDark)
-                    Text("\(city), \(state) \(zip)")
+                        .lineSpacing(3)
+                } else if !addressLine1.isEmpty {
+                    Text("Standard Delivery")
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("\(addressLine1)\(addressLine2.isEmpty ? "" : ", \(addressLine2)")\n\(city), \(addrState) \(zip)")
                         .font(AppTypography.bodySmall)
                         .foregroundColor(AppColors.textSecondaryDark)
                 }
@@ -315,28 +416,26 @@ struct CheckoutView: View {
 
             GoldDivider()
 
-            // Payment
-            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                Text("PAYMENT")
-                    .font(AppTypography.overline)
-                    .tracking(2)
-                    .foregroundColor(AppColors.accent)
-
-                Text(selectedPayment)
-                    .font(AppTypography.bodyMedium)
-                    .foregroundColor(AppColors.textPrimaryDark)
+            // Payment summary
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                sectionHeader("PAYMENT")
+                HStack(spacing: 8) {
+                    Image(systemName: selectedPayment.icon)
+                        .foregroundColor(AppColors.accent)
+                    Text(selectedPayment.title)
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
             }
 
             GoldDivider()
 
-            // Totals
+            // Price breakdown
             VStack(spacing: AppSpacing.sm) {
-                summaryRow(label: "Subtotal", value: formatCurrency(subtotal))
-                summaryRow(label: "Tax (8%)", value: formatCurrency(tax))
-                summaryRow(label: "Shipping", value: selectedFulfillment == .bopis ? "Free" : "Free")
-
+                summaryRow("Subtotal",   value: formatCurrency(subtotal))
+                summaryRow("Tax (8%)",   value: formatCurrency(tax))
+                summaryRow("Shipping",   value: shipping == 0 ? "Free" : formatCurrency(shipping))
                 GoldDivider()
-
                 HStack {
                     Text("Total")
                         .font(AppTypography.heading3)
@@ -350,7 +449,60 @@ struct CheckoutView: View {
         }
     }
 
-    private func summaryRow(label: String, value: String) -> some View {
+    // MARK: - Bottom Bar
+
+    private var bottomBar: some View {
+        HStack(spacing: AppSpacing.md) {
+            if currentStep > 0 {
+                SecondaryButton(title: "Back") {
+                    withAnimation(.spring(response: 0.3)) { currentStep -= 1 }
+                }
+                .frame(width: 90)
+            }
+
+            if currentStep < steps.count - 1 {
+                PrimaryButton(title: "Continue") {
+                    withAnimation(.spring(response: 0.3)) { currentStep += 1 }
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+            } else {
+                Button(action: placeOrder) {
+                    HStack(spacing: 8) {
+                        if isPlacing {
+                            ProgressView().tint(AppColors.textPrimaryLight).scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "lock.fill").font(.system(size: 14))
+                        }
+                        Text(isPlacing ? "Placing Order…" : "Place Order · \(formatCurrency(total))")
+                            .font(AppTypography.buttonPrimary)
+                    }
+                    .foregroundColor(AppColors.textPrimaryLight)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: AppSpacing.touchTarget)
+                    .background(AppColors.accent)
+                    .cornerRadius(AppSpacing.radiusMedium)
+                }
+                .disabled(isPlacing)
+            }
+        }
+        .padding(.horizontal, AppSpacing.screenHorizontal)
+        .padding(.vertical, AppSpacing.md)
+        .background(
+            AppColors.backgroundPrimary
+                .shadow(color: .black.opacity(0.2), radius: 10, y: -5)
+        )
+    }
+
+    // MARK: - Helpers
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(AppTypography.overline)
+            .tracking(2)
+            .foregroundColor(AppColors.accent)
+    }
+
+    private func summaryRow(_ label: String, value: String) -> some View {
         HStack {
             Text(label)
                 .font(AppTypography.bodyMedium)
@@ -362,111 +514,105 @@ struct CheckoutView: View {
         }
     }
 
-    // MARK: - Bottom Bar
-
-    private var bottomBar: some View {
-        HStack(spacing: AppSpacing.md) {
-            if currentStep > 0 {
-                SecondaryButton(title: "Back") {
-                    withAnimation { currentStep -= 1 }
-                }
-            }
-
-            if currentStep < steps.count - 1 {
-                PrimaryButton(title: "Continue") {
-                    withAnimation { currentStep += 1 }
-                }
-            } else {
-                PrimaryButton(title: "Place Order") {
-                    placeOrder()
-                }
-            }
-        }
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-        .padding(.vertical, AppSpacing.md)
-        .background(
-            AppColors.backgroundPrimary
-                .shadow(color: .black.opacity(0.3), radius: 10, y: -5)
-        )
+    private func formatCurrency(_ v: Double) -> String {
+        let f = NumberFormatter()
+        f.numberStyle  = .currency
+        f.currencyCode = "USD"
+        return f.string(from: NSNumber(value: v)) ?? "$\(v)"
     }
 
     // MARK: - Place Order
 
     private func placeOrder() {
-        // Build address JSON
-        let addressJSON: String
-        if selectedFulfillment == .standard {
-            let addr: [String: String] = [
-                "line1": addressLine1,
-                "line2": addressLine2,
-                "city": city,
-                "state": state,
-                "zip": zip,
-                "country": "US"
-            ]
-            if let data = try? JSONSerialization.data(withJSONObject: addr),
-               let str = String(data: data, encoding: .utf8) {
-                addressJSON = str
-            } else {
-                addressJSON = "{}"
+        isPlacing = true
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+
+        let addrJSON: String = {
+            if let addr = selectedAddress {
+                let d: [String: String] = [
+                    "line1": addr.line1, "line2": addr.line2,
+                    "city": addr.city, "state": addr.state,
+                    "zip": addr.zip, "country": addr.country
+                ]
+                guard let data = try? JSONSerialization.data(withJSONObject: d),
+                      let s = String(data: data, encoding: .utf8) else { return "{}" }
+                return s
             }
-        } else {
-            addressJSON = "{}"
-        }
+            if selectedFulfillment == .standard && !addressLine1.isEmpty {
+                let d: [String: String] = [
+                    "line1": addressLine1, "line2": addressLine2,
+                    "city": city, "state": addrState, "zip": zip, "country": "US"
+                ]
+                guard let data = try? JSONSerialization.data(withJSONObject: d),
+                      let s = String(data: data, encoding: .utf8) else { return "{}" }
+                return s
+            }
+            return "{}"
+        }()
 
-        // Build order items JSON
-        let itemsArray: [[String: Any]] = cartItems.map { item in
-            [
-                "name": item.productName,
-                "brand": item.productBrand,
-                "qty": item.quantity,
-                "price": item.unitPrice,
-                "image": item.productImageName
-            ]
+        let itemsArr: [[String: Any]] = cartItems.map { item in
+            ["name": item.productName, "brand": item.productBrand,
+             "qty": item.quantity, "price": item.unitPrice, "image": item.productImageName]
         }
-        let itemsJSON: String
-        if let data = try? JSONSerialization.data(withJSONObject: itemsArray),
-           let str = String(data: data, encoding: .utf8) {
-            itemsJSON = str
-        } else {
-            itemsJSON = "[]"
-        }
+        let itemsJSON: String = {
+            guard let data = try? JSONSerialization.data(withJSONObject: itemsArr),
+                  let s = String(data: data, encoding: .utf8) else { return "[]" }
+            return s
+        }()
 
-        // Generate order number
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy"
-        let year = dateFormatter.string(from: Date())
-        let random = String(format: "%04d", Int.random(in: 1000...9999))
-        let orderNumber = "ML-ORD-\(year)-\(random)"
+        let df = DateFormatter(); df.dateFormat = "yyyy"
+        let num = "ML-ORD-\(df.string(from: Date()))-\(String(format: "%04d", Int.random(in: 1000...9999)))"
 
         let order = Order(
-            orderNumber: orderNumber,
+            orderNumber: num,
             customerEmail: appState.currentUserEmail,
             status: .confirmed,
             orderItems: itemsJSON,
             subtotal: subtotal,
             tax: tax,
             total: total,
-            shippingAddress: addressJSON,
+            shippingAddress: addrJSON,
             fulfillmentType: selectedFulfillment,
-            paymentMethod: selectedPayment
+            paymentMethod: selectedPayment.title
         )
         modelContext.insert(order)
-
-        // Clear cart
-        for item in cartItems {
-            modelContext.delete(item)
-        }
+        for item in cartItems { modelContext.delete(item) }
         try? modelContext.save()
 
-        createdOrder = order
-        showConfirmation = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            createdOrder    = order
+            isPlacing       = false
+            showConfirmation = true
+        }
+    }
+}
+
+// MARK: - Payment enum
+
+enum CheckoutPayment: String, CaseIterable {
+    case applePay   = "Apple Pay"
+    case creditCard = "Credit / Debit Card"
+    case googlePay  = "Google Pay"
+    case payInStore = "Pay In Store"
+
+    var title: String { rawValue }
+
+    var subtitle: String {
+        switch self {
+        case .applePay:   return "Touch ID or Face ID"
+        case .creditCard: return "Visa, Mastercard, Amex"
+        case .googlePay:  return "Google Wallet"
+        case .payInStore: return "Pay at the boutique"
+        }
     }
 
-    private func formatCurrency(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
+    var icon: String {
+        switch self {
+        case .applePay:   return "apple.logo"
+        case .creditCard: return "creditcard.fill"
+        case .googlePay:  return "g.circle.fill"
+        case .payInStore: return "banknote.fill"
+        }
     }
 }

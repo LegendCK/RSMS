@@ -99,16 +99,12 @@ struct WishlistView: View {
 
     private func wishlistRow(_ product: Product) -> some View {
         HStack(spacing: AppSpacing.md) {
-            // Image
-            ZStack {
-                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                    .fill(AppColors.backgroundTertiary)
-                    .frame(width: 90, height: 90)
-
-                Image(systemName: product.imageName)
-                    .font(AppTypography.iconCategory)
-                    .foregroundColor(AppColors.neutral600)
-            }
+            ProductArtworkView(
+                imageSource: product.imageName,
+                fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock.fill" : "bag.fill",
+                cornerRadius: AppSpacing.radiusMedium
+            )
+            .frame(width: 90, height: 90)
 
             VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                 Text(product.brand.uppercased())
