@@ -57,15 +57,22 @@ class AppState {
 
     // MARK: - Guest Access
 
-    func continueAsGuest() {
+    func continueAsGuest() async {
         isGuest = true
         currentUserName = "Guest"
         currentUserEmail = ""
         currentUserRole = .customer
         currentUserProfile = nil
         currentClientProfile = nil
-        withAnimation(.easeInOut(duration: 0.5)) {
-            currentFlow = .main
+        
+        // Ensure an authenticated session exists before switching to the main flow.
+        // This permits the catalog sync in MainTabView to succeed against RLS policies.
+        try? await AuthService.shared.signInAnonymously()
+        
+        await MainActor.run {
+            withAnimation(.easeInOut(duration: 0.5)) {
+                currentFlow = .main
+            }
         }
     }
 
