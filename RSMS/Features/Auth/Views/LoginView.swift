@@ -58,7 +58,7 @@ struct LoginView: View {
                         // Input fields
                         VStack(spacing: AppSpacing.xl) {
                             LuxuryTextField(
-                                placeholder: "Email or Employee ID",
+                                placeholder: "Email",
                                 text: $viewModel.loginEmail,
                                 icon: "envelope"
                             )

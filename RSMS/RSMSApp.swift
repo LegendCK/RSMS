@@ -21,6 +21,7 @@ struct RSMSApp: App {
             Order.self,
             CartItem.self,
             SavedAddress.self,
+            SavedPaymentCard.self,
             ClientProfile.self,
             Appointment.self,
             AfterSalesTicket.self,

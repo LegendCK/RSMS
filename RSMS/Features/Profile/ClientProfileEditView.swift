@@ -80,8 +80,21 @@ struct ClientProfileEditView: View {
                                 .keyboardType(.phonePad)
                             // Calendar picker — eliminates manual date entry and YYYY-MM-DD format errors
                             LuxuryDatePicker(label: "Date of Birth", date: $dobDate, maximumDate: Date())
-                            LuxuryTextField(placeholder: "Preferred Language (e.g. en)", text: $preferredLanguage, icon: "character.book.closed")
-                            LuxuryTextField(placeholder: "Nationality (2-letter code)", text: $nationality, icon: "globe")
+                            // Pull-down menu pickers — liquid glass style on iOS 26
+                            LuxuryMenuPicker(
+                                label: "Preferred Language",
+                                icon: "character.book.closed",
+                                items: LuxuryPickerItem.languages,
+                                selection: $preferredLanguage,
+                                placeholder: "Select language…"
+                            )
+                            LuxuryMenuPicker(
+                                label: "Nationality",
+                                icon: "globe",
+                                items: LuxuryPickerItem.nationalities,
+                                selection: $nationality,
+                                placeholder: "Select nationality…"
+                            )
                             LuxuryTextField(placeholder: "Address Line 1", text: $addressLine1, icon: "house")
                             LuxuryTextField(placeholder: "Address Line 2", text: $addressLine2, icon: "house")
                             LuxuryTextField(placeholder: "City", text: $city, icon: "building.2")

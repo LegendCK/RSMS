@@ -72,7 +72,7 @@ final class StaffSyncService {
             return dto
         } catch {
             // Always restore admin session, even on failure.
-            try? await client.auth.setSession(
+            _ = try? await client.auth.setSession(
                 accessToken: adminSession.accessToken,
                 refreshToken: adminSession.refreshToken
             )
