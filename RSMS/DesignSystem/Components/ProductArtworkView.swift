@@ -70,6 +70,19 @@ enum ProductImageResolver {
         if value.hasPrefix("storage/v1/object/public/") {
             return URL(string: "\(base)/\(value)")
         }
+        if value.hasPrefix("/object/public/") {
+            return URL(string: "\(base)/storage/v1\(value)")
+        }
+        if value.hasPrefix("object/public/") {
+            return URL(string: "\(base)/storage/v1/\(value)")
+        }
+
+        // Bucket-prefixed object path, e.g. `product-images/products/<id>/1.jpg`
+        if value.hasPrefix("product-images/") {
+            let pathOnly = String(value.dropFirst("product-images/".count))
+            let encoded = pathOnly.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? pathOnly
+            return URL(string: "\(base)/storage/v1/object/public/product-images/\(encoded)")
+        }
 
         let encoded = value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
         return URL(string: "\(base)/storage/v1/object/public/product-images/\(encoded)")

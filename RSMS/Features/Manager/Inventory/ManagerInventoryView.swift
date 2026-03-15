@@ -102,10 +102,12 @@ struct InvStockSubview: View {
 
     private func invRow(_ product: Product) -> some View {
         HStack(spacing: AppSpacing.sm) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6).fill(AppColors.backgroundTertiary).frame(width: 40, height: 40)
-                Image(systemName: product.imageName).font(AppTypography.inventoryIcon).foregroundColor(AppColors.neutral600)
-            }
+            ProductArtworkView(
+                imageSource: product.imageName,
+                fallbackSymbol: "bag.fill",
+                cornerRadius: 6
+            )
+            .frame(width: 40, height: 40)
             VStack(alignment: .leading, spacing: 1) {
                 Text(product.name).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark).lineLimit(1)
                 Text(product.categoryName).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
