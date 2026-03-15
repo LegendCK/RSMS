@@ -20,6 +20,7 @@ enum UserRole: String, Codable, CaseIterable {
 @Model
 final class User {
     var id: UUID
+    var storeId: UUID?
     var name: String
     var email: String
     var phone: String
@@ -38,10 +39,12 @@ final class User {
         email: String,
         phone: String = "",
         passwordHash: String,
+        storeId: UUID? = nil,
         role: UserRole = .customer,
         isActive: Bool = true
     ) {
         self.id = UUID()
+        self.storeId = storeId
         self.name = name
         self.email = email
         self.phone = phone

@@ -65,7 +65,7 @@ struct MgrRevenueSubview: View {
                         ForEach(periods, id: \.self) { p in
                             Button(action: { period = p }) {
                                 Text(p).font(AppTypography.caption)
-                                    .foregroundColor(period == p ? AppColors.primary : AppColors.textSecondaryDark)
+                                    .foregroundColor(period == p ? AppColors.textPrimaryLight : AppColors.textPrimaryDark)
                                     .padding(.horizontal, AppSpacing.sm).padding(.vertical, AppSpacing.xs)
                                     .background(period == p ? AppColors.accent : AppColors.backgroundTertiary)
                                     .cornerRadius(AppSpacing.radiusSmall)
@@ -100,9 +100,9 @@ struct MgrRevenueSubview: View {
                     .frame(height: 62).padding(.horizontal, AppSpacing.screenHorizontal)
 
                     HStack {
-                        Text("Mar 1").font(AppTypography.caption).foregroundColor(AppColors.neutral500)
+                        Text("Mar 1").font(AppTypography.caption).foregroundColor(AppColors.neutral700)
                         Spacer()
-                        Text("Mar 10").font(AppTypography.caption).foregroundColor(AppColors.neutral500)
+                        Text("Mar 10").font(AppTypography.caption).foregroundColor(AppColors.neutral700)
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
                 }
@@ -180,7 +180,7 @@ struct MgrProductInsightsSubview: View {
                     HStack(spacing: AppSpacing.sm) {
                         Text(p.name).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark).lineLimit(1)
                         Spacer()
-                        Text("\(p.stockCount) units").font(AppTypography.caption).foregroundColor(AppColors.neutral500)
+                        Text("\(p.stockCount) units").font(AppTypography.caption).foregroundColor(AppColors.neutral700)
                         Text("Low demand").font(AppTypography.demandBadge).foregroundColor(AppColors.warning)
                             .padding(.horizontal, 6).padding(.vertical, 2).background(AppColors.warning.opacity(0.12)).cornerRadius(4)
                     }

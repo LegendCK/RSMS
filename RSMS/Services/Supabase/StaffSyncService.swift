@@ -22,30 +22,38 @@ final class StaffSyncService {
 
     /// Creates a new staff member end-to-end:
     /// 1. Signs up in Supabase Auth  → creates `auth.users` entry.
-    /// 2. Inserts the profile row in `users` (authenticated as new user, so FK + RLS pass).
-    /// 3. Restores the admin's original session.
+    /// 2. Restores manager/admin session.
+    /// 3. Inserts the profile row in `users` as manager/admin.
     /// Returns the persisted `UserDTO` with the real auth UUID.
     func createStaffWithAuth(
         name: String,
         email: String,
         phone: String,
         password: String,
-        role: UserRole
+        role: UserRole,
+        storeId: UUID? = nil
     ) async throws -> UserDTO {
         // 1. Capture admin session before touching auth state.
         let adminSession = try await client.auth.session
 
-        // 2. Sign up — creates auth.users entry and switches active session to new user.
+        // 2. Sign up — creates auth.users entry and usually switches active session to new user.
         let authResponse = try await client.auth.signUp(email: email, password: password)
         let authUser = authResponse.user
 
         do {
-            // 3. Insert profile (now running as the new user → auth.uid() = authUser.id).
+            // 3. Restore manager/admin session before profile insert so RLS policies
+            //    evaluate with manager/admin role.
+            try await client.auth.setSession(
+                accessToken: adminSession.accessToken,
+                refreshToken: adminSession.refreshToken
+            )
+
+            // 4. Insert profile as manager/admin.
             let (firstName, lastName) = splitName(name)
             let payload = UserInsertDTO(
                 id: authUser.id,
                 role: snakeRole(for: role),
-                storeId: nil,
+                storeId: storeId,
                 firstName: firstName,
                 lastName: lastName,
                 email: email.lowercased(),
@@ -61,11 +69,6 @@ final class StaffSyncService {
                 .execute()
                 .value
 
-            // 4. Restore admin session.
-            try await client.auth.setSession(
-                accessToken: adminSession.accessToken,
-                refreshToken: adminSession.refreshToken
-            )
             return dto
         } catch {
             // Always restore admin session, even on failure.
@@ -138,6 +141,7 @@ final class StaffSyncService {
     }
 
     private func apply(_ dto: UserDTO, to user: User) {
+        user.storeId = dto.storeId
         user.name = dto.fullName
         user.email = dto.email
         user.phone = dto.phone ?? ""
@@ -151,6 +155,7 @@ final class StaffSyncService {
             email: dto.email,
             phone: dto.phone ?? "",
             passwordHash: "",
+            storeId: dto.storeId,
             role: dto.userRole,
             isActive: dto.isActive
         )
@@ -165,7 +170,7 @@ final class StaffSyncService {
         case .boutiqueManager: return "boutique_manager"
         case .salesAssociate: return "sales_associate"
         case .inventoryController: return "inventory_controller"
-        case .serviceTechnician: return "service_technician"
+        case .serviceTechnician: return "aftersales_specialist"
         case .customer: return "client"
         }
     }
