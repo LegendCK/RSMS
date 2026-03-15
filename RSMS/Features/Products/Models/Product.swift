@@ -35,6 +35,10 @@ final class Product {
     var productTypeName: String   // Sub-type within category, e.g. "Engagement Rings"
     var attributes: String        // JSON blob for category-specific data
 
+    // MARK: - Multi-image support
+    /// Comma-separated list of image URLs / storage paths. Falls back to `imageName` when empty.
+    var imageNames: String
+
     // MARK: - Additional Metadata
     var material: String
     var countryOfOrigin: String
@@ -59,6 +63,7 @@ final class Product {
         certificateRef: String = "",
         productTypeName: String = "",
         attributes: String = "{}",
+        imageNames: String = "",
         material: String = "",
         countryOfOrigin: String = "",
         weight: Double = 0,
@@ -84,6 +89,7 @@ final class Product {
         self.certificateRef = certificateRef
         self.productTypeName = productTypeName
         self.attributes = attributes
+        self.imageNames = imageNames
         self.material = material
         self.countryOfOrigin = countryOfOrigin
         self.weight = weight
@@ -103,5 +109,16 @@ final class Product {
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String]
         else { return [:] }
         return dict
+    }
+
+    /// All image sources for the product gallery.
+    /// Uses `imageNames` (comma-separated) when populated, otherwise falls back to `imageName`.
+    var imageList: [String] {
+        let extra = imageNames
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !extra.isEmpty { return extra }
+        return imageName.isEmpty ? [] : [imageName]
     }
 }

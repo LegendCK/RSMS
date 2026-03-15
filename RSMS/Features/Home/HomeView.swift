@@ -1,7 +1,8 @@
 ////  HomeView.swift
-//  infosys2
+//  RSMS
 //
 //  Home screen with hero banner, featured products, and category strip.
+//  View All / See All buttons are wired to the correct destination views.
 //
 
 import SwiftUI
@@ -15,46 +16,52 @@ struct HomeView: View {
     private var categories: [Category]
     @Query private var allProducts: [Product]
 
+    // Navigation state
+    @State private var showAllCategories = false
+    @State private var showAllFeatured = false
+    @State private var showAllArrivals = false
+
     var body: some View {
         NavigationStack {
             ZStack {
-                AppColors.backgroundPrimary
+                Color(.systemGroupedBackground)
                     .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppSpacing.xxl) {
-                        // Hero banner
+                    VStack(spacing: 28) {
                         heroBanner
-
-                        // Categories strip
                         categoriesSection
-
-                        // Featured products
                         featuredSection
-
-                        // New arrivals
                         newArrivalsSection
                     }
-                    .padding(.bottom, AppSpacing.xxxl)
+                    .padding(.bottom, 40)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("MAISON LUXE")
-                            .font(AppTypography.navTitle)
-                            .tracking(3)
-                            .foregroundColor(AppColors.accent)
-                    }
+                    Text("MAISON LUXE")
+                        .font(AppTypography.navTitle)
+                        .tracking(3)
+                        .foregroundColor(AppColors.accent)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {}) {
                         Image(systemName: "bell")
                             .font(AppTypography.bellIcon)
-                            .foregroundColor(AppColors.textPrimaryDark)
+                            .foregroundStyle(Color.primary)
                     }
                 }
+            }
+            // Full-screen navigation destinations
+            .navigationDestination(isPresented: $showAllCategories) {
+                CategoriesView()
+            }
+            .navigationDestination(isPresented: $showAllFeatured) {
+                ProductListView(categoryFilter: nil)
+            }
+            .navigationDestination(isPresented: $showAllArrivals) {
+                ProductListView(categoryFilter: nil)
             }
         }
     }
@@ -63,23 +70,19 @@ struct HomeView: View {
 
     private var heroBanner: some View {
         ZStack(alignment: .bottomLeading) {
-            // Background gradient
-            LinearGradient(
-                colors: [AppColors.backgroundSecondary, AppColors.backgroundTertiary],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .frame(height: 220)
-            .overlay(
-                // Gold accent line at top
-                Rectangle()
-                    .fill(AppColors.accent)
-                    .frame(height: 2),
-                alignment: .top
-            )
+            // System material background — native iOS feel
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.regularMaterial)
+                .frame(height: 210)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(AppColors.accent)
+                        .frame(height: 2)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                }
 
             // Content
-            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("NEW COLLECTION")
                     .font(AppTypography.overline)
                     .tracking(3)
@@ -87,57 +90,55 @@ struct HomeView: View {
 
                 Text("Spring 2026")
                     .font(AppTypography.displayMedium)
-                    .foregroundColor(AppColors.textPrimaryDark)
+                    .foregroundColor(Color.primary)
 
                 Text("Discover the essence of modern luxury")
                     .font(AppTypography.bodyMedium)
-                    .foregroundColor(AppColors.textSecondaryDark)
+                    .foregroundColor(Color.secondary)
 
-                Spacer().frame(height: AppSpacing.xs)
+                Spacer().frame(height: 4)
 
-                HStack(spacing: AppSpacing.xs) {
+                HStack(spacing: 5) {
                     Text("Explore")
                         .font(AppTypography.buttonSecondary)
                         .foregroundColor(AppColors.accent)
                     Image(systemName: "arrow.right")
-                        .font(AppTypography.chevron)
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(AppColors.accent)
                 }
             }
-            .padding(AppSpacing.screenHorizontal)
-            .padding(.bottom, AppSpacing.lg)
+            .padding(20)
+            .padding(.bottom, 16)
 
             // Decorative diamond
-            VStack {
-                HStack {
-                    Spacer()
-                    Image(systemName: "diamond.fill")
-                        .font(AppTypography.iconDecorative)
-                        .foregroundColor(AppColors.accent.opacity(0.08))
-                        .padding(.trailing, AppSpacing.xl)
-                }
-                .padding(.top, AppSpacing.xl)
-                Spacer()
-            }
-            .frame(height: 220)
+            Image(systemName: "diamond.fill")
+                .font(AppTypography.iconDecorative)
+                .foregroundColor(AppColors.accent.opacity(0.07))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .padding(.trailing, 24)
+                .padding(.top, 20)
         }
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge))
+        .frame(height: 210)
         .padding(.horizontal, AppSpacing.screenHorizontal)
         .padding(.top, AppSpacing.sm)
+        .shadow(color: Color.black.opacity(0.06), radius: 14, x: 0, y: 4)
     }
 
     // MARK: - Categories Strip
 
     private var categoriesSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            sectionHeader(title: "Categories", action: "See All")
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeader(title: "Categories") {
+                showAllCategories = true
+            }
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppSpacing.md) {
+                HStack(spacing: 16) {
                     ForEach(categories) { category in
                         NavigationLink(destination: CategoryDetailView(category: category)) {
                             categoryChip(category)
                         }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -146,38 +147,52 @@ struct HomeView: View {
     }
 
     private func categoryChip(_ category: Category) -> some View {
-        VStack(spacing: AppSpacing.xs) {
+        VStack(spacing: 8) {
             ZStack {
                 Circle()
-                    .fill(AppColors.backgroundTertiary)
+                    .fill(.regularMaterial)
                     .frame(width: 64, height: 64)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(AppColors.accent.opacity(0.15), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
 
                 Image(systemName: category.icon)
-                    .font(AppTypography.categoryCircleIcon)
+                    .font(.system(size: 22, weight: .medium))
                     .foregroundColor(AppColors.accent)
             }
 
             Text(category.name)
                 .font(AppTypography.caption)
-                .foregroundColor(AppColors.textSecondaryDark)
+                .foregroundColor(Color.secondary)
+                .lineLimit(1)
         }
+        .frame(width: 74)
     }
 
     // MARK: - Featured Products
 
     private var featuredSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            sectionHeader(title: "Featured", action: "View All")
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeader(title: "Featured") {
+                showAllFeatured = true
+            }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppSpacing.md) {
-                    ForEach(featuredProducts) { product in
-                        NavigationLink(destination: ProductDetailView(product: product)) {
-                            productCard(product)
+            if featuredProducts.isEmpty {
+                emptyBanner(icon: "star", message: "No featured products yet")
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        ForEach(featuredProducts) { product in
+                            NavigationLink(destination: ProductDetailView(product: product)) {
+                                productCard(product)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
                 }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
             }
         }
     }
@@ -185,35 +200,42 @@ struct HomeView: View {
     // MARK: - New Arrivals
 
     private var newArrivalsSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            sectionHeader(title: "New Arrivals", action: "View All")
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeader(title: "New Arrivals") {
+                showAllArrivals = true
+            }
 
-            VStack(spacing: AppSpacing.md) {
-                ForEach(Array(allProducts.prefix(4))) { product in
-                    NavigationLink(destination: ProductDetailView(product: product)) {
-                        productRow(product)
+            if allProducts.isEmpty {
+                emptyBanner(icon: "shippingbox", message: "No products available")
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(Array(allProducts.prefix(4))) { product in
+                        NavigationLink(destination: ProductDetailView(product: product)) {
+                            productRow(product)
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
         }
     }
 
     // MARK: - Shared Components
 
-    private func sectionHeader(title: String, action: String) -> some View {
+    private func sectionHeader(title: String, action: @escaping () -> Void) -> some View {
         HStack {
             Text(title)
                 .font(AppTypography.heading2)
-                .foregroundColor(AppColors.textPrimaryDark)
+                .foregroundColor(Color.primary)
             Spacer()
-            Button(action: {}) {
-                HStack(spacing: 4) {
-                    Text(action)
-                        .font(AppTypography.bodySmall)
+            Button(action: action) {
+                HStack(spacing: 3) {
+                    Text("View All")
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(AppColors.accent)
                     Image(systemName: "chevron.right")
-                        .font(AppTypography.iconCompact)
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(AppColors.accent)
                 }
             }
@@ -222,71 +244,29 @@ struct HomeView: View {
     }
 
     private func productCard(_ product: Product) -> some View {
-        LuxuryCardView {
-            VStack(alignment: .leading, spacing: 0) {
-                // Image placeholder
-                ZStack {
-                    AppColors.backgroundSecondary
-                        .frame(width: 180, height: 200)
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topTrailing) {
+                ProductArtworkView(
+                    imageSource: product.imageName,
+                    fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock.fill" : "bag.fill",
+                    cornerRadius: 0
+                )
+                .frame(width: 175, height: 195)
 
-                    Image(systemName: product.imageName)
-                        .font(AppTypography.iconProductLarge)
-                        .foregroundColor(AppColors.neutral600)
-
-                    if product.isLimitedEdition {
-                        VStack {
-                            HStack {
-                                Spacer()
-                                Text("LIMITED")
-                                    .font(AppTypography.overline)
-                                    .tracking(1)
-                                    .foregroundColor(AppColors.textPrimaryLight)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(AppColors.accent)
-                                    .cornerRadius(4)
-                            }
-                            Spacer()
-                        }
-                        .padding(8)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                    Text(product.brand.uppercased())
+                if product.isLimitedEdition {
+                    Text("LIMITED")
                         .font(AppTypography.overline)
                         .tracking(1)
-                        .foregroundColor(AppColors.accent)
-
-                    Text(product.name)
-                        .font(AppTypography.label)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                        .lineLimit(1)
-
-                    Text(product.formattedPrice)
-                        .font(AppTypography.priceSmall)
-                        .foregroundColor(AppColors.textSecondaryDark)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppColors.accent)
+                        .cornerRadius(4)
+                        .padding(10)
                 }
-                .padding(AppSpacing.cardPadding)
-            }
-            .frame(width: 180)
-        }
-    }
-
-    private func productRow(_ product: Product) -> some View {
-        HStack(spacing: AppSpacing.md) {
-            // Image placeholder
-            ZStack {
-                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                    .fill(AppColors.backgroundTertiary)
-                    .frame(width: 80, height: 80)
-
-                Image(systemName: product.imageName)
-                    .font(AppTypography.iconProductSmall)
-                    .foregroundColor(AppColors.neutral600)
             }
 
-            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(product.brand.uppercased())
                     .font(AppTypography.overline)
                     .tracking(1)
@@ -294,22 +274,70 @@ struct HomeView: View {
 
                 Text(product.name)
                     .font(AppTypography.label)
-                    .foregroundColor(AppColors.textPrimaryDark)
+                    .foregroundColor(Color.primary)
+                    .lineLimit(1)
 
                 Text(product.formattedPrice)
                     .font(AppTypography.priceSmall)
-                    .foregroundColor(AppColors.textSecondaryDark)
+                    .foregroundColor(Color.secondary)
+            }
+            .padding(12)
+        }
+        .frame(width: 175)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: Color.black.opacity(0.07), radius: 10, x: 0, y: 3)
+    }
+
+    private func productRow(_ product: Product) -> some View {
+        HStack(spacing: 14) {
+            ProductArtworkView(
+                imageSource: product.imageName,
+                fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock.fill" : "bag.fill",
+                cornerRadius: AppSpacing.radiusMedium
+            )
+            .frame(width: 72, height: 72)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(product.brand.uppercased())
+                    .font(AppTypography.overline)
+                    .tracking(1)
+                    .foregroundColor(AppColors.accent)
+
+                Text(product.name)
+                    .font(AppTypography.label)
+                    .foregroundColor(Color.primary)
+
+                Text(product.formattedPrice)
+                    .font(AppTypography.priceSmall)
+                    .foregroundColor(Color.secondary)
             }
 
             Spacer()
 
             Image(systemName: "chevron.right")
-                .font(AppTypography.chevron)
-                .foregroundColor(AppColors.neutral600)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Color(.tertiaryLabel))
         }
-        .padding(AppSpacing.cardPadding)
-        .background(AppColors.backgroundSecondary)
-        .cornerRadius(AppSpacing.radiusMedium)
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
+    }
+
+    private func emptyBanner(icon: String, message: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundColor(AppColors.accent.opacity(0.5))
+            Text(message)
+                .font(AppTypography.bodyMedium)
+                .foregroundColor(Color.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 }
 

@@ -1,8 +1,8 @@
 //
 //  CategoriesView.swift
-//  infosys2
+//  RSMS
 //
-//  Grid display of product categories.
+//  Grid display of product categories — premium iOS native design.
 //
 
 import SwiftUI
@@ -11,39 +11,50 @@ import SwiftData
 struct CategoriesView: View {
     @Query(sort: \Category.displayOrder) private var categories: [Category]
 
+    // Tint colors cycling per card for visual variety
+    private let cardAccents: [Color] = [
+        Color(hex: "800000"),   // maroon
+        Color(hex: "4A4A5E"),   // slate
+        Color(hex: "2D5F2E"),   // forest
+        Color(hex: "8B6914"),   // gold
+        Color(hex: "5C3370"),   // plum
+        Color(hex: "1E4D6B"),   // navy
+    ]
+
     private let columns = [
-        GridItem(.flexible(), spacing: AppSpacing.md),
-        GridItem(.flexible(), spacing: AppSpacing.md)
+        GridItem(.flexible(), spacing: 14),
+        GridItem(.flexible(), spacing: 14)
     ]
 
     var body: some View {
         NavigationStack {
             ZStack {
-                AppColors.backgroundPrimary
+                Color(.systemGroupedBackground)
                     .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: AppSpacing.xl) {
+                    VStack(alignment: .leading, spacing: 24) {
                         // Header
-                        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text("BROWSE")
-                                .font(AppTypography.overline)
+                                .font(.system(size: 11, weight: .semibold))
                                 .tracking(3)
                                 .foregroundColor(AppColors.accent)
 
                             Text("Collections")
-                                .font(AppTypography.displaySmall)
-                                .foregroundColor(AppColors.textPrimaryDark)
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(Color.primary)
                         }
                         .padding(.horizontal, AppSpacing.screenHorizontal)
                         .padding(.top, AppSpacing.md)
 
                         // Category grid
-                        LazyVGrid(columns: columns, spacing: AppSpacing.md) {
-                            ForEach(categories) { category in
+                        LazyVGrid(columns: columns, spacing: 14) {
+                            ForEach(Array(categories.enumerated()), id: \.offset) { index, category in
                                 NavigationLink(destination: CategoryDetailView(category: category)) {
-                                    categoryCard(category)
+                                    categoryCard(category, accent: cardAccents[index % cardAccents.count])
                                 }
+                                .buttonStyle(PlainButtonStyle())
                             }
                         }
                         .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -56,58 +67,72 @@ struct CategoriesView: View {
                 ToolbarItem(placement: .principal) {
                     Text("Categories")
                         .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
+                        .foregroundColor(Color.primary)
                 }
             }
         }
     }
 
-    private func categoryCard(_ category: Category) -> some View {
-        LuxuryCardView {
-            VStack(spacing: AppSpacing.md) {
-                Spacer()
-                    .frame(height: AppSpacing.sm)
+    private func categoryCard(_ category: Category, accent: Color) -> some View {
+        VStack(spacing: 0) {
+            // Tinted top band with icon
+            ZStack {
+                RoundedRectangle(cornerRadius: 0)
+                    .fill(accent.opacity(0.10))
+                    .frame(height: 110)
 
-                // Icon
-                ZStack {
-                    Circle()
-                        .stroke(AppColors.secondary.opacity(0.15), lineWidth: 1)
-                        .frame(width: 85, height: 85)
-
-                    Circle()
-                        .stroke(AppColors.accent.opacity(0.3), lineWidth: 1)
-                        .frame(width: 70, height: 70)
-
-                    Image(systemName: category.icon)
-                        .font(AppTypography.iconCategory)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [AppColors.accent, AppColors.accentLight],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(accent.opacity(0.15))
+                            .frame(width: 60, height: 60)
+                        Circle()
+                            .strokeBorder(accent.opacity(0.25), lineWidth: 1.5)
+                            .frame(width: 60, height: 60)
+                        Image(systemName: category.icon)
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [accent, accent.opacity(0.7)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
+                    }
                 }
-
-                VStack(spacing: AppSpacing.xxs) {
-                    Text(category.name)
-                        .font(AppTypography.heading3)
-                        .foregroundColor(AppColors.textPrimaryDark)
-
-                    Text(category.categoryDescription)
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.textSecondaryDark)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                }
-                .padding(.horizontal, AppSpacing.sm)
-
-                Spacer()
-                    .frame(height: AppSpacing.sm)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 190)
+
+            // Text content
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(category.name)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Color.primary)
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(accent.opacity(0.6))
+                }
+
+                Text(category.categoryDescription)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(accent.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: accent.opacity(0.1), radius: 10, x: 0, y: 4)
+        .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
     }
 }
 

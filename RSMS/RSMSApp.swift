@@ -20,6 +20,7 @@ struct RSMSApp: App {
             Category.self,
             Order.self,
             CartItem.self,
+            SavedAddress.self,
             ClientProfile.self,
             Appointment.self,
             AfterSalesTicket.self,

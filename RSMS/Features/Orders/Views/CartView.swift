@@ -1,8 +1,8 @@
 //
 //  CartView.swift
-//  infosys2
+//  RSMS
 //
-//  Shopping bag — displays cart items with quantity controls, summary, and checkout CTA.
+//  Premium shopping bag — larger thumbnails, swipe-to-delete, order summary, checkout CTA.
 //
 
 import SwiftUI
@@ -13,8 +13,8 @@ struct CartView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var allCartItems: [CartItem]
 
-    @State private var navigateToCheckout  = false
-    @State private var showGuestAuthGate   = false
+    @State private var navigateToCheckout = false
+    @State private var showGuestAuthGate  = false
 
     private var cartItems: [CartItem] {
         allCartItems.filter { $0.customerEmail == appState.currentUserEmail }
@@ -22,9 +22,10 @@ struct CartView: View {
     }
 
     private var subtotal: Double { cartItems.reduce(0) { $0 + $1.lineTotal } }
-    private var tax: Double { subtotal * 0.08 }
-    private var total: Double { subtotal + tax }
-    private var itemCount: Int { cartItems.reduce(0) { $0 + $1.quantity } }
+    private var tax:      Double { subtotal * 0.08 }
+    private var shipping: Double { subtotal > 500 ? 0 : 25 }
+    private var total:    Double { subtotal + tax + shipping }
+    private var itemCount: Int   { cartItems.reduce(0) { $0 + $1.quantity } }
 
     var body: some View {
         NavigationStack {
@@ -42,9 +43,16 @@ struct CartView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("Shopping Bag")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
+                    VStack(spacing: 1) {
+                        Text("Shopping Bag")
+                            .font(AppTypography.navTitle)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        if itemCount > 0 {
+                            Text("\(itemCount) \(itemCount == 1 ? "item" : "items")")
+                                .font(AppTypography.pico)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                        }
+                    }
                 }
             }
             .navigationDestination(isPresented: $navigateToCheckout) {
@@ -64,29 +72,21 @@ struct CartView: View {
             Image(systemName: "lock")
                 .font(AppTypography.iconDecorative)
                 .foregroundColor(AppColors.neutral600)
-
             VStack(spacing: AppSpacing.xs) {
                 Text("Sign In to Shop")
                     .font(AppTypography.heading2)
                     .foregroundColor(AppColors.textPrimaryDark)
-
                 Text("Create an account or sign in to add\nitems to your bag and checkout.")
                     .font(AppTypography.bodyMedium)
                     .foregroundColor(AppColors.textSecondaryDark)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
             }
-
             VStack(spacing: AppSpacing.sm) {
-                PrimaryButton(title: "Sign In") {
-                    showGuestAuthGate = true
-                }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
-
-                SecondaryButton(title: "Create Account") {
-                    showGuestAuthGate = true
-                }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
+                PrimaryButton(title: "Sign In") { showGuestAuthGate = true }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                SecondaryButton(title: "Create Account") { showGuestAuthGate = true }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
             }
         }
         .padding(.horizontal, AppSpacing.xxl)
@@ -99,12 +99,10 @@ struct CartView: View {
             Image(systemName: "bag")
                 .font(AppTypography.iconDecorative)
                 .foregroundColor(AppColors.neutral600)
-
             VStack(spacing: AppSpacing.xs) {
                 Text("Your Bag is Empty")
                     .font(AppTypography.heading2)
                     .foregroundColor(AppColors.textPrimaryDark)
-
                 Text("Browse our collections and add items to your bag")
                     .font(AppTypography.bodyMedium)
                     .foregroundColor(AppColors.textSecondaryDark)
@@ -119,30 +117,30 @@ struct CartView: View {
     private var cartContent: some View {
         VStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
-                VStack(spacing: AppSpacing.md) {
-                    // Item count
-                    HStack {
-                        Text("\(itemCount) \(itemCount == 1 ? "item" : "items") in your bag")
-                            .font(AppTypography.bodySmall)
-                            .foregroundColor(AppColors.textSecondaryDark)
-                        Spacer()
-                    }
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
-                    .padding(.top, AppSpacing.md)
-
-                    // Cart items
+                VStack(spacing: AppSpacing.sm) {
+                    // Items
                     ForEach(cartItems) { item in
                         cartItemRow(item)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .trailing)),
+                                removal: .opacity.combined(with: .move(edge: .leading))
+                            ))
+                    }
+
+                    // Free shipping progress
+                    if subtotal < 500 {
+                        freeShippingBanner
                     }
 
                     // Order summary
                     orderSummary
                         .padding(.top, AppSpacing.sm)
                 }
-                .padding(.bottom, 120)
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.md)
+                .padding(.bottom, 130)
             }
 
-            // Bottom checkout bar
             checkoutBar
         }
     }
@@ -151,18 +149,14 @@ struct CartView: View {
 
     private func cartItemRow(_ item: CartItem) -> some View {
         HStack(spacing: AppSpacing.md) {
-            // Product image placeholder
-            ZStack {
-                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                    .fill(AppColors.backgroundTertiary)
-                    .frame(width: 80, height: 80)
+            // Larger thumbnail
+            ProductArtworkView(
+                imageSource: item.productImageName,
+                fallbackSymbol: "bag.fill",
+                cornerRadius: AppSpacing.radiusMedium
+            )
+            .frame(width: 100, height: 100)
 
-                Image(systemName: item.productImageName)
-                    .font(AppTypography.iconProductSmall)
-                    .foregroundColor(AppColors.neutral600)
-            }
-
-            // Product details
             VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                 Text(item.productBrand.uppercased())
                     .font(AppTypography.overline)
@@ -178,16 +172,17 @@ struct CartView: View {
                     .font(AppTypography.priceSmall)
                     .foregroundColor(AppColors.textSecondaryDark)
 
-                // Quantity controls
+                // Quantity stepper
                 HStack(spacing: AppSpacing.sm) {
                     Button {
                         if item.quantity > 1 {
                             item.quantity -= 1
                             try? modelContext.save()
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         }
                     } label: {
-                        Image(systemName: "minus.circle")
-                            .font(AppTypography.toolbarIcon)
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: 22))
                             .foregroundColor(item.quantity > 1 ? AppColors.accent : AppColors.neutral600)
                     }
                     .disabled(item.quantity <= 1)
@@ -201,34 +196,78 @@ struct CartView: View {
                         if item.quantity < 10 {
                             item.quantity += 1
                             try? modelContext.save()
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         }
                     } label: {
-                        Image(systemName: "plus.circle")
-                            .font(AppTypography.toolbarIcon)
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 22))
                             .foregroundColor(item.quantity < 10 ? AppColors.accent : AppColors.neutral600)
                     }
                     .disabled(item.quantity >= 10)
 
                     Spacer()
-
-                    // Remove button
-                    Button {
-                        withAnimation {
-                            modelContext.delete(item)
-                            try? modelContext.save()
-                        }
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(AppTypography.alertIcon)
-                            .foregroundColor(AppColors.error)
-                    }
                 }
+            }
+
+            // Remove
+            Button {
+                withAnimation(.spring(response: 0.3)) {
+                    modelContext.delete(item)
+                    try? modelContext.save()
+                }
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(AppColors.neutral600)
+                    .padding(8)
+                    .background(AppColors.backgroundTertiary)
+                    .clipShape(Circle())
             }
         }
         .padding(AppSpacing.cardPadding)
         .background(AppColors.backgroundSecondary)
         .cornerRadius(AppSpacing.radiusMedium)
-        .padding(.horizontal, AppSpacing.screenHorizontal)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                withAnimation {
+                    modelContext.delete(item)
+                    try? modelContext.save()
+                }
+            } label: {
+                Label("Remove", systemImage: "trash.fill")
+            }
+            .tint(AppColors.error)
+        }
+    }
+
+    // MARK: - Free Shipping Banner
+
+    private var freeShippingBanner: some View {
+        let remaining = 500.0 - subtotal
+        let progress  = subtotal / 500.0
+        return VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack {
+                Image(systemName: "shippingbox.fill")
+                    .foregroundColor(AppColors.accent)
+                Text("Add \(formatCurrency(remaining)) more for free shipping")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(AppColors.backgroundTertiary)
+                    Capsule()
+                        .fill(AppColors.accent)
+                        .frame(width: geo.size.width * min(progress, 1.0))
+                        .animation(.easeOut(duration: 0.4), value: progress)
+                }
+            }
+            .frame(height: 4)
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
     }
 
     // MARK: - Order Summary
@@ -244,8 +283,9 @@ struct CartView: View {
 
                 GoldDivider()
 
-                summaryRow(label: "Subtotal", value: formatCurrency(subtotal))
-                summaryRow(label: "Tax (8%)", value: formatCurrency(tax))
+                summaryRow("Subtotal",          value: formatCurrency(subtotal))
+                summaryRow("Tax (8%)",            value: formatCurrency(tax))
+                summaryRow("Shipping",            value: subtotal > 500 ? "Free" : formatCurrency(shipping))
 
                 GoldDivider()
 
@@ -261,10 +301,55 @@ struct CartView: View {
             }
             .padding(AppSpacing.cardPadding)
         }
-        .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 
-    private func summaryRow(label: String, value: String) -> some View {
+    // MARK: - Checkout Bar
+
+    private var checkoutBar: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: AppSpacing.xs) {
+                HStack(spacing: AppSpacing.md) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Total")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                        Text(formatCurrency(total))
+                            .font(AppTypography.priceDisplay)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                    }
+                    Spacer()
+                    Button(action: { navigateToCheckout = true }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Checkout")
+                                .font(AppTypography.buttonPrimary)
+                        }
+                        .foregroundColor(AppColors.textPrimaryLight)
+                        .padding(.horizontal, AppSpacing.lg)
+                        .frame(height: AppSpacing.touchTarget)
+                        .background(AppColors.accent)
+                        .cornerRadius(AppSpacing.radiusMedium)
+                    }
+                }
+
+                Text("Estimated delivery: 5–7 business days")
+                    .font(AppTypography.pico)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.vertical, AppSpacing.md)
+            .background(
+                AppColors.backgroundPrimary
+                    .shadow(color: .black.opacity(0.25), radius: 12, y: -6)
+            )
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func summaryRow(_ label: String, value: String) -> some View {
         HStack {
             Text(label)
                 .font(AppTypography.bodyMedium)
@@ -276,41 +361,9 @@ struct CartView: View {
         }
     }
 
-    // MARK: - Checkout Bar
-
-    private var checkoutBar: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: AppSpacing.md) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Total")
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.textSecondaryDark)
-                    Text(formatCurrency(total))
-                        .font(AppTypography.priceDisplay)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                }
-
-                Spacer()
-
-                PrimaryButton(title: "Checkout") {
-                    navigateToCheckout = true
-                }
-                .frame(width: 160)
-            }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
-            .padding(.vertical, AppSpacing.md)
-            .background(
-                AppColors.backgroundPrimary
-                    .shadow(color: .black.opacity(0.3), radius: 10, y: -5)
-            )
-        }
-    }
-
-    // MARK: - Helpers
-
     private func formatCurrency(_ value: Double) -> String {
         let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
+        formatter.numberStyle  = .currency
         formatter.currencyCode = "USD"
         return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
     }
