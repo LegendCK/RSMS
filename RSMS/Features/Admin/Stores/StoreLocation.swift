@@ -23,7 +23,8 @@ final class StoreLocation {
     var id: UUID
     var code: String
     var name: String
-    var type: LocationType
+    // Persist as raw string for schema resilience and safe fallback.
+    var typeRaw: String
     var country: String
     var city: String
     var addressLine1: String
@@ -35,6 +36,11 @@ final class StoreLocation {
     var isOperational: Bool
     var createdAt: Date
     var updatedAt: Date
+
+    var type: LocationType {
+        get { LocationType(rawValue: typeRaw) ?? .boutique }
+        set { typeRaw = newValue.rawValue }
+    }
 
     init(
         code: String,
@@ -53,7 +59,7 @@ final class StoreLocation {
         self.id = UUID()
         self.code = code
         self.name = name
-        self.type = type
+        self.typeRaw = type.rawValue
         self.addressLine1 = addressLine1
         self.city = city
         self.stateProvince = stateProvince

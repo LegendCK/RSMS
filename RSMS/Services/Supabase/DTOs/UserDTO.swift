@@ -93,3 +93,21 @@ struct UserInsertDTO: Codable {
         case isActive  = "is_active"
     }
 }
+
+// MARK: - Update Payload
+
+struct UserUpdateDTO: Codable {
+    let role: String
+    let firstName: String
+    let lastName: String
+    let phone: String?
+    let isActive: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case role
+        case firstName = "first_name"
+        case lastName  = "last_name"
+        case phone
+        case isActive  = "is_active"
+    }
+}
