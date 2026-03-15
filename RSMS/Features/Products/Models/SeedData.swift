@@ -12,7 +12,7 @@ import SwiftData
 struct SeedData {
 
     static func seedIfNeeded(modelContext: ModelContext) {
-        seedUsersIfNeeded(modelContext: modelContext)
+        // Users are sourced from Supabase via StaffSyncService — no local seed
         seedCatalogIfNeeded(modelContext: modelContext)
         seedOrdersIfNeeded(modelContext: modelContext)
         seedClientsIfNeeded(modelContext: modelContext)
@@ -22,26 +22,6 @@ struct SeedData {
         seedEventsIfNeeded(modelContext: modelContext)
         seedNotificationsIfNeeded(modelContext: modelContext)
         try? modelContext.save()
-    }
-
-    // MARK: - Users
-
-    private static func seedUsersIfNeeded(modelContext: ModelContext) {
-        let desc = FetchDescriptor<User>()
-        guard (try? modelContext.fetchCount(desc)) == 0 else { return }
-
-        let users = [
-            User(name: "Victoria Sterling", email: "admin@maisonluxe.com", phone: "+1-800-555-0001", passwordHash: "admin123", role: .corporateAdmin),
-            User(name: "James Beaumont", email: "manager@maisonluxe.com", phone: "+1-800-555-0010", passwordHash: "manager123", role: .boutiqueManager),
-            User(name: "Sophia Laurent", email: "sophia.l@maisonluxe.com", phone: "+1-800-555-0011", passwordHash: "manager123", role: .boutiqueManager),
-            User(name: "Alexander Chase", email: "sales@maisonluxe.com", phone: "+1-800-555-0020", passwordHash: "sales123", role: .salesAssociate),
-            User(name: "Isabella Moreau", email: "isabella.m@maisonluxe.com", phone: "+1-800-555-0021", passwordHash: "sales123", role: .salesAssociate),
-            User(name: "Daniel Park", email: "inventory@maisonluxe.com", phone: "+1-800-555-0030", passwordHash: "inventory123", role: .inventoryController),
-            User(name: "Marcus Webb", email: "service@maisonluxe.com", phone: "+1-800-555-0040", passwordHash: "service123", role: .serviceTechnician),
-            User(name: "Olivia Hartwell", email: "olivia@example.com", phone: "+1-555-123-4567", passwordHash: "customer123", role: .customer),
-            User(name: "Liam Chen", email: "liam.c@example.com", phone: "+1-555-234-5678", passwordHash: "customer123", role: .customer),
-        ]
-        for u in users { modelContext.insert(u) }
     }
 
     // MARK: - Catalog (Categories + Products)

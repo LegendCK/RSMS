@@ -28,16 +28,20 @@ final class StoreSyncService {
             location.id = existingId
         }
 
+        // Supabase `stores.country` is character(2) — always send a 2-letter ISO code.
+        let countryCode = isoCountryCode(for: location.country)
+        location.country = countryCode  // keep local value in sync
+
         let payload = StoreInsertDTO(
             id: location.id,
             code: location.code,
             name: location.name,
             type: location.type == .boutique ? "boutique" : "distribution_center",
-            country: location.country,
+            country: countryCode,
             city: location.city,
             address: location.addressLine1,
-            currency: inferredCurrency(for: location.country),
-            timezone: inferredTimeZone(for: location.country),
+            currency: inferredCurrency(for: countryCode),
+            timezone: inferredTimeZone(for: countryCode),
             region: location.region,
             managerName: location.managerName,
             capacityUnits: location.capacityUnits,
@@ -179,29 +183,68 @@ final class StoreSyncService {
         return "\(prefix)-\(dto.id.uuidString.prefix(8))".uppercased()
     }
 
-    private func inferredCurrency(for country: String) -> String {
-        switch country.uppercased() {
-        case "USA", "US":
-            return "USD"
-        case "FRANCE", "ITALY", "FR", "IT":
-            return "EUR"
-        case "JAPAN", "JP":
-            return "JPY"
+    /// Converts any country string to a 2-letter ISO 3166-1 alpha-2 code
+    /// required by the Supabase `stores.country` character(2) column.
+    private func isoCountryCode(for country: String) -> String {
+        let upper = country.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if upper.count == 2 { return upper }
+        switch upper {
+        case "INDIA", "BHARAT":                            return "IN"
+        case "UNITED STATES", "USA", "UNITED STATES OF AMERICA": return "US"
+        case "FRANCE":                                     return "FR"
+        case "ITALY":                                      return "IT"
+        case "JAPAN":                                      return "JP"
+        case "UNITED KINGDOM", "UK", "GREAT BRITAIN":     return "GB"
+        case "GERMANY", "DEUTSCHLAND":                     return "DE"
+        case "CHINA":                                      return "CN"
+        case "AUSTRALIA":                                  return "AU"
+        case "CANADA":                                     return "CA"
+        case "BRAZIL", "BRASIL":                           return "BR"
+        case "SPAIN", "ESPAÑA":                            return "ES"
+        case "NETHERLANDS", "HOLLAND":                     return "NL"
+        case "SWITZERLAND":                                return "CH"
+        case "SINGAPORE":                                  return "SG"
+        case "UAE", "UNITED ARAB EMIRATES":                return "AE"
         default:
-            return "USD"
+            // Unknown full name — take first 2 uppercase chars as best-effort fallback
+            let prefix = String(upper.prefix(2))
+            return prefix.count == 2 ? prefix : "XX"
         }
     }
 
-    private func inferredTimeZone(for country: String) -> String {
-        switch country.uppercased() {
-        case "USA", "US":
-            return "America/New_York"
-        case "FRANCE", "ITALY", "FR", "IT":
-            return "Europe/Paris"
-        case "JAPAN", "JP":
-            return "Asia/Tokyo"
-        default:
-            return "UTC"
+    private func inferredCurrency(for isoCode: String) -> String {
+        switch isoCode {
+        case "US": return "USD"
+        case "IN": return "INR"
+        case "GB": return "GBP"
+        case "JP": return "JPY"
+        case "AU": return "AUD"
+        case "CA": return "CAD"
+        case "CH": return "CHF"
+        case "CN": return "CNY"
+        case "BR": return "BRL"
+        case "SG": return "SGD"
+        case "AE": return "AED"
+        case "FR", "IT", "DE", "ES", "NL": return "EUR"
+        default: return "USD"
+        }
+    }
+
+    private func inferredTimeZone(for isoCode: String) -> String {
+        switch isoCode {
+        case "US": return "America/New_York"
+        case "IN": return "Asia/Kolkata"
+        case "GB": return "Europe/London"
+        case "JP": return "Asia/Tokyo"
+        case "AU": return "Australia/Sydney"
+        case "CA": return "America/Toronto"
+        case "CH": return "Europe/Zurich"
+        case "CN": return "Asia/Shanghai"
+        case "BR": return "America/Sao_Paulo"
+        case "SG": return "Asia/Singapore"
+        case "AE": return "Asia/Dubai"
+        case "FR", "IT", "DE", "ES", "NL": return "Europe/Paris"
+        default: return "UTC"
         }
     }
 }

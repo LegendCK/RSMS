@@ -173,7 +173,7 @@ struct OrgBoutiquesSubview: View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Maison Luxe — \(store.name)")
+                    Text(store.name)
                         .font(AppTypography.label)
                         .foregroundColor(AppColors.textPrimaryDark)
                     Text("\(store.city), \(store.country)")
@@ -708,9 +708,7 @@ struct OrgStaffSubview: View {
         }
         .task { await syncStaff() }
         .sheet(isPresented: $showCreateStaff) {
-            OrgCreateStaffSheet { newUser in
-                Task { await pushSingleUser(newUser) }
-            }
+            OrgCreateStaffSheet { _ in }
         }
         .sheet(item: $editingUser) { user in
             OrgManageStaffSheet(user: user)
@@ -926,6 +924,7 @@ struct OrgCreateStaffSheet: View {
     @State private var password = ""
     @State private var selectedRole: UserRole = .boutiqueManager
     @State private var errorMessage: String?
+    @State private var isCreating = false
 
     private let creatableRoles: [UserRole] = [
         .boutiqueManager,
@@ -955,15 +954,6 @@ struct OrgCreateStaffSheet: View {
                         secureField("Temporary Password", text: $password)
                     }
 
-                    card("Sync Logic", icon: "arrow.triangle.2.circlepath") {
-                        Text("New staff created here is saved to local app data immediately.")
-                            .font(AppTypography.bodySmall)
-                            .foregroundColor(AppColors.textSecondaryDark)
-                        Text("Supabase sync works only when a matching staff auth/profile already exists remotely.")
-                            .font(AppTypography.bodySmall)
-                            .foregroundColor(AppColors.textSecondaryDark)
-                    }
-
                     if let errorMessage {
                         Text(errorMessage)
                             .font(AppTypography.caption)
@@ -983,10 +973,18 @@ struct OrgCreateStaffSheet: View {
                         .foregroundColor(AppColors.accent)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Create") { createStaff() }
-                        .disabled(!isFormValid)
-                        .opacity(isFormValid ? 1 : 0.45)
-                        .foregroundColor(AppColors.accent)
+                    Button {
+                        Task { await createStaff() }
+                    } label: {
+                        if isCreating {
+                            ProgressView().tint(AppColors.accent)
+                        } else {
+                            Text("Create")
+                        }
+                    }
+                    .disabled(!isFormValid || isCreating)
+                    .opacity((isFormValid && !isCreating) ? 1 : 0.45)
+                    .foregroundColor(AppColors.accent)
                 }
             }
         }
@@ -998,25 +996,41 @@ struct OrgCreateStaffSheet: View {
         password.count >= 6
     }
 
-    private func createStaff() {
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              password.count >= 6 else {
-            errorMessage = "Name, email, and a 6+ char password are required."
-            return
-        }
+    private func createStaff() async {
+        guard isFormValid else { return }
+        isCreating = true
+        errorMessage = nil
+        defer { isCreating = false }
 
-        let newUser = User(
-            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-            phone: phone.trimmingCharacters(in: .whitespacesAndNewlines),
-            passwordHash: password,
-            role: selectedRole
-        )
-        modelContext.insert(newUser)
-        try? modelContext.save()
-        onCreated(newUser)
-        dismiss()
+        do {
+            // Create auth user + profile in Supabase, then restore admin session.
+            let dto = try await StaffSyncService.shared.createStaffWithAuth(
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+                phone: phone.trimmingCharacters(in: .whitespacesAndNewlines),
+                password: password,
+                role: selectedRole
+            )
+
+            // Save locally using the real auth UUID so IDs match Supabase.
+            let newUser = User(
+                name: dto.fullName,
+                email: dto.email,
+                phone: dto.phone ?? "",
+                passwordHash: "",
+                role: dto.userRole,
+                isActive: dto.isActive
+            )
+            newUser.id = dto.id
+            newUser.createdAt = dto.createdAt
+            modelContext.insert(newUser)
+            try? modelContext.save()
+
+            onCreated(newUser)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func roleChip(_ role: UserRole) -> some View {

@@ -20,8 +20,64 @@ final class StaffSyncService {
         try await pullRemoteStaff(modelContext: modelContext)
     }
 
+    /// Creates a new staff member end-to-end:
+    /// 1. Signs up in Supabase Auth  → creates `auth.users` entry.
+    /// 2. Inserts the profile row in `users` (authenticated as new user, so FK + RLS pass).
+    /// 3. Restores the admin's original session.
+    /// Returns the persisted `UserDTO` with the real auth UUID.
+    func createStaffWithAuth(
+        name: String,
+        email: String,
+        phone: String,
+        password: String,
+        role: UserRole
+    ) async throws -> UserDTO {
+        // 1. Capture admin session before touching auth state.
+        let adminSession = try await client.auth.session
+
+        // 2. Sign up — creates auth.users entry and switches active session to new user.
+        let authResponse = try await client.auth.signUp(email: email, password: password)
+        let authUser = authResponse.user
+
+        do {
+            // 3. Insert profile (now running as the new user → auth.uid() = authUser.id).
+            let (firstName, lastName) = splitName(name)
+            let payload = UserInsertDTO(
+                id: authUser.id,
+                role: snakeRole(for: role),
+                storeId: nil,
+                firstName: firstName,
+                lastName: lastName,
+                email: email.lowercased(),
+                phone: phone.isEmpty ? nil : phone,
+                isActive: true
+            )
+
+            let dto: UserDTO = try await client
+                .from("users")
+                .insert(payload)
+                .select()
+                .single()
+                .execute()
+                .value
+
+            // 4. Restore admin session.
+            try await client.auth.setSession(
+                accessToken: adminSession.accessToken,
+                refreshToken: adminSession.refreshToken
+            )
+            return dto
+        } catch {
+            // Always restore admin session, even on failure.
+            try? await client.auth.setSession(
+                accessToken: adminSession.accessToken,
+                refreshToken: adminSession.refreshToken
+            )
+            throw error
+        }
+    }
+
     /// Updates an existing remote staff profile.
-    /// Does not create new remote rows because `users.id` is typically a FK to `auth.users`.
     func updateStaffIfExists(_ user: User) async throws -> UserDTO {
         let (firstName, lastName) = splitName(user.name)
         let payload = UserUpdateDTO(
@@ -51,9 +107,13 @@ final class StaffSyncService {
             .execute()
             .value
 
+        // Build authoritative set of remote staff IDs (customers excluded).
+        let remoteStaffIds = Set(remote.filter { $0.userRole != .customer }.map { $0.id })
+
         let locals = (try? modelContext.fetch(FetchDescriptor<User>())) ?? []
         var byId = Dictionary(uniqueKeysWithValues: locals.map { ($0.id, $0) })
 
+        // Update existing or insert new staff from Supabase.
         for dto in remote {
             let role = dto.userRole
             guard role != .customer else { continue }
@@ -64,6 +124,13 @@ final class StaffSyncService {
                 let created = makeUser(from: dto)
                 modelContext.insert(created)
                 byId[created.id] = created
+            }
+        }
+
+        // Delete local staff not present in Supabase (stale seed data / orphaned records).
+        for local in locals where local.role != .customer {
+            if !remoteStaffIds.contains(local.id) {
+                modelContext.delete(local)
             }
         }
 

@@ -90,10 +90,6 @@ struct StaffRosterSubview: View {
                 Text(user.role.rawValue).font(AppTypography.roleTag).foregroundColor(roleClr(user.role))
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("On Floor").font(AppTypography.micro).foregroundColor(AppColors.success)
-                Text("9:00–6:00").font(AppTypography.caption).foregroundColor(AppColors.neutral500)
-            }
         }
         .padding(AppSpacing.sm)
         .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
@@ -128,47 +124,22 @@ struct StaffRosterSubview: View {
 
 struct StaffShiftsSubview: View {
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: AppSpacing.md) {
-                sLabel("TODAY — MAR 10")
-
-                shiftRow(name: "Alexander Chase", role: "Sales Associate", shift: "9:00 AM – 6:00 PM", status: "On Floor", color: AppColors.success)
-                shiftRow(name: "Isabella Moreau", role: "Sales Associate", shift: "10:00 AM – 7:00 PM", status: "On Floor", color: AppColors.success)
-                shiftRow(name: "Daniel Park", role: "Inventory Controller", shift: "8:00 AM – 4:00 PM", status: "Stockroom", color: AppColors.info)
-                shiftRow(name: "Marcus Webb", role: "Service Technician", shift: "11:00 AM – 3:00 PM", status: "Service Bay", color: AppColors.warning)
-
-                sLabel("TOMORROW — MAR 11")
-
-                shiftRow(name: "Alexander Chase", role: "Sales Associate", shift: "9:00 AM – 6:00 PM", status: "Scheduled", color: AppColors.neutral500)
-                shiftRow(name: "Isabella Moreau", role: "Sales Associate", shift: "OFF", status: "Day Off", color: AppColors.neutral500)
-                shiftRow(name: "Daniel Park", role: "Inventory Controller", shift: "8:00 AM – 4:00 PM", status: "Scheduled", color: AppColors.neutral500)
-            }
-            .padding(.top, AppSpacing.sm).padding(.bottom, AppSpacing.xxxl)
-        }
-    }
-
-    private func shiftRow(name: String, role: String, shift: String, status: String, color: Color) -> some View {
-        HStack(spacing: AppSpacing.sm) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                Text(role).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-            }
+        VStack(spacing: AppSpacing.sm) {
             Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(shift).font(AppTypography.caption).foregroundColor(AppColors.textPrimaryDark)
-                Text(status.uppercased()).font(AppTypography.nano).foregroundColor(color)
-                    .padding(.horizontal, 8).padding(.vertical, 3).background(color.opacity(0.12)).cornerRadius(4)
-            }
+            Image(systemName: "calendar.badge.clock")
+                .font(.system(size: 40))
+                .foregroundColor(AppColors.neutral400)
+            Text("No Shift Data")
+                .font(AppTypography.heading3)
+                .foregroundColor(AppColors.textPrimaryDark)
+            Text("Shift scheduling is not yet available.")
+                .font(AppTypography.bodySmall)
+                .foregroundColor(AppColors.textSecondaryDark)
+                .multilineTextAlignment(.center)
+            Spacer()
         }
-        .padding(AppSpacing.sm)
-        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, AppSpacing.screenHorizontal)
-    }
-
-    private func sLabel(_ t: String) -> some View {
-        Text(t).font(AppTypography.overline).tracking(2).foregroundColor(AppColors.accent)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 }
 
@@ -176,76 +147,22 @@ struct StaffShiftsSubview: View {
 
 struct StaffPerformanceSubview: View {
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: AppSpacing.md) {
-                sLabel("THIS MONTH")
-
-                perfCard(name: "Alexander Chase", role: "Sales Associate", sales: "$86,400", txns: 14, avgTicket: "$6,171", convRate: "42%", rank: 1)
-                perfCard(name: "Isabella Moreau", role: "Sales Associate", sales: "$72,100", txns: 11, avgTicket: "$6,554", convRate: "38%", rank: 2)
-
-                sLabel("SUPPORT STAFF")
-
-                perfSupportCard(name: "Daniel Park", role: "Inventory Controller", metric: "98.5% accuracy", detail: "127 items processed this month")
-                perfSupportCard(name: "Marcus Webb", role: "Service Technician", metric: "4 repairs completed", detail: "Avg. turnaround: 2.3 days")
-            }
-            .padding(.top, AppSpacing.sm).padding(.bottom, AppSpacing.xxxl)
-        }
-    }
-
-    private func perfCard(name: String, role: String, sales: String, txns: Int, avgTicket: String, convRate: String, rank: Int) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack {
-                Text("#\(rank)").font(AppTypography.heading2).foregroundColor(AppColors.accent)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(name).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                    Text(role).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                }
-                Spacer()
-                Text(sales).font(AppTypography.heading3).foregroundColor(AppColors.accent)
-            }
-            Divider().background(AppColors.border)
-            HStack(spacing: AppSpacing.xl) {
-                VStack(spacing: 2) {
-                    Text("\(txns)").font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                    Text("Txns").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                }
-                VStack(spacing: 2) {
-                    Text(avgTicket).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                    Text("Avg Ticket").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                }
-                VStack(spacing: 2) {
-                    Text(convRate).font(AppTypography.label).foregroundColor(AppColors.success)
-                    Text("Conv Rate").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                }
-            }
-        }
-        .padding(AppSpacing.cardPadding)
-        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusLarge)
-        .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge).stroke(AppColors.border, lineWidth: 0.5))
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-    }
-
-    private func perfSupportCard(name: String, role: String, metric: String, detail: String) -> some View {
-        HStack(spacing: AppSpacing.md) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                Text(role).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-            }
+        VStack(spacing: AppSpacing.sm) {
             Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(metric).font(AppTypography.label).foregroundColor(AppColors.success)
-                Text(detail).font(AppTypography.caption).foregroundColor(AppColors.neutral500)
-            }
+            Image(systemName: "chart.bar.xaxis")
+                .font(.system(size: 40))
+                .foregroundColor(AppColors.neutral400)
+            Text("No Performance Data")
+                .font(AppTypography.heading3)
+                .foregroundColor(AppColors.textPrimaryDark)
+            Text("Performance metrics are not yet available.")
+                .font(AppTypography.bodySmall)
+                .foregroundColor(AppColors.textSecondaryDark)
+                .multilineTextAlignment(.center)
+            Spacer()
         }
-        .padding(AppSpacing.sm)
-        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, AppSpacing.screenHorizontal)
-    }
-
-    private func sLabel(_ t: String) -> some View {
-        Text(t).font(AppTypography.overline).tracking(2).foregroundColor(AppColors.accent)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 }
 
