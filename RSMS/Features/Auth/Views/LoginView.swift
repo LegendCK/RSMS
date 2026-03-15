@@ -131,7 +131,7 @@ struct LoginView: View {
                             }
                             .padding(.horizontal, AppSpacing.screenHorizontal)
 
-                            Button(action: { appState.continueAsGuest() }) {
+                            Button(action: { Task { await appState.continueAsGuest() } }) {
                                 Text("Browse as Guest")
                                     .font(AppTypography.bodySmall)
                                     .foregroundColor(AppColors.textSecondaryDark)

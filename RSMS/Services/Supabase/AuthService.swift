@@ -115,6 +115,13 @@ final class AuthService {
         return profile
     }
 
+    /// Performs an anonymous sign-in to allow guest users an authenticated session context.
+    /// This is useful for RLS policies that permit 'authenticated' but not 'anon' access.
+    func signInAnonymously() async throws {
+        try await client.auth.signInAnonymously()
+        print("[AuthService] signInAnonymously succeeded")
+    }
+
     // MARK: - Sign Up (Customers only)
 
     /// Creates a Supabase Auth account then inserts the customer profile row in public.clients.

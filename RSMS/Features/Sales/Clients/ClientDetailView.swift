@@ -215,7 +215,7 @@ struct ClientDetailView: View {
         guard let segment = segment else { return AppColors.neutral300 }
         switch segment.lowercased() {
         case "vip", "ultra_vip": return AppColors.accent
-        case "gold": return Color(hex: "D4AF37").opacity(0.8)
+        case "gold": return AppColors.accent.opacity(0.8)
         case "silver": return AppColors.neutral500
         default: return AppColors.backgroundSecondary
         }
@@ -224,9 +224,7 @@ struct ClientDetailView: View {
     private func segmentBadgeTextColor(_ segment: String?) -> Color {
         guard let segment = segment else { return AppColors.textPrimaryDark }
         switch segment.lowercased() {
-        case "vip", "ultra_vip": return .white
-        case "gold": return .white
-        case "silver": return .white
+        case "vip", "ultra_vip", "gold", "silver": return .white
         default: return AppColors.textPrimaryDark
         }
     }

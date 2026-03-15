@@ -15,14 +15,25 @@ final class CustomerCatalogSyncService {
     private init() {}
 
     func refreshLocalCatalog(modelContext: ModelContext) async throws {
-        async let remoteCategoriesTask = CatalogService.shared.fetchCategories()
-        async let remoteProductsTask = CatalogService.shared.fetchProducts()
+        let remoteCategories = try await CatalogService.shared.fetchCategories()
+        let remoteProducts = try await CatalogService.shared.fetchProducts()
 
-        let remoteCategories = try await remoteCategoriesTask.filter { $0.isActive }
-        let remoteProducts = try await remoteProductsTask.filter { $0.isActive }
+        // Safety check: If we get 0 categories from remote but have local categories, 
+        // it's likely an RLS restriction for a Guest session.
+        // We skip synchronization to prevent wiping out the local catalog.
+        if remoteCategories.isEmpty {
+            let localCount = (try? modelContext.fetchCount(FetchDescriptor<Category>())) ?? 0
+            if localCount > 0 {
+                print("[SyncService] Remote fetch returned 0 categories but local data exists. Skipping sync to prevent wipeout (Guest/RLS safety).")
+                return
+            }
+        }
 
-        try syncCategories(remoteCategories, modelContext: modelContext)
-        try syncProducts(remoteProducts, categories: remoteCategories, modelContext: modelContext)
+        let activeCategories = remoteCategories.filter { $0.isActive }
+        let activeProducts = remoteProducts.filter { $0.isActive }
+
+        try syncCategories(activeCategories, modelContext: modelContext)
+        try syncProducts(activeProducts, categories: activeCategories, modelContext: modelContext)
         try cleanOrphanedCartItems(modelContext: modelContext)
 
         try modelContext.save()

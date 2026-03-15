@@ -28,7 +28,7 @@ struct PrimaryButton: View {
             .frame(height: AppSpacing.touchTarget + 8)
             .foregroundColor(AppColors.textPrimaryLight)
             .background(AppColors.accent)
-            .cornerRadius(AppSpacing.radiusMedium)
+            .clipShape(Capsule())
             .liquidShadow(LiquidShadow.subtle)
         }
         .disabled(isLoading)
