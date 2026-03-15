@@ -11,11 +11,36 @@ struct CreateClientProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @State private var vm = CreateClientProfileViewModel()
-    
+
+    /// Local Date state for the DOB picker — synced to vm.dateOfBirth (String) via onChange.
+    @State private var dobDate: Date = Calendar.current.date(
+        byAdding: .year, value: -30, to: Date()
+    ) ?? Date()
+
     var onSave: (() -> Void)?
-    
+
     private let communicationOptions = ["Email", "Phone", "SMS", "WhatsApp"]
     private let segments = ["standard", "silver", "gold", "vip", "ultra_vip"]
+
+    // MARK: - ISO date formatter (yyyy-MM-dd — required by Supabase)
+    private static let isoFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    /// Creates a two-way Date ↔ String binding for a specific anniversary index.
+    private func anniversaryDateBinding(for index: Int) -> Binding<Date> {
+        Binding<Date>(
+            get: {
+                Self.isoFormatter.date(from: vm.anniversaries[index].date) ?? Date()
+            },
+            set: { newDate in
+                vm.anniversaries[index].date = Self.isoFormatter.string(from: newDate)
+            }
+        )
+    }
     
     var body: some View {
         NavigationStack {
@@ -78,7 +103,15 @@ struct CreateClientProfileView: View {
                             .keyboardType(.emailAddress)
                         LuxuryTextField(placeholder: "Phone", text: $vm.phone, icon: "phone")
                             .keyboardType(.phonePad)
-                        LuxuryTextField(placeholder: "Date of Birth (YYYY-MM-DD)", text: $vm.dateOfBirth, icon: "calendar")
+                        // Calendar picker — eliminates manual YYYY-MM-DD entry and format errors
+                        LuxuryDatePicker(label: "Date of Birth", date: $dobDate, maximumDate: Date())
+                            .onChange(of: dobDate) { _, newDate in
+                                vm.dateOfBirth = Self.isoFormatter.string(from: newDate)
+                            }
+                            .onAppear {
+                                // Seed vm.dateOfBirth with the initial picker value
+                                vm.dateOfBirth = Self.isoFormatter.string(from: dobDate)
+                            }
                     }
                     .padding(AppSpacing.cardPadding)
                 }
@@ -238,14 +271,21 @@ struct CreateClientProfileView: View {
                                     .padding(AppSpacing.xs)
                                     .background(AppColors.backgroundSecondary)
                                     .cornerRadius(4)
-                                
-                                TextField("Date", text: $vm.anniversaries[index].date)
-                                    .textFieldStyle(.plain)
-                                    .font(AppTypography.bodyMedium)
-                                    .padding(AppSpacing.xs)
-                                    .background(AppColors.backgroundSecondary)
-                                    .cornerRadius(4)
-                                
+
+                                // Calendar picker — no free-text date entry
+                                DatePicker(
+                                    "",
+                                    selection: anniversaryDateBinding(for: index),
+                                    displayedComponents: .date
+                                )
+                                .datePickerStyle(.compact)
+                                .labelsHidden()
+                                .tint(AppColors.accent)
+                                .frame(maxWidth: 130)
+                                .padding(.horizontal, AppSpacing.xs)
+                                .background(AppColors.backgroundSecondary)
+                                .cornerRadius(4)
+
                                 Button {
                                     vm.removeAnniversary(at: index)
                                 } label: {
