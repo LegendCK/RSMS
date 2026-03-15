@@ -1373,10 +1373,12 @@ struct AdminCatalogCategoryDetailView: View {
                         )
                     } label: {
                         HStack(spacing: AppSpacing.sm) {
-                            Image(systemName: product.imageName)
-                                .font(AppTypography.iconMedium)
-                                .foregroundColor(AppColors.neutral600)
-                                .frame(width: 28)
+                            ProductArtworkView(
+                                imageSource: product.imageName,
+                                fallbackSymbol: "bag.fill",
+                                cornerRadius: 6
+                            )
+                            .frame(width: 28, height: 28)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(product.name)

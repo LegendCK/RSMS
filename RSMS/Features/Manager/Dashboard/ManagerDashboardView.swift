@@ -248,11 +248,12 @@ struct ManagerDashboardView: View {
 
     private func topProductCard(_ product: Product) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            ZStack {
-                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium).fill(AppColors.backgroundTertiary)
-                    .frame(width: 120, height: 90)
-                Image(systemName: product.imageName).font(AppTypography.topProductIcon).foregroundColor(AppColors.neutral600)
-            }
+            ProductArtworkView(
+                imageSource: product.imageName,
+                fallbackSymbol: "bag.fill",
+                cornerRadius: AppSpacing.radiusMedium
+            )
+            .frame(width: 120, height: 90)
             Text(product.name).font(AppTypography.caption).foregroundColor(AppColors.textPrimaryDark).lineLimit(1)
             Text(product.formattedPrice).font(AppTypography.avatarSmall).foregroundColor(AppColors.accent)
         }

@@ -11,15 +11,8 @@ import SwiftData
 struct MainTabView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
-    @Query private var allCartItems: [CartItem]
     @State private var isPreparingCatalog = true
     @State private var syncErrorMessage: String?
-
-    private var cartBadgeCount: Int {
-        allCartItems
-            .filter { $0.customerEmail == appState.currentUserEmail }
-            .reduce(0) { $0 + $1.quantity }
-    }
 
     var body: some View {
         ZStack {
@@ -51,14 +44,6 @@ struct MainTabView: View {
                             ProfileView()
                         }
                     }
-
-                    // Bag Tab
-                    Tab("Bag", systemImage: "bag.fill") {
-                        NavigationStack {
-                            CartView()
-                        }
-                    }
-                    .badge(cartBadgeCount)
 
                     // Search Tab (system renders this as a separate search control)
                     Tab(role: .search) {

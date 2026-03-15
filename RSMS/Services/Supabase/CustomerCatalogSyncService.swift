@@ -103,9 +103,13 @@ final class CustomerCatalogSyncService {
         for dto in remote {
             let categoryName = dto.categoryId.flatMap { categoryNamesByID[$0] } ?? "Uncategorized"
             let fallbackIcon = fallbackIcon(forCategory: categoryName)
-            let normalizedImages = dto.imageUrls?
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty } ?? []
+            let normalizedImages = {
+                let resolved = dto.resolvedImageURLs.map(\.absoluteString)
+                if !resolved.isEmpty { return resolved }
+                return (dto.imageUrls ?? [])
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            }()
             let resolvedImageSource = normalizedImages.first ?? fallbackIcon
             let serializedImageNames = normalizedImages.joined(separator: ",")
 
