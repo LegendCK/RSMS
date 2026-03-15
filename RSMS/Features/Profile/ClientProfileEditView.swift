@@ -15,7 +15,8 @@ struct ClientProfileEditView: View {
     @State private var lastName = ""
     @State private var email = ""
     @State private var phone = ""
-    @State private var dateOfBirth = ""
+    // Date picker state — always holds a valid Date; defaults to 30 years ago when profile has no DOB
+    @State private var dobDate: Date = Calendar.current.date(byAdding: .year, value: -30, to: Date()) ?? Date()
     @State private var preferredLanguage = ""
     @State private var nationality = ""
     @State private var addressLine1 = ""
@@ -31,6 +32,14 @@ struct ClientProfileEditView: View {
     @State private var showError = false
     @State private var showSuccessBanner = false
     @State private var errorMessage = ""
+
+    // MARK: - ISO date formatter (yyyy-MM-dd — required by Supabase)
+    private static let isoFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
 
     var body: some View {
         ZStack {
@@ -69,7 +78,8 @@ struct ClientProfileEditView: View {
                                 .opacity(0.7)
                             LuxuryTextField(placeholder: "Phone Number", text: $phone, icon: "phone")
                                 .keyboardType(.phonePad)
-                            LuxuryTextField(placeholder: "Date of Birth (YYYY-MM-DD)", text: $dateOfBirth, icon: "calendar")
+                            // Calendar picker — eliminates manual date entry and YYYY-MM-DD format errors
+                            LuxuryDatePicker(label: "Date of Birth", date: $dobDate, maximumDate: Date())
                             LuxuryTextField(placeholder: "Preferred Language (e.g. en)", text: $preferredLanguage, icon: "character.book.closed")
                             LuxuryTextField(placeholder: "Nationality (2-letter code)", text: $nationality, icon: "globe")
                             LuxuryTextField(placeholder: "Address Line 1", text: $addressLine1, icon: "house")
@@ -158,7 +168,11 @@ struct ClientProfileEditView: View {
             lastName = profile.lastName
             email = profile.email
             phone = profile.phone ?? ""
-            dateOfBirth = profile.dateOfBirth ?? ""
+            // Parse stored "yyyy-MM-dd" string back to Date; fall back to 30 years ago if absent/invalid
+            if let dobString = profile.dateOfBirth,
+               let parsed = Self.isoFormatter.date(from: dobString) {
+                dobDate = parsed
+            }
             preferredLanguage = profile.preferredLanguage ?? ""
             nationality = profile.nationality ?? ""
             addressLine1 = profile.addressLine1 ?? ""
@@ -184,12 +198,8 @@ struct ClientProfileEditView: View {
             return
         }
 
-        let dob = optionalTrimmed(dateOfBirth)
-        if let dob, !isISODate(dob) {
-            errorMessage = "Date of birth must use YYYY-MM-DD format."
-            showError = true
-            return
-        }
+        // Format Date → "yyyy-MM-dd" string for the DTO (always valid — came from a DatePicker)
+        let dob = Self.isoFormatter.string(from: dobDate)
 
         isLoading = true
         Task { @MainActor in
@@ -233,12 +243,6 @@ struct ClientProfileEditView: View {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    private func isISODate(_ value: String) -> Bool {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: value) != nil
-    }
 }
 
 #Preview {

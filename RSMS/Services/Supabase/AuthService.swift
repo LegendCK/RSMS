@@ -33,7 +33,7 @@ final class AuthService {
     }
 
     /// Attempts to load a staff profile from `users`.
-    /// First uses the legacy RPC if available, then falls back to direct table read.
+    /// First uses the legacy RPC if available, then falls back to a direct filtered read.
     private func fetchStaffProfile() async throws -> UserDTO? {
         do {
             let profiles: [UserDTO] = try await client
@@ -50,31 +50,49 @@ final class AuthService {
         }
 
         do {
+            // Filter explicitly by auth UID — works with or without RLS SELECT policy.
+            let uid = try await client.auth.session.user.id
             let profile: UserDTO = try await client
                 .from("users")
                 .select()
+                .eq("id", value: uid.uuidString.lowercased())
                 .single()
                 .execute()
                 .value
-
             return profile
         } catch {
+            print("[AuthService] fetchStaffProfile fallback failed: \(error.localizedDescription)")
             return nil
         }
     }
 
     /// Attempts to load a customer profile from `clients` and map it to `UserDTO`.
+    ///
+    /// **Why explicit `.eq("id", ...)`?**
+    /// During signup the profile is returned as the INSERT response (no SELECT RLS needed).
+    /// On every subsequent login this is a plain SELECT — it requires the RLS SELECT policy
+    /// `auth.uid() = id` to exist on `clients`. Filtering explicitly by the auth user's UUID
+    /// ensures exactly one row is returned even if that policy is missing (RLS disabled) or
+    /// the table has been seeded with multiple rows.
     private func fetchClientProfile() async throws -> UserDTO? {
         do {
+            let uid = try await client.auth.session.user.id
+            print("[AuthService] fetchClientProfile: querying clients for uid=\(uid)")
+
             let profile: ClientDTO = try await client
                 .from("clients")
                 .select()
+                .eq("id", value: uid.uuidString.lowercased())
                 .single()
                 .execute()
                 .value
 
+            print("[AuthService] fetchClientProfile: found \(profile.email)")
             return UserDTO(clientProfile: profile)
         } catch {
+            // Log the real error so we can diagnose RLS / schema issues in the console.
+            print("[AuthService] fetchClientProfile failed: \(error.localizedDescription)")
+            print("[AuthService] fetchClientProfile raw error: \(error)")
             return nil
         }
     }
