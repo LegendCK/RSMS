@@ -128,14 +128,12 @@ struct ProductManagementView: View {
     private func productRow(_ product: Product) -> some View {
         HStack(spacing: AppSpacing.md) {
             // Image placeholder
-            ZStack {
-                RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
-                    .fill(AppColors.backgroundTertiary)
-                    .frame(width: 50, height: 50)
-                Image(systemName: product.imageName)
-                    .font(AppTypography.catalogIcon)
-                    .foregroundColor(AppColors.neutral600)
-            }
+            ProductArtworkView(
+                imageSource: product.imageName,
+                fallbackSymbol: "bag.fill",
+                cornerRadius: AppSpacing.radiusSmall
+            )
+            .frame(width: 50, height: 50)
 
             // Info
             VStack(alignment: .leading, spacing: 2) {

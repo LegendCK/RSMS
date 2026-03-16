@@ -74,8 +74,14 @@ struct ProfileView: View {
                             }
                             profileRow(icon: "calendar", title: "Appointments", subtitle: "Book a boutique visit")
                             profileRow(icon: "bell", title: "Notifications", subtitle: "Manage preferences")
-                            profileRow(icon: "creditcard", title: "Payment Methods", subtitle: "Manage cards")
-                            profileRow(icon: "mappin.and.ellipse", title: "Addresses", subtitle: "Delivery addresses")
+                            if appState.isAuthenticated && !appState.isGuest {
+                                NavigationLink(destination: PaymentMethodsView()) {
+                                    profileRowContent(icon: "creditcard", title: "Payment Methods", subtitle: "Manage cards")
+                                }
+                                NavigationLink(destination: AddressManagerView()) {
+                                    profileRowContent(icon: "mappin.and.ellipse", title: "Addresses", subtitle: "Delivery addresses")
+                                }
+                            }
                             profileRow(icon: "shield", title: "Privacy & Security", subtitle: "Account settings")
                             profileRow(icon: "questionmark.circle", title: "Help & Support", subtitle: "Contact us")
                         }

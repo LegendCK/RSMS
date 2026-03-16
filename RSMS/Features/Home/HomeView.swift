@@ -46,10 +46,13 @@ struct HomeView: View {
                         .foregroundColor(AppColors.accent)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {}) {
-                        Image(systemName: "bell")
-                            .font(AppTypography.bellIcon)
-                            .foregroundStyle(Color.primary)
+                    HStack(spacing: 14) {
+                        Button(action: {}) {
+                            Image(systemName: "bell")
+                                .font(AppTypography.bellIcon)
+                                .foregroundStyle(Color.primary)
+                        }
+                        CartShortcutButton()
                     }
                 }
             }

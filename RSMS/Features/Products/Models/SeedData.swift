@@ -13,7 +13,7 @@ struct SeedData {
 
     static func seedIfNeeded(modelContext: ModelContext) {
         // Users are sourced from Supabase via StaffSyncService — no local seed
-        // Product catalog is sourced from Supabase via CustomerCatalogSyncService.
+        seedCatalogIfNeeded(modelContext: modelContext)
         seedOrdersIfNeeded(modelContext: modelContext)
         seedClientsIfNeeded(modelContext: modelContext)
         seedAppointmentsIfNeeded(modelContext: modelContext)
@@ -38,10 +38,12 @@ struct SeedData {
         let coutureTypes = "[\"Evening Gowns\",\"Tailored Suits\",\"Silk Blouses & Tops\",\"Cashmere Knitwear\",\"Outerwear & Coats\",\"Scarves & Shawls\",\"Ready-to-Wear Dresses\",\"Bridal Couture\",\"Resort & Cruise Wear\",\"Limited Edition Capsules\"]"
 
         let categories = [
-            Category(name: "Jewellery", icon: "sparkles", description: "Fine jewellery and precious gemstones crafted by master artisans", displayOrder: 0, productTypes: jewelleryTypes),
-            Category(name: "Watches", icon: "clock.fill", description: "Precision timepieces from the world's most prestigious horologists", displayOrder: 1, productTypes: watchTypes),
-            Category(name: "Leather Goods", icon: "bag.fill", description: "Exquisite leather goods handcrafted from the finest hides", displayOrder: 2, productTypes: leatherTypes),
-            Category(name: "Couture", icon: "tshirt.fill", description: "Haute couture and ready-to-wear from visionary ateliers", displayOrder: 3, productTypes: coutureTypes),
+            Category(name: "Accessories", icon: "clock.fill", description: "Premium scarves, belts, sunglasses and lifestyle accessories.", displayOrder: 0, productTypes: watchTypes),
+            Category(name: "Clothing", icon: "tshirt.fill", description: "Made out of purest and finest materials.", displayOrder: 1, productTypes: coutureTypes),
+            Category(name: "Handbags", icon: "bag.fill", description: "Exquisite leather handbags, clutches and accessories.", displayOrder: 2, productTypes: leatherTypes),
+            Category(name: "Jewellery", icon: "sparkles", description: "Fine jewellery in gold, platinum, diamonds and precious stones.", displayOrder: 3, productTypes: jewelleryTypes),
+            Category(name: "Shoes", icon: "shoe.fill", description: "Made out of pure leather.", displayOrder: 4, productTypes: "[]"),
+            Category(name: "Limited Edition", icon: "star.fill", description: "Exclusive numbered limited edition collections.", displayOrder: 5, productTypes: "[]"),
         ]
         for c in categories { modelContext.insert(c) }
 

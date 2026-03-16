@@ -104,6 +104,11 @@ struct CategoryDetailView: View {
         }
         .navigationTitle(category.name)
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                CartShortcutButton()
+            }
+        }
     }
 
     private func productTypeCard(_ typeName: String, icon: String) -> some View {

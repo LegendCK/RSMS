@@ -25,10 +25,10 @@ struct SecondaryButton: View {
             view.background(Material.thinMaterial)
         }
         .overlay(
-            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+            Capsule()
                 .stroke(AppColors.accent, lineWidth: 1.5)
         )
-        .cornerRadius(AppSpacing.radiusMedium)
+        .clipShape(Capsule())
         .liquidShadow(LiquidShadow.subtle)
     }
 }

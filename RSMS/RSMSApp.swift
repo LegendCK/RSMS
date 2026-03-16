@@ -21,6 +21,7 @@ struct RSMSApp: App {
             Order.self,
             CartItem.self,
             SavedAddress.self,
+            SavedPaymentCard.self,
             ClientProfile.self,
             Appointment.self,
             AfterSalesTicket.self,
@@ -29,6 +30,7 @@ struct RSMSApp: App {
             AppNotification.self,
             InventoryByLocation.self,
             StoreLocation.self,
+            StaffShift.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

@@ -11,15 +11,8 @@ import SwiftData
 struct CategoriesView: View {
     @Query(sort: \Category.displayOrder) private var categories: [Category]
 
-    // Tint colors cycling per card for visual variety
-    private let cardAccents: [Color] = [
-        Color(hex: "800000"),   // maroon
-        Color(hex: "4A4A5E"),   // slate
-        Color(hex: "2D5F2E"),   // forest
-        Color(hex: "8B6914"),   // gold
-        Color(hex: "5C3370"),   // plum
-        Color(hex: "1E4D6B"),   // navy
-    ]
+    // Unified brand accent color for all cards
+    private var cardAccent: Color { AppColors.accent }
 
     private let columns = [
         GridItem(.flexible(), spacing: 14),
@@ -48,11 +41,10 @@ struct CategoriesView: View {
                         .padding(.horizontal, AppSpacing.screenHorizontal)
                         .padding(.top, AppSpacing.md)
 
-                        // Category grid
                         LazyVGrid(columns: columns, spacing: 14) {
-                            ForEach(Array(categories.enumerated()), id: \.offset) { index, category in
+                            ForEach(categories) { category in
                                 NavigationLink(destination: CategoryDetailView(category: category)) {
-                                    categoryCard(category, accent: cardAccents[index % cardAccents.count])
+                                    categoryCard(category, accent: cardAccent)
                                 }
                                 .buttonStyle(PlainButtonStyle())
                             }
@@ -68,6 +60,9 @@ struct CategoriesView: View {
                     Text("Categories")
                         .font(AppTypography.navTitle)
                         .foregroundColor(Color.primary)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    CartShortcutButton()
                 }
             }
         }

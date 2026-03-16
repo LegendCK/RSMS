@@ -86,7 +86,9 @@ struct CatalogProductsSubview: View {
  
     // Keep local SwiftData categories for the chip filter labels
     @Query(sort: \Category.displayOrder) private var localCategories: [Category]
+    @Query private var localProducts: [Product]
     @Environment(\.modelContext) private var modelContext
+    
  
     @State private var searchText = ""
     @State private var selectedCategoryId: UUID? = nil   // filter by Supabase category UUID
@@ -157,11 +159,16 @@ struct CatalogProductsSubview: View {
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: AppSpacing.xs) {
-                        ForEach(filtered) { product in
-                            NavigationLink(destination: ProductDetailView(product: product)) {
-                                productRow(product)
+                        ForEach(filtered) { dto in
+                            if let localProduct = localProducts.first(where: { $0.id == dto.id }) {
+                                NavigationLink(destination: ProductDetailView(product: localProduct)) {
+                                    productRow(dto)
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                productRow(dto)
+                                    .opacity(0.5)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)

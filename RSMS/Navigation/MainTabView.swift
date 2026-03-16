@@ -11,13 +11,8 @@ import SwiftData
 struct MainTabView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
-    @Query private var allCartItems: [CartItem]
     @State private var isPreparingCatalog = true
     @State private var syncErrorMessage: String?
-
-    private var cartBadgeCount: Int {
-        allCartItems.filter { $0.customerEmail == appState.currentUserEmail }.count
-    }
 
     var body: some View {
         ZStack {
@@ -107,8 +102,16 @@ struct MainTabView: View {
             try await CustomerCatalogSyncService.shared.refreshLocalCatalog(modelContext: modelContext)
             isPreparingCatalog = false
         } catch {
-            syncErrorMessage = error.localizedDescription
-            isPreparingCatalog = true
+            // Safety: If sync fails but we have cached/seeded categories, allow the app to open.
+            // This prevents Guest users from being stuck on the loading screen due to RLS blocks.
+            let localCount = (try? modelContext.fetchCount(FetchDescriptor<Category>())) ?? 0
+            if localCount > 0 {
+                print("[MainTabView] Sync failed but local data exists. Proceeding. Error: \(error.localizedDescription)")
+                self.isPreparingCatalog = false
+            } else {
+                syncErrorMessage = error.localizedDescription
+                isPreparingCatalog = true
+            }
         }
     }
 }
@@ -125,26 +128,26 @@ struct AppleMusicTabBarModifier: ViewModifier {
                 let appearance = UITabBarAppearance()
                 appearance.configureWithDefaultBackground()
                 
-                // Dark semi-transparent background
-                let backgroundColor = UIColor.black.withAlphaComponent(0.3)
+                // Dark semi-transparent glass background
+                let backgroundColor = UIColor.black.withAlphaComponent(0.6)
                 appearance.backgroundColor = backgroundColor
                 
                 // Blur effect using shadow for depth
                 appearance.shadowColor = UIColor.black.withAlphaComponent(0.2)
                 appearance.shadowImage = nil
                 
-                // Configure item appearance (light text)
+                // Configure item appearance (inactive state - use grey for visibility)
                 let itemAppearance = UITabBarItemAppearance()
-                itemAppearance.normal.iconColor = UIColor.white.withAlphaComponent(0.6)
+                itemAppearance.normal.iconColor = UIColor.systemGray
                 itemAppearance.normal.titleTextAttributes = [
-                    .foregroundColor: UIColor.white.withAlphaComponent(0.6),
+                    .foregroundColor: UIColor.systemGray,
                     .font: UIFont.systemFont(ofSize: 10, weight: .medium)
                 ]
                 
                 // Selected state - maroon tint
-                itemAppearance.selected.iconColor = UIColor(red: 0.5, green: 0, blue: 0, alpha: 1)  // Maroon
+                itemAppearance.selected.iconColor = UIColor(AppColors.accent)  // Maroon
                 itemAppearance.selected.titleTextAttributes = [
-                    .foregroundColor: UIColor(red: 0.5, green: 0, blue: 0, alpha: 1),  // Maroon
+                    .foregroundColor: UIColor(AppColors.accent),  // Maroon
                     .font: UIFont.systemFont(ofSize: 10, weight: .bold)
                 ]
                 
@@ -154,7 +157,7 @@ struct AppleMusicTabBarModifier: ViewModifier {
                 
                 tabBar.standardAppearance = appearance
                 tabBar.scrollEdgeAppearance = appearance
-                tabBar.tintColor = UIColor(red: 0.5, green: 0, blue: 0, alpha: 1)  // Maroon tint
+                tabBar.tintColor = UIColor(AppColors.accent)  // Maroon tint
             }
     }
 }

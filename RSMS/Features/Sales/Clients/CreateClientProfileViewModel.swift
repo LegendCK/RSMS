@@ -59,6 +59,10 @@ final class CreateClientProfileViewModel {
     var errorMessage: String = ""
     var isSuccess: Bool = false
     var currentStep: Int = 1
+
+    // Temporary password shown to the associate after creating a new client account
+    var temporaryPassword: String = ""
+    var showTempPasswordAlert: Bool = false
     
     func addAnniversary() {
         anniversaries.append(ClientAnniversary(label: "Special Day", date: ""))
@@ -110,6 +114,7 @@ final class CreateClientProfileViewModel {
         currentStep = 2
     }
     
+    @discardableResult
     func save(creatorId: UUID?) async -> ClientDTO? {
         guard gdprConsent else {
             errorMessage = "Privacy consent is mandatory to create a profile."
@@ -141,7 +146,7 @@ final class CreateClientProfileViewModel {
         let notesJson = blob.toJSONString() ?? ""
         
         let insertDTO = ClientInsertDTO(
-            id: UUID(),
+            id: nil,                          // id is assigned inside createClientWithAuth via auth.signUp
             firstName: trimmedFirst,
             lastName: trimmedLast,
             email: trimmedEmail,
@@ -162,10 +167,14 @@ final class CreateClientProfileViewModel {
             createdBy: creatorId,
             isActive: true
         )
-        
+
         do {
-            let createdClient = try await ClientService.shared.createClient(insertDTO)
+            // Creates auth account first (so id is never null), then inserts profile,
+            // then restores the associate's session automatically.
+            let (createdClient, tempPass) = try await ClientService.shared.createClientWithAuth(insertDTO)
+            temporaryPassword = tempPass
             isSuccess = true
+            showTempPasswordAlert = true
             return createdClient
         } catch {
             errorMessage = error.localizedDescription
