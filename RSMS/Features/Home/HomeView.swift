@@ -138,7 +138,7 @@ struct HomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(categories) { category in
-                        NavigationLink(destination: CategoryDetailView(category: category)) {
+                        NavigationLink(destination: ProductListView(categoryFilter: category.name)) {
                             categoryChip(category)
                         }
                         .buttonStyle(PlainButtonStyle())

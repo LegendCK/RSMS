@@ -166,6 +166,7 @@ struct OperationsView: View {
                 cornerRadius: 6
             )
             .frame(width: 40, height: 40)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(product.name)
