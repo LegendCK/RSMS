@@ -802,7 +802,7 @@ struct ManagerCreateStaffSheet: View {
                 phone: phone.trimmingCharacters(in: .whitespacesAndNewlines),
                 password: password,
                 role: selectedRole,
-                storeId: storeId
+                //storeId: storeId
             )
 
             try await StaffSyncService.shared.syncStaff(modelContext: modelContext)

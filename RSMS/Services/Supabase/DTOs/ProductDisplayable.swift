@@ -1,6 +1,6 @@
 //
 //  ProductDisplayable.swift
-//  infosys2
+//  RSMS
 //
 //  Shared display protocol so ProductDetailView works with both
 //  the local SwiftData `Product` and the remote `ProductDTO`.
@@ -53,7 +53,6 @@ extension Product: ProductDisplayable {
 }
 
 // MARK: - Remote ProductDTO conformance
-// ProductDTO is already defined in ProductDTO.swift — this just adds display helpers.
 
 extension ProductDTO: ProductDisplayable {
     var displayName: String                 { name }
@@ -69,6 +68,6 @@ extension ProductDTO: ProductDisplayable {
     var displayRating: Double               { 0 }
     var displayStockCount: Int              { isActive ? 1 : 0 }
     var displayAttributes: [String: String] { [:] }
-    var displayImageURLs: [URL]             { resolvedImageURLs }
+    var displayImageURLs: [URL]             { imageUrls?.compactMap { URL(string: $0) } ?? [] }
     var displayFallbackIcon: String         { "bag.fill" }
 }
