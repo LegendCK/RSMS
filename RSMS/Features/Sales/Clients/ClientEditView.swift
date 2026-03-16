@@ -9,7 +9,7 @@
 import SwiftUI
 
 struct ClientEditView: View {
-    var vm: ClientDetailViewModel
+    @Bindable var vm: ClientDetailViewModel
     @Environment(\.dismiss) private var dismiss
 
     private let segments = ["standard", "silver", "gold", "vip", "ultra_vip"]
