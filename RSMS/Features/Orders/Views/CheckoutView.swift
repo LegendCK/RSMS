@@ -526,7 +526,16 @@ struct CheckoutView: View {
     private func placeOrder() {
         isPlacing = true
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        Task { await placeOrderAsync() }
+    }
 
+    @MainActor
+    private func placeOrderAsync() async {
+        // Snapshot cart items BEFORE deleting from context (needed for Supabase line items)
+        let snapshot: [(productId: UUID, productName: String, quantity: Int, unitPrice: Double)] =
+            cartItems.map { ($0.productId, $0.productName, $0.quantity, $0.unitPrice) }
+
+        // Build address JSON
         let addrJSON: String = {
             if let addr = selectedAddress {
                 let d: [String: String] = [
@@ -563,6 +572,7 @@ struct CheckoutView: View {
         let df = DateFormatter(); df.dateFormat = "yyyy"
         let num = "ML-ORD-\(df.string(from: Date()))-\(String(format: "%04d", Int.random(in: 1000...9999)))"
 
+        // 1. Save locally (always — source of truth for the customer order history UI)
         let order = Order(
             orderNumber: num,
             customerEmail: appState.currentUserEmail,
@@ -579,12 +589,40 @@ struct CheckoutView: View {
         for item in cartItems { modelContext.delete(item) }
         try? modelContext.save()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-            createdOrder    = order
-            isPlacing       = false
-            showConfirmation = true
+        // 2. Sync to Supabase so sales associates can view purchase history.
+        //    The client's UUID lives in AppState (set during login from clients.id).
+        if let clientId = appState.currentUserProfile?.id {
+            let channel: String
+            switch selectedFulfillment {
+            case .bopis:         channel = "bopis"
+            case .shipFromStore: channel = "ship_from_store"
+            case .inStore:       channel = "in_store"
+            default:             channel = "online"
+            }
+            do {
+                try await OrderService.shared.syncOrder(
+                    clientId: clientId,
+                    cartItems: snapshot,
+                    orderNumber: num,
+                    subtotal: subtotal,
+                    taxTotal: tax,
+                    grandTotal: total,
+                    channel: channel
+                )
+            } catch {
+                // Non-fatal: local order already saved; associate view will be missing this
+                // order until next successful sync or manual Supabase insert.
+                print("[CheckoutView] Supabase sync failed (order still saved locally): \(error.localizedDescription)")
+            }
+        } else {
+            print("[CheckoutView] No client UUID in AppState — skipping Supabase sync (guest/unauthenticated)")
         }
+
+        // 3. Navigate to confirmation
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        createdOrder     = order
+        isPlacing        = false
+        showConfirmation = true
     }
 }
 

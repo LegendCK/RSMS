@@ -90,6 +90,7 @@ struct OrderItemDTO: Codable, Identifiable {
 // MARK: - Insert Payloads
 
 struct OrderInsertDTO: Codable {
+    let orderNumber: String?
     let clientId: UUID?
     let storeId: UUID
     let associateId: UUID?
@@ -103,6 +104,7 @@ struct OrderInsertDTO: Codable {
     let notes: String?
 
     enum CodingKeys: String, CodingKey {
+        case orderNumber = "order_number"
         case clientId    = "client_id"
         case storeId     = "store_id"
         case associateId = "associate_id"

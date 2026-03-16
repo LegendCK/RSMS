@@ -142,3 +142,40 @@ struct ClientUpdateDTO: Codable {
         case marketingOptIn  = "marketing_opt_in"
     }
 }
+
+// MARK: - Associate Update Payload (includes segment + notes blob)
+
+/// Used by sales associates to update any field on a client profile,
+/// including VIP segment and the structured notes/preferences blob.
+struct ClientAssociateUpdateDTO: Codable {
+    let firstName: String
+    let lastName: String
+    let phone: String?
+    let dateOfBirth: String?
+    let nationality: String?
+    let preferredLanguage: String?
+    let addressLine1: String?
+    let addressLine2: String?
+    let city: String?
+    let state: String?
+    let postalCode: String?
+    let country: String?
+    let segment: String
+    let notes: String?
+    let marketingOptIn: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case firstName       = "first_name"
+        case lastName        = "last_name"
+        case phone
+        case dateOfBirth     = "date_of_birth"
+        case nationality
+        case preferredLanguage = "preferred_language"
+        case addressLine1    = "address_line1"
+        case addressLine2    = "address_line2"
+        case city, state
+        case postalCode      = "postal_code"
+        case country, segment, notes
+        case marketingOptIn  = "marketing_opt_in"
+    }
+}
