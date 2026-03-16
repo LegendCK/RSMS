@@ -15,15 +15,55 @@ final class ClientService {
 
     private init() {}
 
-    /// Creates a new client profile in the `clients` table.
-    func createClient(_ payload: ClientInsertDTO) async throws -> ClientDTO {
-        return try await client
-            .from("clients")
-            .insert(payload)
-            .select()
-            .single()
-            .execute()
-            .value
+    /// Creates a Supabase Auth account for a new offline client, inserts their
+    /// profile into `clients`, then restores the associate's session.
+    /// Returns the created ClientDTO and a temporary password for the client to use.
+    func createClientWithAuth(_ payload: ClientInsertDTO) async throws -> (client: ClientDTO, temporaryPassword: String) {
+        // 1. Save the current associate's session so we can restore it afterward.
+        let associateSession = try await client.auth.session
+
+        // 2. Generate a secure temporary password.
+        let tempPassword = Self.generateTempPassword()
+
+        // 3. Create the Supabase Auth account — this gives us a real UUID.
+        let authResponse = try await client.auth.signUp(email: payload.email, password: tempPassword)
+        let authUser = authResponse.user
+
+        // 4. Insert the client profile row using the auth UUID as `id`.
+        var payloadWithId = payload
+        payloadWithId.id = authUser.id
+
+        do {
+            let createdClient: ClientDTO = try await client
+                .from("clients")
+                .insert(payloadWithId)
+                .select()
+                .single()
+                .execute()
+                .value
+
+            // 5. Restore the associate's session.
+            try await client.auth.setSession(
+                accessToken: associateSession.accessToken,
+                refreshToken: associateSession.refreshToken
+            )
+
+            return (createdClient, tempPassword)
+        } catch {
+            // Always restore the associate's session even on failure.
+            _ = try? await client.auth.setSession(
+                accessToken: associateSession.accessToken,
+                refreshToken: associateSession.refreshToken
+            )
+            throw error
+        }
+    }
+
+    /// Generates a temporary password that satisfies Supabase's requirements.
+    private static func generateTempPassword() -> String {
+        let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        let random = String((0..<8).compactMap { _ in chars.randomElement() })
+        return "Welcome@\(random)"
     }
 
     /// Fetches all active clients.

@@ -70,7 +70,7 @@ struct ClientDTO: Codable, Identifiable {
 // MARK: - Insert Payload
 
 struct ClientInsertDTO: Codable {
-    let id: UUID
+    var id: UUID?     // nil when sales associate creates offline client — real UUID assigned after auth.signUp()
     let firstName: String
     let lastName: String
     let email: String

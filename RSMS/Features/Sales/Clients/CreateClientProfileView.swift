@@ -84,6 +84,20 @@ struct CreateClientProfileView: View {
             } message: {
                 Text(vm.errorMessage)
             }
+            // Show temporary password to the associate so they can hand it to the client
+            .alert("Client Account Created", isPresented: $vm.showTempPasswordAlert) {
+                Button("Copy & Done") {
+                    UIPasteboard.general.string = vm.temporaryPassword
+                    onSave?()
+                    dismiss()
+                }
+                Button("Done", role: .cancel) {
+                    onSave?()
+                    dismiss()
+                }
+            } message: {
+                Text("The client account was created successfully.\n\nShare this temporary password with the client so they can log in:\n\n\(vm.temporaryPassword)\n\nThey can log in with their email and change the password later.")
+            }
         }
     }
     
@@ -340,13 +354,10 @@ struct CreateClientProfileView: View {
                     .padding(AppSpacing.cardPadding)
                 }
                 
-                // Submit Button
+                // Submit Button — dismiss happens inside the temp-password alert after user acknowledges
                 PrimaryButton(title: "Create Profile", isLoading: vm.isLoading) {
                     Task {
-                        if let _ = await vm.save(creatorId: appState.currentUserProfile?.id) {
-                            onSave?()
-                            dismiss()
-                        }
+                        await vm.save(creatorId: appState.currentUserProfile?.id)
                     }
                 }
                 .padding(.top, AppSpacing.md)
