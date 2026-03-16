@@ -131,4 +131,17 @@ final class ClientService {
             .execute()
             .value
     }
+
+    /// Updates a client's full profile (associate-level: includes segment + notes blob).
+    /// Records `updated_at` via Supabase trigger automatically.
+    func updateClient(id: UUID, payload: ClientAssociateUpdateDTO) async throws -> ClientDTO {
+        return try await client
+            .from("clients")
+            .update(payload)
+            .eq("id", value: id.uuidString.lowercased())
+            .select()
+            .single()
+            .execute()
+            .value
+    }
 }
