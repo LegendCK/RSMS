@@ -31,7 +31,7 @@ struct SearchView: View {
                 if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
                     Section("Browse Categories") {
                         ForEach(allCategories, id: \.id) { category in
-                            NavigationLink(destination: CategoryDetailView(category: category)) {
+                            NavigationLink(destination: ProductListView(categoryFilter: category.name)) {
                                 categoryRow(category)
                             }
                         }

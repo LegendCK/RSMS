@@ -120,9 +120,10 @@ struct CatalogProductsSubview: View {
                     .font(AppTypography.bodyMedium)
                     .foregroundColor(AppColors.textPrimaryDark)
             }
-            .padding(AppSpacing.sm)
-            .background(AppColors.backgroundSecondary)
-            .cornerRadius(AppSpacing.radiusMedium)
+            .padding(.horizontal, AppSpacing.md)
+            .padding(.vertical, 10)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .padding(.horizontal, AppSpacing.screenHorizontal)
  
             // Category chips — built from remote categories
@@ -149,7 +150,8 @@ struct CatalogProductsSubview: View {
                 Spacer()
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
-            .padding(.bottom, AppSpacing.xs)
+            .padding(.top, 2)
+            .padding(.bottom, 6)
  
             // Loading / list
             if isLoading && remoteProducts.isEmpty {
@@ -188,7 +190,7 @@ struct CatalogProductsSubview: View {
             // Thumbnail — AsyncImage from Supabase Storage
             ZStack {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(AppColors.backgroundTertiary)
+                    .fill(Color(uiColor: .tertiarySystemGroupedBackground))
                     .frame(width: 44, height: 44)
  
                 if let urlString = product.primaryImageUrl, let url = URL(string: urlString) {
@@ -245,8 +247,12 @@ struct CatalogProductsSubview: View {
                 .frame(width: 28, height: AppSpacing.touchTarget)
         }
         .padding(AppSpacing.sm)
-        .background(AppColors.backgroundSecondary)
-        .cornerRadius(AppSpacing.radiusMedium)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.black.opacity(0.04), lineWidth: 0.5)
+        )
     }
  
     // MARK: - Chip button
@@ -254,13 +260,33 @@ struct CatalogProductsSubview: View {
     private func chipButton(label: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(AppTypography.caption)
-                .foregroundColor(selected ? AppColors.primary : AppColors.textSecondaryDark)
-                .padding(.horizontal, AppSpacing.sm)
-                .padding(.vertical, AppSpacing.xs)
-                .background(selected ? AppColors.accent : AppColors.backgroundTertiary)
-                .cornerRadius(AppSpacing.radiusSmall)
+                .font(.footnote.weight(selected ? .semibold : .regular))
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
+                .foregroundStyle(selected ? AppColors.accent : AppColors.textPrimaryDark)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .frame(minWidth: 66)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(
+                            selected
+                            ? AppColors.accent.opacity(0.14)
+                            : Color(uiColor: .secondarySystemGroupedBackground)
+                        )
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(
+                            selected
+                            ? AppColors.accent.opacity(0.30)
+                            : Color.black.opacity(0.05),
+                            lineWidth: 0.6
+                        )
+                )
         }
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.18), value: selected)
     }
  
     // MARK: - Data loading

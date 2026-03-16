@@ -43,7 +43,7 @@ struct CategoriesView: View {
 
                         LazyVGrid(columns: columns, spacing: 14) {
                             ForEach(categories) { category in
-                                NavigationLink(destination: CategoryDetailView(category: category)) {
+                                NavigationLink(destination: ProductListView(categoryFilter: category.name)) {
                                     categoryCard(category, accent: cardAccent)
                                 }
                                 .buttonStyle(PlainButtonStyle())

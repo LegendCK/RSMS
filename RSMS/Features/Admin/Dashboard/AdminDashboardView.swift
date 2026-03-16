@@ -56,16 +56,10 @@ struct AdminDashboardView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("MAISON LUXE")
-                            .font(AppTypography.overline)
-                            .tracking(3)
-                            .foregroundColor(AppColors.accent)
-                        Text("Enterprise Console")
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.textSecondaryDark)
-                    }
+                ToolbarItem(placement: .principal) {
+                    Text("Dashboard")
+                        .font(AppTypography.navTitle)
+                        .foregroundColor(AppColors.textPrimaryDark)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: AppSpacing.sm) {
