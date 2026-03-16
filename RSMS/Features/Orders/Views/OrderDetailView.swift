@@ -170,16 +170,12 @@ struct OrderDetailView: View {
 
             ForEach(parsedItems, id: \.name) { item in
                 HStack(spacing: AppSpacing.md) {
-                    // Product image placeholder
-                    ZStack {
-                        RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
-                            .fill(AppColors.backgroundSecondary)
-                            .frame(width: 56, height: 56)
-
-                        Image(systemName: item.image)
-                            .font(AppTypography.toolbarIcon)
-                            .foregroundColor(AppColors.neutral600)
-                    }
+                    ProductArtworkView(
+                        imageSource: item.image,
+                        fallbackSymbol: "bag.fill",
+                        cornerRadius: AppSpacing.radiusSmall
+                    )
+                    .frame(width: 56, height: 56)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.brand.uppercased())

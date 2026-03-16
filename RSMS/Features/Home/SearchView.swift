@@ -160,12 +160,12 @@ struct SearchView: View {
                                     ForEach(filteredProducts, id: \.id) { product in
                                         NavigationLink(destination: ProductDetailView(product: product)) {
                                             HStack(spacing: AppSpacing.md) {
-                                                Image(systemName: product.imageName)
-                                                    .font(.system(size: 24))
-                                                    .foregroundColor(AppColors.accent.opacity(0.4))
-                                                    .frame(width: 60, height: 60)
-                                                    .background(AppColors.backgroundSecondary)
-                                                    .cornerRadius(AppSpacing.radiusSmall)
+                                                ProductArtworkView(
+                                                    imageSource: product.imageName,
+                                                    fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock.fill" : "bag.fill",
+                                                    cornerRadius: AppSpacing.radiusSmall
+                                                )
+                                                .frame(width: 60, height: 60)
 
                                                 VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                                                     Text(product.name)

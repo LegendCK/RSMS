@@ -10,7 +10,10 @@ import SwiftData
 
 struct MainTabView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @Query private var allCartItems: [CartItem]
+    @State private var isPreparingCatalog = true
+    @State private var syncErrorMessage: String?
 
     private var cartBadgeCount: Int {
         allCartItems.filter { $0.customerEmail == appState.currentUserEmail }.count
@@ -22,39 +25,90 @@ struct MainTabView: View {
             AppColors.backgroundPrimary
                 .ignoresSafeArea()
 
-            TabView {
-                // Home Tab
-                Tab("Home", systemImage: "house.fill") {
-                    NavigationStack {
-                        HomeView()
+            if isPreparingCatalog {
+                loadingState
+            } else {
+                TabView {
+                    // Home Tab
+                    Tab("Home", systemImage: "house.fill") {
+                        NavigationStack {
+                            HomeView()
+                        }
                     }
-                }
 
-                // Categories Tab
-                Tab("Categories", systemImage: "square.grid.2x2") {
-                    NavigationStack {
-                        CategoriesView()
+                    // Categories Tab
+                    Tab("Categories", systemImage: "square.grid.2x2") {
+                        NavigationStack {
+                            CategoriesView()
+                        }
                     }
-                }
 
-                // Profile Tab
-                Tab("Profile", systemImage: "person.fill") {
-                    NavigationStack {
-                        ProfileView()
+                    // Profile Tab
+                    Tab("Profile", systemImage: "person.fill") {
+                        NavigationStack {
+                            ProfileView()
+                        }
                     }
-                }
 
-                // Search Tab (system renders this as a separate search control)
-                Tab(role: .search) {
-                    NavigationStack {
-                        SearchView()
+                    // Search Tab (system renders this as a separate search control)
+                    Tab(role: .search) {
+                        NavigationStack {
+                            SearchView()
+                        }
                     }
                 }
+                .tint(AppColors.accent)  // Active tab tint (maroon)
+                .tabBarMinimizeBehavior(.onScrollDown)  // Collapse on scroll
+                .toolbarColorScheme(.dark, for: .tabBar)  // Dark styling
+                .modifier(AppleMusicTabBarModifier())  // Apply Apple Music glass design
             }
-            .tint(AppColors.accent)  // Active tab tint (maroon)
-            .tabBarMinimizeBehavior(.onScrollDown)  // Collapse on scroll
-            .toolbarColorScheme(.dark, for: .tabBar)  // Dark styling
-            .modifier(AppleMusicTabBarModifier())  // Apply Apple Music glass design
+        }
+        .task { await prepareCustomerCatalog() }
+    }
+
+    @ViewBuilder
+    private var loadingState: some View {
+        VStack(spacing: AppSpacing.md) {
+            if let syncErrorMessage {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(AppTypography.iconDecorative)
+                    .foregroundColor(AppColors.warning)
+                Text("Unable to load catalog")
+                    .font(AppTypography.heading2)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                Text(syncErrorMessage)
+                    .font(AppTypography.bodySmall)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                SecondaryButton(title: "Retry") {
+                    Task { await prepareCustomerCatalog(force: true) }
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+            } else {
+                ProgressView()
+                    .tint(AppColors.accent)
+                    .scaleEffect(1.1)
+                Text("Loading Collection")
+                    .font(AppTypography.heading3)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                Text("Syncing live products from Maison Luxe catalog")
+                    .font(AppTypography.bodySmall)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+        }
+    }
+
+    private func prepareCustomerCatalog(force: Bool = false) async {
+        guard force || isPreparingCatalog else { return }
+
+        do {
+            syncErrorMessage = nil
+            try await CustomerCatalogSyncService.shared.refreshLocalCatalog(modelContext: modelContext)
+            isPreparingCatalog = false
+        } catch {
+            syncErrorMessage = error.localizedDescription
+            isPreparingCatalog = true
         }
     }
 }
@@ -110,4 +164,3 @@ struct AppleMusicTabBarModifier: ViewModifier {
         .environment(AppState())
         .modelContainer(for: [Product.self, Category.self, User.self], inMemory: true)
 }
-

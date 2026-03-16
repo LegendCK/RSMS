@@ -13,7 +13,7 @@ struct SeedData {
 
     static func seedIfNeeded(modelContext: ModelContext) {
         // Users are sourced from Supabase via StaffSyncService — no local seed
-        seedCatalogIfNeeded(modelContext: modelContext)
+        // Product catalog is sourced from Supabase via CustomerCatalogSyncService.
         seedOrdersIfNeeded(modelContext: modelContext)
         seedClientsIfNeeded(modelContext: modelContext)
         seedAppointmentsIfNeeded(modelContext: modelContext)

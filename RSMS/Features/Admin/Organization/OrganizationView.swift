@@ -912,7 +912,12 @@ struct OrgManageStaffSheet: View {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Replace the OrgCreateStaffSheet struct in OrganizationView.swift
+// ─────────────────────────────────────────────────────────────────────────────
+
 struct OrgCreateStaffSheet: View {
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
@@ -925,6 +930,7 @@ struct OrgCreateStaffSheet: View {
     @State private var selectedRole: UserRole = .boutiqueManager
     @State private var errorMessage: String?
     @State private var isCreating = false
+    @State private var successMessage: String?
 
     private let creatableRoles: [UserRole] = [
         .boutiqueManager,
@@ -937,6 +943,8 @@ struct OrgCreateStaffSheet: View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: AppSpacing.lg) {
+
+                    // Role picker
                     card("Role", icon: "person.badge.key.fill") {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: AppSpacing.xs) {
@@ -947,18 +955,43 @@ struct OrgCreateStaffSheet: View {
                         }
                     }
 
+                    // Staff profile
                     card("Staff Profile", icon: "person.fill") {
                         field("Full Name", text: $name)
                         field("Email", text: $email, keyboard: .emailAddress)
-                        field("Phone", text: $phone, keyboard: .phonePad)
+                        field("Phone (optional)", text: $phone, keyboard: .phonePad)
                         secureField("Temporary Password", text: $password)
                     }
+
+                    // Info banner
+                    HStack(alignment: .top, spacing: AppSpacing.sm) {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundColor(AppColors.accent)
+                            .padding(.top, 1)
+                        Text("Share this temporary password with the staff member. They should change it after first login.")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    .padding(AppSpacing.sm)
+                    .background(AppColors.accent.opacity(0.08))
+                    .cornerRadius(AppSpacing.radiusMedium)
 
                     if let errorMessage {
                         Text(errorMessage)
                             .font(AppTypography.caption)
                             .foregroundColor(AppColors.error)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if let successMessage {
+                        HStack(spacing: AppSpacing.xs) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(AppColors.success)
+                            Text(successMessage)
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.success)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -993,6 +1026,7 @@ struct OrgCreateStaffSheet: View {
     private var isFormValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        email.contains("@") &&
         password.count >= 6
     }
 
@@ -1000,10 +1034,10 @@ struct OrgCreateStaffSheet: View {
         guard isFormValid else { return }
         isCreating = true
         errorMessage = nil
+        successMessage = nil
         defer { isCreating = false }
 
         do {
-            // Create auth user + profile in Supabase, then restore admin session.
             let dto = try await StaffSyncService.shared.createStaffWithAuth(
                 name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                 email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
@@ -1012,7 +1046,6 @@ struct OrgCreateStaffSheet: View {
                 role: selectedRole
             )
 
-            // Save locally using the real auth UUID so IDs match Supabase.
             let newUser = User(
                 name: dto.fullName,
                 email: dto.email,
@@ -1026,22 +1059,22 @@ struct OrgCreateStaffSheet: View {
             modelContext.insert(newUser)
             try? modelContext.save()
 
+            successMessage = "Staff account created for \(dto.email)"
             onCreated(newUser)
+
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
             dismiss()
+
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     private func roleChip(_ role: UserRole) -> some View {
-        Button {
-            selectedRole = role
-        } label: {
+        Button { selectedRole = role } label: {
             Text(role.rawValue)
                 .font(selectedRole == role ? AppTypography.label : AppTypography.bodySmall)
                 .foregroundColor(selectedRole == role ? AppColors.textPrimaryLight : AppColors.textSecondaryDark)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
                 .padding(.horizontal, AppSpacing.md)
                 .padding(.vertical, 10)
                 .background(selectedRole == role ? AppColors.accent : AppColors.backgroundTertiary)
@@ -1068,9 +1101,12 @@ struct OrgCreateStaffSheet: View {
 
     private func field(_ label: String, text: Binding<String>, keyboard: UIKeyboardType = .default) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text(label).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+            Text(label)
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
             TextField(label, text: text)
                 .keyboardType(keyboard)
+                .textInputAutocapitalization(.never)
                 .font(AppTypography.bodyMedium)
                 .padding(AppSpacing.sm)
                 .background(AppColors.backgroundWhite)
@@ -1080,7 +1116,9 @@ struct OrgCreateStaffSheet: View {
 
     private func secureField(_ label: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text(label).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+            Text(label)
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
             SecureField(label, text: text)
                 .font(AppTypography.bodyMedium)
                 .padding(AppSpacing.sm)
@@ -1089,7 +1127,6 @@ struct OrgCreateStaffSheet: View {
         }
     }
 }
-
 // MARK: - Roles & Permissions
 
 struct OrgRoleTemplate: Identifiable, Codable, Hashable {

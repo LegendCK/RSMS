@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 struct ProductListView: View {
-    let categoryFilter: String
+    let categoryFilter: String?
     var productTypeFilter: String? = nil
     @Query private var allProducts: [Product]
     @Environment(\.modelContext) private var modelContext
@@ -24,7 +24,12 @@ struct ProductListView: View {
     }
 
     private var filteredProducts: [Product] {
-        var filtered = allProducts.filter { $0.categoryName == categoryFilter }
+        var filtered: [Product]
+        if let cat = categoryFilter {
+            filtered = allProducts.filter { $0.categoryName == cat }
+        } else {
+            filtered = allProducts
+        }
         if let typeFilter = productTypeFilter {
             filtered = filtered.filter { $0.productTypeName == typeFilter }
         }
@@ -98,7 +103,7 @@ struct ProductListView: View {
                 .padding(.bottom, AppSpacing.xxxl)
             }
         }
-        .navigationTitle(productTypeFilter ?? categoryFilter)
+        .navigationTitle(productTypeFilter ?? categoryFilter ?? "All Products")
         .navigationBarTitleDisplayMode(.large)
     }
 
@@ -107,12 +112,12 @@ struct ProductListView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Image
                 ZStack {
-                    AppColors.backgroundSecondary
+                    ProductArtworkView(
+                        imageSource: product.imageName,
+                        fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock.fill" : "bag.fill",
+                        cornerRadius: 0
+                    )
                         .frame(height: 180)
-
-                    Image(systemName: product.imageName)
-                        .font(AppTypography.iconProductMedium)
-                        .foregroundColor(AppColors.neutral600)
 
                     // Wishlist heart
                     VStack {
