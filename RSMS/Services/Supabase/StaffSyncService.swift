@@ -91,7 +91,8 @@ final class StaffSyncService {
         email: String,
         phone: String,
         password: String,
-        role: UserRole
+        role: UserRole,
+        storeId: UUID? = nil
     ) async throws -> UserDTO {
 
         // Capture admin session — ok if nil (CA using local auth)
@@ -106,7 +107,7 @@ final class StaffSyncService {
             let payload = UserInsertDTO(
                 id: authUser.id,
                 role: snakeRole(for: role),
-                storeId: nil,
+                storeId: storeId,
                 firstName: firstName,
                 lastName: lastName,
                 email: email.lowercased(),
@@ -255,6 +256,7 @@ final class StaffSyncService {
     }
 
     private func apply(_ dto: UserDTO, to user: User) {
+        user.storeId  = dto.storeId
         user.name     = dto.fullName
         user.email    = dto.email
         user.phone    = dto.phone ?? ""
@@ -268,6 +270,7 @@ final class StaffSyncService {
             email: dto.email,
             phone: dto.phone ?? "",
             passwordHash: "",
+            storeId: dto.storeId,
             role: dto.userRole,
             isActive: dto.isActive
         )

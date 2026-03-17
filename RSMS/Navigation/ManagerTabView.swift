@@ -10,7 +10,12 @@ import SwiftUI
 import SwiftData
 
 struct ManagerTabView: View {
+    @Environment(AppState.self) private var appState
     @State private var selectedTab = 0
+
+    private var showsDashboard: Bool {
+        appState.currentUserRole == .boutiqueManager
+    }
 
     var body: some View {
         ZStack {
@@ -18,40 +23,59 @@ struct ManagerTabView: View {
                 .ignoresSafeArea()
 
             TabView(selection: $selectedTab) {
-                NavigationStack { ManagerDashboardView() }
-                    .tabItem {
-                        Image(systemName: selectedTab == 0 ? "square.grid.2x2.fill" : "square.grid.2x2")
-                        Text("Dashboard")
-                    }
-                    .tag(0)
+                if showsDashboard {
+                    NavigationStack { ManagerDashboardView() }
+                        .tabItem {
+                            Image(systemName: selectedTab == 0 ? "square.grid.2x2.fill" : "square.grid.2x2")
+                            Text("Dashboard")
+                        }
+                        .tag(0)
+                }
 
                 NavigationStack { ManagerOperationsView() }
                     .tabItem {
-                        Image(systemName: selectedTab == 1 ? "list.clipboard.fill" : "list.clipboard")
+                        Image(systemName: selectedTab == operationsTabTag ? "list.clipboard.fill" : "list.clipboard")
                         Text("Operations")
                     }
-                    .tag(1)
+                    .tag(operationsTabTag)
 
                 NavigationStack { ManagerStaffView() }
                     .tabItem {
-                        Image(systemName: selectedTab == 2 ? "person.2.fill" : "person.2")
+                        Image(systemName: selectedTab == staffTabTag ? "person.2.fill" : "person.2")
                         Text("Staff")
                     }
-                    .tag(2)
+                    .tag(staffTabTag)
 
                 NavigationStack { ManagerProfileView() }
                     .tabItem {
-                        Image(systemName: selectedTab == 3 ? "person.fill" : "person")
+                        Image(systemName: selectedTab == profileTabTag ? "person.fill" : "person")
                         Text("Profile")
                     }
-                    .tag(3)
+                    .tag(profileTabTag)
             }
             .tint(AppColors.accent)
             .tabBarMinimizeBehavior(.onScrollDown)
             .toolbarColorScheme(.dark, for: .tabBar)
             .toolbar(removing: .sidebarToggle)
             .modifier(AppleMusicTabBarModifier())
+            .onChange(of: showsDashboard) { _, newValue in
+                if !newValue && selectedTab == 0 {
+                    selectedTab = operationsTabTag
+                }
+            }
         }
+    }
+
+    private var operationsTabTag: Int {
+        showsDashboard ? 1 : 0
+    }
+
+    private var staffTabTag: Int {
+        showsDashboard ? 2 : 1
+    }
+
+    private var profileTabTag: Int {
+        showsDashboard ? 3 : 2
     }
 }
 

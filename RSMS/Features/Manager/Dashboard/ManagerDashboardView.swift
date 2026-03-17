@@ -10,411 +10,769 @@ import SwiftUI
 import SwiftData
 
 struct ManagerDashboardView: View {
-    @Environment(AppState.self) var appState
-    @Query private var allProducts: [Product]
-    @Query private var allUsers: [User]
-    @State private var showProfile = false
+    @Environment(AppState.self) private var appState
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Query private var allStores: [StoreLocation]
 
-    private var storeStaff: [User] {
-        allUsers.filter { $0.role == .salesAssociate || $0.role == .inventoryController }
-    }
-    private var lowStockCount: Int { allProducts.filter { $0.stockCount <= 3 && $0.stockCount > 0 }.count }
-    private var outOfStockCount: Int { allProducts.filter { $0.stockCount == 0 }.count }
-    private var totalStoreUnits: Int { allProducts.reduce(0) { $0 + $1.stockCount } }
+    @State private var snapshot: ManagerDashboardSnapshot?
+    @State private var showProfile = false
+    @State private var isShowingCachedData = false
+    @State private var statusMessage: String?
+
+    private let service = ManagerDashboardService.shared
 
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .top) {
-                Color(.systemGroupedBackground).ignoresSafeArea()
-
-                // Maroon top glow
-                LinearGradient(
-                    colors: [AppColors.accent.opacity(0.13), Color.clear],
-                    startPoint: .top,
-                    endPoint: .init(x: 0.5, y: 0.22)
-                )
+        ZStack {
+            AppColors.backgroundPrimary
                 .ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 24) {
-                        storeHeader
-                        dailySalesStrip
-                        kpiGrid
-                        alertsSection
-                        topProductsSection
-                        staffOnDutySection
-                        quickActionsGrid
-                        Spacer().frame(height: 40)
+            LinearGradient(
+                colors: [AppColors.accent.opacity(0.14), Color.clear],
+                startPoint: .top,
+                endPoint: .init(x: 0.5, y: 0.34)
+            )
+            .ignoresSafeArea()
+
+            if appState.currentUserRole != .boutiqueManager {
+                restrictedAccessView
+            } else if appState.currentStoreId == nil {
+                unavailableStoreView
+            } else {
+                dashboardContent
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("MAISON LUXE")
+                    .font(.system(size: 12, weight: .black))
+                    .tracking(4)
+                    .foregroundColor(AppColors.textPrimaryDark)
+            }
+
+            if appState.currentUserRole == .boutiqueManager {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showProfile = true }) {
+                        ZStack {
+                            Circle()
+                                .fill(AppColors.accent.opacity(0.12))
+                                .frame(width: 30, height: 30)
+
+                            Text(managerInitials)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(AppColors.accent)
+                        }
                     }
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("MAISON LUXE")
-                        .font(.system(size: 12, weight: .black))
-                        .tracking(4)
-                        .foregroundColor(.primary)
+        }
+        .sheet(isPresented: $showProfile) {
+            ManagerProfileView()
+        }
+        .task(id: appState.currentStoreId) {
+            await loadDashboard()
+        }
+    }
+
+    private var dashboardContent: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: AppSpacing.lg) {
+                dashboardHeader
+
+                if let statusMessage {
+                    statusBanner(message: statusMessage, isWarning: isShowingCachedData)
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 14) {
-                        Button(action: {}) {
-                            Image(systemName: "bell.badge")
-                                .font(.system(size: 16, weight: .light))
-                                .foregroundColor(.primary)
+
+                if let snapshot {
+                    heroMetrics(snapshot)
+                    supportingMetrics(snapshot)
+                    operationalSignals(snapshot)
+                    staffPerformanceSection(snapshot)
+                    appointmentSection(snapshot)
+                } else {
+                    loadingState
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.top, AppSpacing.md)
+            .padding(.bottom, AppSpacing.xxxl)
+        }
+        .refreshable {
+            await loadDashboard(forceRefresh: true)
+        }
+    }
+
+    private var dashboardHeader: some View {
+        dashboardCard(
+            content: {
+                VStack(alignment: .leading, spacing: AppSpacing.md) {
+                    HStack(alignment: .top, spacing: AppSpacing.md) {
+                        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                            Text("GOOD \(greeting.uppercased())")
+                                .font(AppTypography.overline)
+                                .tracking(3)
+                                .foregroundColor(AppColors.accent)
+
+                            Text(managerFirstName)
+                                .font(.system(size: 34, weight: .black))
+                                .foregroundColor(AppColors.textPrimaryDark)
+
+                            Text("\(currentStoreName) · Boutique Performance Command")
+                                .font(AppTypography.label)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.9)
+
+                            Text(headerSubtitle)
+                                .font(AppTypography.bodySmall)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
                         }
-                        Button(action: { showProfile = true }) {
-                            ZStack {
-                                Circle()
-                                    .fill(AppColors.accent.opacity(0.12))
-                                    .frame(width: 30, height: 30)
-                                Text(managerInitials)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(AppColors.accent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        syncPill
+                    }
+
+                    if let snapshot {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: AppSpacing.sm) {
+                                labelPill(
+                                    title: monthLabel(from: snapshot.periodStart),
+                                    color: AppColors.secondary
+                                )
+                                labelPill(
+                                    title: isShowingCachedData ? "Cached KPI data" : "Live KPI data",
+                                    color: isShowingCachedData ? AppColors.warning : AppColors.success
+                                )
+                            }
+
+                            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                                labelPill(
+                                    title: monthLabel(from: snapshot.periodStart),
+                                    color: AppColors.secondary
+                                )
+                                labelPill(
+                                    title: isShowingCachedData ? "Cached KPI data" : "Live KPI data",
+                                    color: isShowingCachedData ? AppColors.warning : AppColors.success
+                                )
                             }
                         }
                     }
                 }
-            }
-            .sheet(isPresented: $showProfile) { ManagerProfileView() }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            },
+            glassConfig: .regular,
+            padding: AppSpacing.md
+        )
+    }
+
+    private func heroMetrics(_ snapshot: ManagerDashboardSnapshot) -> some View {
+        LazyVGrid(columns: heroMetricColumns, spacing: AppSpacing.md) {
+            dashboardCard(
+                content: {
+                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        HStack {
+                            sectionTitle("SALES VS TARGET")
+                            Spacer()
+                            performanceBadge(progress: snapshot.sales.targetProgress)
+                        }
+
+                        HStack(alignment: .lastTextBaseline) {
+                            Text(currency(snapshot.sales.actualRevenue))
+                                .font(AppTypography.displaySmall)
+                                .foregroundColor(AppColors.textPrimaryDark)
+
+                            Spacer()
+
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("Target")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                                Text(currency(snapshot.sales.targetRevenue))
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                            }
+                        }
+
+                        ProgressView(value: min(max(snapshot.sales.targetProgress, 0), 1.25))
+                            .tint(progressColor(progress: snapshot.sales.targetProgress))
+
+                        HStack {
+                            Text("Gap")
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                            Spacer()
+                            Text(snapshot.sales.revenueGap > 0 ? currency(snapshot.sales.revenueGap) : "Ahead by \(currency(abs(snapshot.sales.revenueGap)))")
+                                .font(AppTypography.label)
+                                .foregroundColor(progressColor(progress: snapshot.sales.targetProgress))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .frame(minHeight: 164, alignment: .topLeading)
+                },
+                glassConfig: .thin,
+                padding: AppSpacing.md
+            )
+
+            dashboardCard(
+                content: {
+                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        HStack {
+                            sectionTitle("CONVERSION RATE")
+                            Spacer()
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .foregroundColor(AppColors.secondary)
+                        }
+
+                        Text(percent(snapshot.sales.conversionRate))
+                            .font(AppTypography.displaySmall)
+                            .foregroundColor(AppColors.textPrimaryDark)
+
+                        Text("Transactions closed from attended appointments this month")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+
+                        HStack(spacing: AppSpacing.md) {
+                            compactMetric(label: "Transactions", value: "\(snapshot.sales.transactions)")
+                            compactMetric(label: "Clients", value: "\(snapshot.sales.uniqueClients)")
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .frame(minHeight: 164, alignment: .topLeading)
+                },
+                glassConfig: .thin,
+                padding: AppSpacing.md
+            )
         }
+    }
+
+    private func supportingMetrics(_ snapshot: ManagerDashboardSnapshot) -> some View {
+        LazyVGrid(columns: metricColumns, spacing: AppSpacing.md) {
+            dashboardMetricCard(
+                label: "Transactions",
+                value: "\(snapshot.sales.transactions)",
+                detail: snapshot.sales.transactions == 0 ? "No sales recorded yet" : "Month-to-date closed",
+                icon: "creditcard.fill",
+                tint: AppColors.accent
+            )
+
+            dashboardMetricCard(
+                label: "Average Ticket",
+                value: currency(snapshot.sales.averageTicket),
+                detail: "Per completed order",
+                icon: "dollarsign.gauge.chart.leftthird.topthird.rightthird",
+                tint: AppColors.secondary
+            )
+
+            dashboardMetricCard(
+                label: "Upcoming Today",
+                value: "\(snapshot.appointments.upcomingToday)",
+                detail: snapshot.appointments.upcomingThisWeek == 0 ? "No further appointments this week" : "\(snapshot.appointments.upcomingThisWeek) this week",
+                icon: "calendar.badge.clock",
+                tint: AppColors.info
+            )
+
+            dashboardMetricCard(
+                label: "Appointment Completion",
+                value: percent(snapshot.appointments.completionRate),
+                detail: "\(snapshot.appointments.completed) completed",
+                icon: "checkmark.circle.fill",
+                tint: snapshot.appointments.completionRate >= 0.7 ? AppColors.success : AppColors.warning
+            )
+        }
+    }
+
+    private func operationalSignals(_ snapshot: ManagerDashboardSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            sectionTitle("OPERATIONAL SIGNALS")
+
+            ForEach(snapshot.operationalSignals) { signal in
+                dashboardCard(
+                    content: {
+                        HStack(alignment: .top, spacing: AppSpacing.md) {
+                            Circle()
+                                .fill(signalColor(signal.severity).opacity(0.16))
+                                .frame(width: 40, height: 40)
+                                .overlay {
+                                    Image(systemName: signalIcon(signal.severity))
+                                        .foregroundColor(signalColor(signal.severity))
+                                }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(signal.title)
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+
+                                Text(signal.detail)
+                                    .font(AppTypography.bodySmall)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            }
+
+                            Spacer()
+                        }
+                    },
+                    glassConfig: .regular,
+                    padding: AppSpacing.md
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func staffPerformanceSection(_ snapshot: ManagerDashboardSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            HStack {
+                sectionTitle("STAFF PERFORMANCE")
+                Spacer()
+                Text("Ranked by revenue")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+
+            if snapshot.staffRanking.isEmpty {
+                dashboardCard(
+                    content: {
+                        Text("No staff performance data is available yet for this boutique.")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    },
+                    glassConfig: .regular,
+                    padding: AppSpacing.md
+                )
+            } else {
+                let topRevenue = max(snapshot.staffRanking.first?.revenue ?? 0, 1)
+
+                ForEach(Array(snapshot.staffRanking.prefix(5).enumerated()), id: \.element.id) { index, performer in
+                    dashboardCard(
+                        content: {
+                            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                                HStack(alignment: .center, spacing: AppSpacing.md) {
+                                    Text("#\(index + 1)")
+                                        .font(AppTypography.overline)
+                                        .foregroundColor(AppColors.accent)
+                                        .frame(width: 34, height: 34)
+                                        .background(AppColors.accent.opacity(0.1))
+                                        .clipShape(Circle())
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(performer.name)
+                                            .font(AppTypography.label)
+                                            .foregroundColor(AppColors.textPrimaryDark)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.9)
+                                        Text(performer.role)
+                                            .font(AppTypography.caption)
+                                            .foregroundColor(AppColors.textSecondaryDark)
+                                            .lineLimit(1)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(currency(performer.revenue))
+                                            .font(AppTypography.label)
+                                            .foregroundColor(AppColors.textPrimaryDark)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.85)
+                                        Text("\(performer.transactions) sales · \(percent(performer.conversionRate)) conv.")
+                                            .font(AppTypography.caption)
+                                            .foregroundColor(AppColors.textSecondaryDark)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.8)
+                                    }
+                                    .frame(alignment: .trailing)
+                                }
+
+                                ProgressView(value: performer.revenue / topRevenue)
+                                    .tint(AppColors.secondary)
+
+                                Text("\(performer.appointmentsHandled) appointments handled")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            }
+                        },
+                        glassConfig: .regular,
+                        padding: AppSpacing.md
+                    )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func appointmentSection(_ snapshot: ManagerDashboardSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            sectionTitle("APPOINTMENT STATISTICS")
+
+            dashboardCard(
+                content: {
+                    ViewThatFits(in: .horizontal) {
+                        VStack(alignment: .leading, spacing: AppSpacing.md) {
+                            HStack(alignment: .top, spacing: AppSpacing.md) {
+                                compactMetric(label: "Booked", value: "\(snapshot.appointments.totalBooked)")
+                                compactMetric(label: "Confirmed", value: "\(snapshot.appointments.confirmed)")
+                                compactMetric(label: "Completed", value: "\(snapshot.appointments.completed)")
+                            }
+
+                            Divider()
+
+                            HStack(alignment: .top, spacing: AppSpacing.md) {
+                                compactMetric(label: "Cancelled", value: "\(snapshot.appointments.cancelled)")
+                                compactMetric(label: "No Show", value: "\(snapshot.appointments.noShow)")
+                                compactMetric(label: "This Week", value: "\(snapshot.appointments.upcomingThisWeek)")
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: AppSpacing.md) {
+                            VStack(alignment: .leading, spacing: AppSpacing.md) {
+                                compactMetric(label: "Booked", value: "\(snapshot.appointments.totalBooked)")
+                                compactMetric(label: "Confirmed", value: "\(snapshot.appointments.confirmed)")
+                                compactMetric(label: "Completed", value: "\(snapshot.appointments.completed)")
+                            }
+
+                            Divider()
+
+                            VStack(alignment: .leading, spacing: AppSpacing.md) {
+                                compactMetric(label: "Cancelled", value: "\(snapshot.appointments.cancelled)")
+                                compactMetric(label: "No Show", value: "\(snapshot.appointments.noShow)")
+                                compactMetric(label: "This Week", value: "\(snapshot.appointments.upcomingThisWeek)")
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                },
+                glassConfig: .regular,
+                padding: AppSpacing.md
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var loadingState: some View {
+        dashboardCard(
+            content: {
+                VStack(spacing: AppSpacing.md) {
+                    ProgressView()
+                        .tint(AppColors.accent)
+                    Text("Loading boutique KPI data")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("Orders, appointments, and staff rankings are syncing now.")
+                        .font(AppTypography.bodySmall)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.xl)
+            },
+            glassConfig: .regular,
+            padding: AppSpacing.md
+        )
+    }
+
+    private var restrictedAccessView: some View {
+        VStack(spacing: AppSpacing.lg) {
+            Image(systemName: "lock.shield")
+                .font(.system(size: 40, weight: .semibold))
+                .foregroundColor(AppColors.warning)
+
+            Text("Dashboard access is restricted")
+                .font(AppTypography.heading2)
+                .foregroundColor(AppColors.textPrimaryDark)
+
+            Text("Only Boutique Managers can access boutique performance metrics.")
+                .font(AppTypography.bodyMedium)
+                .foregroundColor(AppColors.textSecondaryDark)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var unavailableStoreView: some View {
+        VStack(spacing: AppSpacing.lg) {
+            Image(systemName: "building.2.crop.circle")
+                .font(.system(size: 40, weight: .semibold))
+                .foregroundColor(AppColors.secondary)
+
+            Text("No boutique is assigned")
+                .font(AppTypography.heading2)
+                .foregroundColor(AppColors.textPrimaryDark)
+
+            Text("A store assignment is required before manager KPIs can be loaded.")
+                .font(AppTypography.bodyMedium)
+                .foregroundColor(AppColors.textSecondaryDark)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var managerInitials: String {
-        let p = appState.currentUserName.split(separator: " ")
-        return p.count >= 2 ? "\(p[0].prefix(1))\(p[1].prefix(1))".uppercased() : String(appState.currentUserName.prefix(2)).uppercased()
+        let pieces = appState.currentUserName.split(separator: " ")
+        if pieces.count >= 2 {
+            return "\(pieces[0].prefix(1))\(pieces[1].prefix(1))".uppercased()
+        }
+        return String(appState.currentUserName.prefix(2)).uppercased()
     }
 
-    // MARK: - Store Header
-
-    private var storeHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("GOOD \(greeting.uppercased())")
-                .font(.system(size: 9, weight: .semibold))
-                .tracking(3)
-                .foregroundColor(AppColors.accent)
-            Text(appState.currentUserName.split(separator: " ").first.map(String.init) ?? "Manager")
-                .font(.system(size: 34, weight: .black))
-                .foregroundColor(.primary)
-            Text(Date(), style: .date)
-                .font(.system(size: 12, weight: .light))
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
+    private var managerFirstName: String {
+        appState.currentUserName.split(separator: " ").first.map(String.init) ?? "Manager"
     }
 
     private var greeting: String {
-        let h = Calendar.current.component(.hour, from: Date())
-        return h < 12 ? "Morning" : h < 17 ? "Afternoon" : "Evening"
+        let hour = Calendar.current.component(.hour, from: Date())
+        return hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : "Evening"
     }
 
-    // MARK: - Daily Sales Strip
+    private var currentStoreName: String {
+        guard let storeId = appState.currentStoreId else { return "Boutique" }
+        return allStores.first(where: { $0.id == storeId })?.name ?? "Current Boutique"
+    }
 
-    private var dailySalesStrip: some View {
-        VStack(spacing: 10) {
-            sectionHeader("TODAY'S PERFORMANCE")
-
-            HStack(spacing: 0) {
-                salesPill(value: "$42,800", label: "Today", icon: "dollarsign.circle.fill", color: AppColors.accent)
-                Rectangle().fill(Color(.systemGray5)).frame(width: 1, height: 40)
-                salesPill(value: "7", label: "Transactions", icon: "creditcard.fill", color: AppColors.secondary)
-                Rectangle().fill(Color(.systemGray5)).frame(width: 1, height: 40)
-                salesPill(value: "$6,114", label: "Avg. Ticket", icon: "chart.line.uptrend.xyaxis", color: AppColors.success)
-            }
-            .background(Color(.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
-            .padding(.horizontal, 20)
+    private var headerSubtitle: String {
+        if let snapshot {
+            return "Last synchronization \(snapshot.syncedAt.formatted(date: .abbreviated, time: .shortened))"
         }
+        return "KPI metrics will appear as soon as the current boutique finishes syncing."
     }
 
-    private func salesPill(value: String, label: String, icon: String, color: Color) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .light))
-                .foregroundColor(color)
+    private var syncPill: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(isShowingCachedData ? AppColors.warning : AppColors.success)
+                .frame(width: 8, height: 8)
+
+            Text(isShowingCachedData ? "Cached" : "Synced")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textPrimaryDark)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(AppColors.backgroundTertiary)
+        .clipShape(Capsule())
+    }
+
+    private var metricColumns: [GridItem] {
+        if horizontalSizeClass == .compact {
+            return [GridItem(.flexible(), spacing: AppSpacing.md), GridItem(.flexible(), spacing: AppSpacing.md)]
+        }
+
+        return [GridItem(.flexible(), spacing: AppSpacing.md), GridItem(.flexible(), spacing: AppSpacing.md)]
+    }
+
+    private var heroMetricColumns: [GridItem] {
+        if horizontalSizeClass == .compact {
+            return [GridItem(.flexible(), spacing: AppSpacing.md)]
+        }
+
+        return [GridItem(.flexible(), spacing: AppSpacing.md), GridItem(.flexible(), spacing: AppSpacing.md)]
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(AppTypography.overline)
+            .tracking(1.6)
+            .foregroundColor(AppColors.accent)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func performanceBadge(progress: Double) -> some View {
+        let color = progressColor(progress: progress)
+
+        return Text(percent(progress))
+            .font(AppTypography.caption)
+            .foregroundColor(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
+    }
+
+    private func labelPill(title: String, color: Color) -> some View {
+        Text(title)
+            .font(AppTypography.caption)
+            .foregroundColor(color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(color.opacity(0.1))
+            .clipShape(Capsule())
+    }
+
+    private func compactMetric(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             Text(value)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.primary)
+                .font(AppTypography.heading3)
+                .foregroundColor(AppColors.textPrimaryDark)
             Text(label)
-                .font(.system(size: 10, weight: .light))
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - KPI Grid
-
-    private var kpiGrid: some View {
-        VStack(spacing: 10) {
-            sectionHeader("STORE OVERVIEW")
-
-            LazyVGrid(
-                columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
-                spacing: 12
-            ) {
-                kpiCard(icon: "chart.bar.fill", iconColor: AppColors.accent,
-                        value: "$248K", label: "MTD Revenue", badge: "+8.2%", positive: true)
-                kpiCard(icon: "person.2.fill", iconColor: AppColors.secondary,
-                        value: "\(storeStaff.count)", label: "Staff On Duty", badge: "of \(storeStaff.count + 1)", positive: true)
-                kpiCard(icon: "shippingbox.fill", iconColor: AppColors.info,
-                        value: "\(totalStoreUnits)", label: "Store Units", badge: "\(allProducts.count) SKUs", positive: true)
-                kpiCard(icon: "exclamationmark.triangle.fill", iconColor: AppColors.warning,
-                        value: "\(lowStockCount)", label: "Low Stock", badge: "\(outOfStockCount) out", positive: false)
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-
-    private func kpiCard(icon: String, iconColor: Color, value: String, label: String, badge: String, positive: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .ultraLight))
-                    .foregroundColor(iconColor)
-                Spacer()
-                Text(badge)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(positive ? AppColors.success : AppColors.warning)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background((positive ? AppColors.success : AppColors.warning).opacity(0.1))
-                    .clipShape(Capsule())
-            }
-            Text(value)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(.primary)
-            Text(label)
-                .font(.system(size: 11, weight: .light))
-                .foregroundColor(.secondary)
-        }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
-    }
-
-    // MARK: - Alerts
-
-    private var alertsSection: some View {
-        VStack(spacing: 10) {
-            HStack {
-                sectionHeader("ALERTS")
-                Spacer()
-                Text("3")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(AppColors.warning)
-                    .clipShape(Capsule())
-                    .padding(.trailing, 20)
-            }
-
-            VStack(spacing: 10) {
-                alertRow(icon: "exclamationmark.triangle.fill", color: AppColors.error,
-                         title: "Heritage Bag — 1 unit", detail: "Reorder or request transfer", time: "15m")
-                alertRow(icon: "doc.text.fill", color: AppColors.warning,
-                         title: "Inventory Discrepancy", detail: "Pearl Earrings: system 6, counted 5", time: "2h")
-                alertRow(icon: "calendar.badge.clock", color: AppColors.info,
-                         title: "VIP Appointment", detail: "Mrs. Chen — 3:00 PM private viewing", time: "in 2h")
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-
-    private func alertRow(icon: String, color: Color, title: String, detail: String, time: String) -> some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(color)
-                .frame(width: 3, height: 40)
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(color)
-                .frame(width: 22)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                Text(detail)
-                    .font(.system(size: 11, weight: .light))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-            Text(time)
-                .font(.system(size: 10, weight: .light))
-                .foregroundColor(.secondary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
-    }
-
-    // MARK: - Top Products
-
-    private var topProductsSection: some View {
-        VStack(spacing: 10) {
-            HStack {
-                sectionHeader("TOP SELLERS TODAY")
-                Spacer()
-                Button(action: {}) {
-                    HStack(spacing: 3) {
-                        Text("View All")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(AppColors.accent)
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(AppColors.accent)
-                    }
-                }
-                .padding(.trailing, 20)
-            }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(Array(allProducts.sorted { $0.price > $1.price }.prefix(5)), id: \.id) { product in
-                        topProductCard(product)
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-        }
-    }
-
-    private func topProductCard(_ product: Product) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ProductArtworkView(
-                imageSource: product.imageName,
-                fallbackSymbol: "bag",
-                cornerRadius: 10
-            )
-            .frame(width: 120, height: 90)
-            .clipped()
-            .background(Color(.systemGray6))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            Text(product.name)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.primary)
-                .lineLimit(1)
-            Text(product.formattedPrice)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(AppColors.accent)
-        }
-        .frame(width: 120)
-        .padding(10)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
-    }
-
-    // MARK: - Staff On Duty
-
-    private var staffOnDutySection: some View {
-        VStack(spacing: 10) {
-            sectionHeader("STAFF ON DUTY")
-
-            HStack(spacing: 12) {
-                ForEach(storeStaff.prefix(4)) { user in
-                    VStack(spacing: 5) {
-                        ZStack {
-                            Circle()
-                                .fill(staffColor(user.role).opacity(0.12))
-                                .frame(width: 44, height: 44)
-                            Text(staffInitials(user.name))
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(staffColor(user.role))
-                        }
-                        Text(user.name.split(separator: " ").first.map(String.init) ?? "")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.primary)
-                        Text(user.role == .salesAssociate ? "Sales" : "Inv.")
-                            .font(.system(size: 9, weight: .light))
-                            .foregroundColor(staffColor(user.role))
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            .padding(.vertical, 16)
-            .padding(.horizontal, 20)
-            .background(Color(.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
-            .padding(.horizontal, 20)
-        }
-    }
-
-    private func staffColor(_ role: UserRole) -> Color {
-        switch role {
-        case .salesAssociate: return AppColors.info
-        case .inventoryController: return AppColors.success
-        default: return .secondary
-        }
-    }
-
-    private func staffInitials(_ name: String) -> String {
-        let p = name.split(separator: " ")
-        return p.count >= 2 ? "\(p[0].prefix(1))\(p[1].prefix(1))".uppercased() : String(name.prefix(2)).uppercased()
-    }
-
-    // MARK: - Quick Actions
-
-    private var quickActionsGrid: some View {
-        VStack(spacing: 10) {
-            sectionHeader("QUICK ACTIONS")
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                actionTile(icon: "checkmark.circle.fill", label: "Approve", color: AppColors.success)
-                actionTile(icon: "arrow.left.arrow.right", label: "Transfer", color: AppColors.info)
-                actionTile(icon: "calendar.badge.plus", label: "VIP Event", color: AppColors.secondary)
-                actionTile(icon: "person.badge.clock", label: "Shift", color: AppColors.accent)
-                actionTile(icon: "doc.text.fill", label: "Report", color: AppColors.warning)
-                actionTile(icon: "exclamationmark.bubble.fill", label: "Flag Item", color: AppColors.error)
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-
-    private func actionTile(icon: String, label: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 20, weight: .ultraLight))
-                .foregroundColor(color)
-            Text(label)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.primary)
-                .multilineTextAlignment(.leading)
-                .lineLimit(2)
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 80)
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
     }
 
-    // MARK: - Helpers
+    private func dashboardMetricCard(
+        label: String,
+        value: String,
+        detail: String,
+        icon: String,
+        tint: Color
+    ) -> some View {
+        dashboardCard(
+            content: {
+                VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                    HStack(alignment: .center, spacing: AppSpacing.sm) {
+                        Text(label)
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
 
-    private func sectionHeader(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 9, weight: .semibold))
-            .tracking(3)
-            .foregroundColor(.primary.opacity(0.45))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
+                        Spacer()
+
+                        Image(systemName: icon)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(tint)
+                    }
+
+                    Text(value)
+                        .font(AppTypography.heading2)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+
+                    Text(detail)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(minHeight: 124, alignment: .topLeading)
+            },
+            glassConfig: .thin,
+            padding: AppSpacing.md
+        )
+    }
+
+    private func dashboardCard<Content: View>(
+        @ViewBuilder content: () -> Content,
+        glassConfig: LiquidGlassConfig,
+        padding: CGFloat
+    ) -> some View {
+        ModernCardView(
+            content: content,
+            backgroundColor: AppColors.backgroundSecondary,
+            glassConfig: glassConfig,
+            cornerRadius: AppSpacing.radiusMedium,
+            padding: padding,
+            showShadow: false,
+            borderColor: AppColors.textPrimaryDark.opacity(0.12),
+            borderWidth: 0.75
+        )
+        .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 4)
+        .shadow(color: Color.black.opacity(0.14), radius: 18, x: 0, y: 9)
+    }
+
+    private func statusBanner(message: String, isWarning: Bool) -> some View {
+        HStack(spacing: AppSpacing.sm) {
+            Image(systemName: isWarning ? "wifi.slash" : "info.circle")
+                .foregroundColor(isWarning ? AppColors.warning : AppColors.info)
+
+            Text(message)
+                .font(AppTypography.bodySmall)
+                .foregroundColor(AppColors.textPrimaryDark)
+
+            Spacer()
+        }
+        .padding(AppSpacing.md)
+        .background((isWarning ? AppColors.warning : AppColors.info).opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
+    }
+
+    private func signalColor(_ severity: ManagerDashboardSignalSeverity) -> Color {
+        switch severity {
+        case .positive:
+            return AppColors.success
+        case .attention:
+            return AppColors.warning
+        case .warning:
+            return AppColors.error
+        }
+    }
+
+    private func signalIcon(_ severity: ManagerDashboardSignalSeverity) -> String {
+        switch severity {
+        case .positive:
+            return "arrow.up.right"
+        case .attention:
+            return "exclamationmark.circle"
+        case .warning:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private func progressColor(progress: Double) -> Color {
+        if progress >= 1 { return AppColors.success }
+        if progress >= 0.85 { return AppColors.warning }
+        return AppColors.error
+    }
+
+    private func monthLabel(from date: Date) -> String {
+        date.formatted(.dateTime.month(.wide).year())
+    }
+
+    private func percent(_ value: Double) -> String {
+        "\(Int((value * 100).rounded()))%"
+    }
+
+    private func currency(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.maximumFractionDigits = value >= 10_000 ? 0 : 2
+        return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
+    }
+
+    private func loadDashboard(forceRefresh: Bool = false) async {
+        guard let storeId = appState.currentStoreId, appState.currentUserRole == .boutiqueManager else {
+            return
+        }
+
+        if !forceRefresh, snapshot == nil, let cached = service.cachedSnapshot(for: storeId) {
+            snapshot = cached
+            isShowingCachedData = true
+            statusMessage = "Showing the last synced KPI snapshot while fresh data loads."
+        }
+
+        do {
+            let fresh = try await service.refreshSnapshot(for: storeId)
+            snapshot = fresh
+            isShowingCachedData = false
+            statusMessage = nil
+        } catch {
+            if snapshot != nil {
+                isShowingCachedData = true
+                statusMessage = "Live refresh failed. Displaying the last synced KPI snapshot."
+            } else {
+                statusMessage = error.localizedDescription
+            }
+        }
     }
 }
 
 #Preview {
-    ManagerDashboardView()
-        .environment(AppState())
-        .modelContainer(for: [Product.self, Category.self, User.self], inMemory: true)
+    let appState = AppState()
+    appState.currentUserName = "Avery Laurent"
+    appState.currentUserEmail = "avery@example.com"
+    appState.currentUserRole = .boutiqueManager
+    appState.currentStoreId = UUID()
+
+    return NavigationStack {
+        ManagerDashboardView()
+            .environment(appState)
+    }
+    .modelContainer(for: [StoreLocation.self], inMemory: true)
 }

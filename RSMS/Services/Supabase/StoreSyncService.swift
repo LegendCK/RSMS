@@ -45,6 +45,7 @@ final class StoreSyncService {
             region: location.region,
             managerName: location.managerName,
             capacityUnits: location.capacityUnits,
+            monthlySalesTarget: location.monthlySalesTarget,
             isActive: location.isOperational
         )
 
@@ -152,6 +153,7 @@ final class StoreSyncService {
         location.region = dto.region ?? location.region
         location.managerName = dto.managerName ?? location.managerName
         location.capacityUnits = dto.capacityUnits ?? location.capacityUnits
+        location.monthlySalesTarget = dto.monthlySalesTarget ?? location.monthlySalesTarget
         location.isOperational = dto.isActive
         location.updatedAt = dto.updatedAt
     }
@@ -170,6 +172,7 @@ final class StoreSyncService {
             region: dto.region ?? "Unassigned",
             managerName: dto.managerName ?? "—",
             capacityUnits: dto.capacityUnits ?? 0,
+            monthlySalesTarget: dto.monthlySalesTarget ?? 300_000,
             isOperational: dto.isActive
         )
         location.id = dto.id

@@ -196,6 +196,7 @@ struct OrgBoutiquesSubview: View {
                 detailCol(label: "Manager", value: store.managerName, color: AppColors.secondary)
                 detailCol(label: "Code", value: store.code, color: AppColors.accent)
                 detailCol(label: "Units", value: "\(store.capacityUnits)", color: AppColors.textPrimaryDark)
+                detailCol(label: "Target", value: formatCurrency(store.monthlySalesTarget), color: AppColors.textPrimaryDark)
             }
         }
         .padding(AppSpacing.cardPadding)
@@ -212,6 +213,14 @@ struct OrgBoutiquesSubview: View {
             Text(label).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
             Text(value).font(AppTypography.bodySmall).foregroundColor(color).lineLimit(1)
         }
+    }
+
+    private func formatCurrency(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
     }
 
     private func statPill(value: String, label: String, color: Color) -> some View {
@@ -279,6 +288,7 @@ struct OrgBoutiqueDetailView: View {
                 card("Operations", icon: "person.2.fill") {
                     row("Manager", store.managerName)
                     row("Capacity", "\(store.capacityUnits) units")
+                    row("Monthly Target", formatCurrency(store.monthlySalesTarget))
                 }
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -337,6 +347,14 @@ struct OrgBoutiqueDetailView: View {
                 .multilineTextAlignment(.trailing)
         }
     }
+
+    private func formatCurrency(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
+    }
 }
 
 struct OrgStoreEditorSheet: View {
@@ -360,6 +378,7 @@ struct OrgStoreEditorSheet: View {
     @State private var managerName: String
     @State private var selectedManagerName: String
     @State private var capacityText: String
+    @State private var monthlySalesTargetText: String
     @State private var isOperational: Bool
     @State private var isSaving = false
     @State private var syncMessage: String?
@@ -379,10 +398,19 @@ struct OrgStoreEditorSheet: View {
         _managerName = State(initialValue: store?.managerName ?? "")
         _selectedManagerName = State(initialValue: store?.managerName ?? "")
         _capacityText = State(initialValue: "\(store?.capacityUnits ?? 0)")
+        _monthlySalesTargetText = State(initialValue: Self.initialTargetText(for: store))
         _isOperational = State(initialValue: store?.isOperational ?? true)
     }
 
     private var capacityUnits: Int? { Int(capacityText) }
+    private var monthlySalesTarget: Double? {
+        let normalized = monthlySalesTargetText
+            .replacingOccurrences(of: ",", with: "")
+            .replacingOccurrences(of: "$", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Double(normalized), value > 0 else { return nil }
+        return value
+    }
     private var isFormValid: Bool {
         !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -390,6 +418,7 @@ struct OrgStoreEditorSheet: View {
         !city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !selectedManagerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         capacityUnits != nil &&
+        monthlySalesTarget != nil &&
         isCodeUnique
     }
 
@@ -434,6 +463,7 @@ struct OrgStoreEditorSheet: View {
                     card("Operations", icon: "person.2.fill") {
                         managerPickerRow
                         row("Capacity Units", text: $capacityText, keyboard: .numberPad)
+                        row("Monthly Sales Target (USD)", text: $monthlySalesTargetText, keyboard: .decimalPad)
                         Toggle("Operational", isOn: $isOperational)
                             .tint(AppColors.accent)
                     }
@@ -551,7 +581,7 @@ struct OrgStoreEditorSheet: View {
     }
 
     private func save() async {
-        guard isFormValid, let capacityUnits else { return }
+        guard isFormValid, let capacityUnits, let monthlySalesTarget else { return }
         isSaving = true
         defer { isSaving = false }
 
@@ -572,6 +602,7 @@ struct OrgStoreEditorSheet: View {
                 region: region,
                 managerName: managerName,
                 capacityUnits: capacityUnits,
+                monthlySalesTarget: monthlySalesTarget,
                 isOperational: isOperational
             )
             modelContext.insert(target)
@@ -588,6 +619,7 @@ struct OrgStoreEditorSheet: View {
         target.region = region.trimmingCharacters(in: .whitespacesAndNewlines)
         target.managerName = selectedManagerName.trimmingCharacters(in: .whitespacesAndNewlines)
         target.capacityUnits = capacityUnits
+        target.monthlySalesTarget = monthlySalesTarget
         target.isOperational = isOperational
 
         do {
@@ -599,6 +631,11 @@ struct OrgStoreEditorSheet: View {
         } catch {
             syncMessage = "Saved locally. Supabase sync failed: \(error.localizedDescription)"
         }
+    }
+
+    private static func initialTargetText(for store: StoreLocation?) -> String {
+        guard let target = store?.monthlySalesTarget else { return "300000" }
+        return target == floor(target) ? String(Int(target)) : String(target)
     }
 }
 

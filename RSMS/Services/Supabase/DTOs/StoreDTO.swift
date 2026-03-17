@@ -5,7 +5,8 @@
 //  Codable DTO matching the Supabase `stores` table.
 //  Core columns: id, name, country, city, address, currency, timezone,
 //                is_active, created_at, updated_at
-//  Extended columns (optional): code, type, region, manager_name, capacity_units
+//  Extended columns (optional): code, type, region, manager_name, capacity_units,
+//  monthly_sales_target
 //
 
 import Foundation
@@ -23,6 +24,7 @@ struct StoreDTO: Codable, Identifiable {
     let region: String?
     let managerName: String?
     let capacityUnits: Int?
+    let monthlySalesTarget: Double?
     let isActive: Bool
     let createdAt: Date
     let updatedAt: Date
@@ -31,6 +33,7 @@ struct StoreDTO: Codable, Identifiable {
         case id, code, name, type, country, city, address, currency, timezone, region
         case managerName  = "manager_name"
         case capacityUnits = "capacity_units"
+        case monthlySalesTarget = "monthly_sales_target"
         case isActive     = "is_active"
         case createdAt    = "created_at"
         case updatedAt    = "updated_at"
@@ -52,12 +55,14 @@ struct StoreInsertDTO: Codable {
     let region: String
     let managerName: String
     let capacityUnits: Int
+    let monthlySalesTarget: Double
     let isActive: Bool
 
     enum CodingKeys: String, CodingKey {
         case id, code, name, type, country, city, address, currency, timezone, region
         case managerName   = "manager_name"
         case capacityUnits = "capacity_units"
+        case monthlySalesTarget = "monthly_sales_target"
         case isActive      = "is_active"
     }
 }

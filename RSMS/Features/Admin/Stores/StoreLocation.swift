@@ -33,6 +33,7 @@ final class StoreLocation {
     var region: String
     var managerName: String
     var capacityUnits: Int
+    var monthlySalesTarget: Double
     var isOperational: Bool
     var createdAt: Date
     var updatedAt: Date
@@ -54,6 +55,7 @@ final class StoreLocation {
         region: String,
         managerName: String,
         capacityUnits: Int,
+        monthlySalesTarget: Double = 300_000,
         isOperational: Bool
     ) {
         self.id = UUID()
@@ -68,6 +70,7 @@ final class StoreLocation {
         self.region = region
         self.managerName = managerName
         self.capacityUnits = capacityUnits
+        self.monthlySalesTarget = monthlySalesTarget
         self.isOperational = isOperational
         self.createdAt = Date()
         self.updatedAt = Date()

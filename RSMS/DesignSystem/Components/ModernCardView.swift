@@ -14,6 +14,9 @@ struct ModernCardView<Content: View>: View {
     var cornerRadius: CGFloat = AppSpacing.radiusLarge
     var padding: CGFloat = AppSpacing.md
     var showShadow: Bool = true
+    var shadowStyle: Shadow = LiquidShadow.subtle
+    var borderColor: Color = .clear
+    var borderWidth: CGFloat = 0
     
     var body: some View {
         content
@@ -23,8 +26,14 @@ struct ModernCardView<Content: View>: View {
                 backgroundColor: backgroundColor,
                 cornerRadius: cornerRadius
             )
+            .overlay {
+                if borderWidth > 0 {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(borderColor, lineWidth: borderWidth)
+                }
+            }
             .if(showShadow) { view in
-                view.liquidShadow(LiquidShadow.subtle)
+                view.liquidShadow(shadowStyle)
             }
     }
 }
