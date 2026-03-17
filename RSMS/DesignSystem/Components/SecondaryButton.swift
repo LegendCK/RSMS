@@ -15,21 +15,16 @@ struct SecondaryButton: View {
     var body: some View {
         Button(action: action) {
             Text(title.uppercased())
-                .font(AppTypography.buttonSecondary)
-                .tracking(1.2)
+                .font(.system(size: 14, weight: .semibold))
+                .tracking(2)
                 .frame(maxWidth: .infinity)
                 .frame(height: AppSpacing.touchTarget + 4)
                 .foregroundColor(AppColors.accent)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(AppColors.accent, lineWidth: 1.5)
+                )
         }
-        .if(useGlass) { view in
-            view.background(Material.thinMaterial)
-        }
-        .overlay(
-            Capsule()
-                .stroke(AppColors.accent, lineWidth: 1.5)
-        )
-        .clipShape(Capsule())
-        .liquidShadow(LiquidShadow.subtle)
     }
 }
 

@@ -1,9 +1,9 @@
 //
 //  ManagerTabView.swift
-//  infosys2
+//  RSMS
 //
-//  Boutique Manager tab bar — 5 store-operations modules.
-//  Dashboard | Operations | Staff | Inventory | Insights
+//  Boutique Manager — 4 tab bar modules.
+//  Dashboard | Operations | Staff | Profile
 //
 
 import SwiftUI
@@ -18,40 +18,33 @@ struct ManagerTabView: View {
                 .ignoresSafeArea()
 
             TabView(selection: $selectedTab) {
-                ManagerDashboardView()
+                NavigationStack { ManagerDashboardView() }
                     .tabItem {
                         Image(systemName: selectedTab == 0 ? "square.grid.2x2.fill" : "square.grid.2x2")
                         Text("Dashboard")
                     }
                     .tag(0)
 
-                ManagerOperationsView()
+                NavigationStack { ManagerOperationsView() }
                     .tabItem {
                         Image(systemName: selectedTab == 1 ? "list.clipboard.fill" : "list.clipboard")
                         Text("Operations")
                     }
                     .tag(1)
 
-                ManagerStaffView()
+                NavigationStack { ManagerStaffView() }
                     .tabItem {
                         Image(systemName: selectedTab == 2 ? "person.2.fill" : "person.2")
                         Text("Staff")
                     }
                     .tag(2)
 
-                ManagerInventoryView()
+                NavigationStack { ManagerProfileView() }
                     .tabItem {
-                        Image(systemName: selectedTab == 3 ? "shippingbox.fill" : "shippingbox")
-                        Text("Inventory")
+                        Image(systemName: selectedTab == 3 ? "person.fill" : "person")
+                        Text("Profile")
                     }
                     .tag(3)
-
-                ManagerInsightsView()
-                    .tabItem {
-                        Image(systemName: selectedTab == 4 ? "chart.bar.fill" : "chart.bar")
-                        Text("Insights")
-                    }
-                    .tag(4)
             }
             .tint(AppColors.accent)
             .tabBarMinimizeBehavior(.onScrollDown)

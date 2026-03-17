@@ -105,26 +105,19 @@ struct AdminDashboardView: View {
     // MARK: - Welcome Header
 
     private var welcomeHeader: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Good \(greeting),")
-                    .font(AppTypography.bodyMedium)
-                    .foregroundColor(AppColors.textSecondaryDark)
-                Text(appState.currentUserName.split(separator: " ").first.map(String.init) ?? "Admin")
-                    .font(AppTypography.displaySmall)
-                    .foregroundColor(AppColors.textPrimaryDark)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("CORPORATE ADMIN")
-                    .font(AppTypography.overline)
-                    .tracking(2)
-                    .foregroundColor(AppColors.accent)
-                Text(Date(), style: .date)
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.neutral500)
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            Text("GOOD \(greeting.uppercased())")
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(3)
+                .foregroundColor(AppColors.accent)
+            Text(appState.currentUserName.split(separator: " ").first.map(String.init) ?? "Admin")
+                .font(.system(size: 34, weight: .black))
+                .foregroundColor(.black)
+            Text(Date(), style: .date)
+                .font(.system(size: 12, weight: .light))
+                .foregroundColor(.black.opacity(0.4))
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, AppSpacing.screenHorizontal)
         .padding(.top, AppSpacing.sm)
     }
@@ -161,62 +154,30 @@ struct AdminDashboardView: View {
     }
 
     private func metricCard(icon: String, iconColor: Color, value: String, label: String, badge: String, badgePositive: Bool) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(iconColor.opacity(0.12))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(iconColor)
-                }
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .ultraLight))
+                    .foregroundColor(iconColor)
                 Spacer()
                 Text(badge)
-                    .font(AppTypography.micro)
+                    .font(.system(size: 9, weight: .medium))
                     .foregroundColor(badgePositive ? AppColors.success : AppColors.warning)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background((badgePositive ? AppColors.success : AppColors.warning).opacity(0.12))
-                    .cornerRadius(4)
+                    .background((badgePositive ? AppColors.success : AppColors.warning).opacity(0.1))
+                    .clipShape(Capsule())
             }
             Text(value)
-                .font(AppTypography.heading1)
-                .foregroundColor(AppColors.textPrimaryDark)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.black)
             Text(label)
-                .font(AppTypography.caption)
-                .foregroundColor(AppColors.textSecondaryDark)
+                .font(.system(size: 11, weight: .light))
+                .foregroundColor(.secondary)
         }
         .padding(14)
-        .background(
-            ZStack {
-                // Frosted glass base
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
-                // Subtle top highlight
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.7), Color.white.opacity(0.3)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.8), Color.white.opacity(0.2)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 4)
-        .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     // MARK: - System Health
@@ -374,54 +335,21 @@ struct AdminDashboardView: View {
 
     private func actionTile(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(color.opacity(0.14))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(color)
-                }
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .ultraLight))
+                    .foregroundColor(color)
                 Text(label)
-                    .font(AppTypography.actionLink)
-                    .foregroundColor(AppColors.textSecondaryDark)
-                    .multilineTextAlignment(.center)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.black)
+                    .multilineTextAlignment(.leading)
                     .lineLimit(2)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 88)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.75),
-                                    color.opacity(0.06),
-                                    Color.white.opacity(0.35)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.9), color.opacity(0.2)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
-            .shadow(color: color.opacity(0.12), radius: 10, x: 0, y: 4)
-            .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 80)
+            .padding(14)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(LiquidPressButtonStyle())
     }
@@ -519,9 +447,9 @@ struct AdminDashboardView: View {
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text)
-            .font(AppTypography.overline)
-            .tracking(2)
-            .foregroundColor(AppColors.accent)
+            .font(.system(size: 9, weight: .semibold))
+            .tracking(3)
+            .foregroundColor(.black.opacity(0.45))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, AppSpacing.screenHorizontal)
     }

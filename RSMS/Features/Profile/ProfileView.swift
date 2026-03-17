@@ -1,8 +1,8 @@
 //
 //  ProfileView.swift
-//  infosys2
+//  RSMS
 //
-//  User profile screen with account info and logout.
+//  iOS-native grouped profile — minimal luxury aesthetic.
 //
 
 import SwiftUI
@@ -13,129 +13,112 @@ struct ProfileView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary
-                    .ignoresSafeArea()
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppSpacing.xl) {
-                        // Profile header
-                        VStack(spacing: AppSpacing.md) {
-                            // Avatar
-                            ZStack {
-                                Circle()
-                                    .stroke(AppColors.secondary.opacity(0.2), lineWidth: 1)
-                                    .frame(width: 116, height: 116)
-
-                                Circle()
-                                    .fill(AppColors.backgroundTertiary)
-                                    .frame(width: 100, height: 100)
-
-                                Circle()
-                                    .stroke(AppColors.accent, lineWidth: 2)
-                                    .frame(width: 100, height: 100)
-
-                                Text(initials)
-                                    .font(AppTypography.displayMedium)
-                                    .foregroundColor(AppColors.accent)
-                            }
-
-                            VStack(spacing: AppSpacing.xxs) {
-                                Text(appState.currentUserName.isEmpty ? "Guest" : appState.currentUserName)
-                                    .font(AppTypography.heading1)
-                                    .foregroundColor(AppColors.textPrimaryDark)
-
-                                Text(appState.currentUserEmail)
-                                    .font(AppTypography.bodyMedium)
-                                    .foregroundColor(AppColors.textSecondaryDark)
-
-                                Text(appState.currentUserRole.rawValue.uppercased())
-                                    .font(AppTypography.overline)
-                                    .tracking(2)
-                                    .foregroundColor(AppColors.accent)
-                                    .padding(.top, AppSpacing.xxs)
-                            }
+            List {
+                // Avatar header section
+                Section {
+                    HStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .fill(Color(.systemGray5))
+                                .frame(width: 60, height: 60)
+                            Circle()
+                                .strokeBorder(AppColors.accent, lineWidth: 1.5)
+                                .frame(width: 60, height: 60)
+                            Text(initials)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(AppColors.accent)
                         }
-                        .padding(.top, AppSpacing.xxl)
 
-                        GoldDivider()
-                            .padding(.horizontal, AppSpacing.screenHorizontal)
-
-                        // Menu items
-                        VStack(spacing: 0) {
-                            if appState.isAuthenticated && !appState.isGuest {
-                                NavigationLink(destination: ClientProfileEditView()) {
-                                    profileRowContent(icon: "square.and.pencil", title: "Edit Profile", subtitle: "Update your personal details")
-                                }
-                            }
-
-                            NavigationLink(destination: OrdersListView()) {
-                                profileRowContent(icon: "bag", title: "My Orders", subtitle: "Track your orders")
-                            }
-                            profileRow(icon: "calendar", title: "Appointments", subtitle: "Book a boutique visit")
-                            profileRow(icon: "bell", title: "Notifications", subtitle: "Manage preferences")
-                            if appState.isAuthenticated && !appState.isGuest {
-                                NavigationLink(destination: PaymentMethodsView()) {
-                                    profileRowContent(icon: "creditcard", title: "Payment Methods", subtitle: "Manage cards")
-                                }
-                                NavigationLink(destination: AddressManagerView()) {
-                                    profileRowContent(icon: "mappin.and.ellipse", title: "Addresses", subtitle: "Delivery addresses")
-                                }
-                            }
-                            profileRow(icon: "shield", title: "Privacy & Security", subtitle: "Account settings")
-                            profileRow(icon: "questionmark.circle", title: "Help & Support", subtitle: "Contact us")
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(appState.currentUserName.isEmpty ? "Guest" : appState.currentUserName)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.black)
+                            Text(appState.currentUserEmail)
+                                .font(.system(size: 13, weight: .light))
+                                .foregroundColor(.secondary)
+                            Text(appState.currentUserRole.rawValue.uppercased())
+                                .font(.system(size: 9, weight: .semibold))
+                                .tracking(2)
+                                .foregroundColor(AppColors.accent)
                         }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
 
-                        GoldDivider()
-                            .padding(.horizontal, AppSpacing.screenHorizontal)
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
+                }
 
-                        // Logout
-                        Button(action: { showLogoutConfirmation = true }) {
-                            HStack(spacing: AppSpacing.sm) {
-                                Image(systemName: "rectangle.portrait.and.arrow.right")
-                                    .font(AppTypography.signOutIcon)
-                                Text("Sign Out")
-                                    .font(AppTypography.buttonSecondary)
-                            }
-                            .foregroundColor(AppColors.error)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: AppSpacing.touchTarget)
+                // Account section
+                if appState.isAuthenticated && !appState.isGuest {
+                    Section("Account") {
+                        NavigationLink(destination: ClientProfileEditView()) {
+                            Label("Edit Profile", systemImage: "person.crop.square")
                         }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-
-                        // App version
-                        Text("Version 1.0.0")
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.neutral600)
-                            .padding(.bottom, AppSpacing.xxxl)
+                        NavigationLink(destination: OrdersListView()) {
+                            Label("My Orders", systemImage: "bag")
+                        }
+                        NavigationLink(destination: PaymentMethodsView()) {
+                            Label("Payment Methods", systemImage: "creditcard")
+                        }
+                        NavigationLink(destination: AddressManagerView()) {
+                            Label("Addresses", systemImage: "mappin.and.ellipse")
+                        }
                     }
                 }
+
+                // Boutique section
+                Section("Boutique") {
+                    Label("Book an Appointment", systemImage: "calendar")
+                    Label("Wishlist", systemImage: "heart")
+                }
+
+                // Preferences
+                Section("Preferences") {
+                    Label("Notifications", systemImage: "bell")
+                    Label("Privacy & Security", systemImage: "lock.shield")
+                }
+
+                // Support
+                Section("Support") {
+                    Label("Help & Support", systemImage: "questionmark.circle")
+                }
+
+                // Sign out
+                Section {
+                    Button(action: { showLogoutConfirmation = true }) {
+                        HStack {
+                            Spacer()
+                            Text("Sign Out")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(AppColors.error)
+                            Spacer()
+                        }
+                    }
+                }
+
+                Section {
+                    Text("MAISON LUXE · Version 1.0.0")
+                        .font(.system(size: 10, weight: .light))
+                        .tracking(1)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .listRowBackground(Color.clear)
             }
+            .listStyle(.insetGrouped)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("Profile")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if appState.isAuthenticated && !appState.isGuest {
-                        NavigationLink(destination: ClientProfileEditView()) {
-                            Image(systemName: "square.and.pencil")
-                                .font(AppTypography.gearIcon)
-                                .foregroundColor(AppColors.textPrimaryDark)
-                        }
-                    }
+                    Text("PROFILE")
+                        .font(.system(size: 12, weight: .bold))
+                        .tracking(3)
+                        .foregroundColor(.black)
                 }
             }
             .alert("Sign Out", isPresented: $showLogoutConfirmation) {
                 Button("Cancel", role: .cancel) { }
-                Button("Sign Out", role: .destructive) {
-                    appState.logout()
-                }
+                Button("Sign Out", role: .destructive) { appState.logout() }
             } message: {
-                Text("Are you sure you want to sign out of your account?")
+                Text("Are you sure you want to sign out?")
             }
         }
     }
@@ -148,38 +131,6 @@ struct ProfileView: View {
             return String(first.prefix(2)).uppercased()
         }
         return "G"
-    }
-
-    private func profileRow(icon: String, title: String, subtitle: String) -> some View {
-        Button(action: {}) {
-            profileRowContent(icon: icon, title: title, subtitle: subtitle)
-        }
-    }
-
-    private func profileRowContent(icon: String, title: String, subtitle: String) -> some View {
-        HStack(spacing: AppSpacing.md) {
-            Image(systemName: icon)
-                .font(AppTypography.menuIconLarge)
-                .foregroundColor(AppColors.accent)
-                .frame(width: 28)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(AppTypography.label)
-                    .foregroundColor(AppColors.textPrimaryDark)
-
-                Text(subtitle)
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.textSecondaryDark)
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(AppTypography.chevron)
-                .foregroundColor(AppColors.neutral600)
-        }
-        .padding(.vertical, AppSpacing.sm)
     }
 }
 
