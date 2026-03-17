@@ -31,6 +31,8 @@ struct ManagerProfileView: View {
                             infoRow(icon: "person.2", title: "4 Staff Members", subtitle: "2 Sales, 1 Inventory, 1 Service")
                             infoRow(icon: "clock", title: "Store Hours", subtitle: "10:00 AM – 8:00 PM")
                         }
+                        .padding(.horizontal, AppSpacing.sm)
+                        .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
 
                         GoldDivider().padding(.horizontal, AppSpacing.screenHorizontal)
@@ -42,6 +44,8 @@ struct ManagerProfileView: View {
                             navRow(icon: "key.fill", title: "Change Password", subtitle: "Update credentials")
                             navRow(icon: "faceid", title: "Biometric Login", subtitle: "Face ID / Touch ID")
                         }
+                        .padding(.horizontal, AppSpacing.sm)
+                        .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
 
                         GoldDivider().padding(.horizontal, AppSpacing.screenHorizontal)
@@ -53,6 +57,8 @@ struct ManagerProfileView: View {
                             navRow(icon: "globe", title: "Language", subtitle: "English")
                             navRow(icon: "questionmark.circle", title: "Help & Support", subtitle: "Contact headquarters")
                         }
+                        .padding(.horizontal, AppSpacing.sm)
+                        .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
 
                         GoldDivider().padding(.horizontal, AppSpacing.screenHorizontal)

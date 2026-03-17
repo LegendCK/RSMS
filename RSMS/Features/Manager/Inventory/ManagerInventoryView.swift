@@ -86,7 +86,8 @@ struct InvStockSubview: View {
                 Image(systemName: "magnifyingglass").foregroundColor(AppColors.neutral500)
                 TextField("Search inventory...", text: $searchText).font(AppTypography.bodyMedium).foregroundColor(AppColors.textPrimaryDark)
             }
-            .padding(AppSpacing.sm).background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
+            .padding(AppSpacing.sm)
+            .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
             .padding(.horizontal, AppSpacing.screenHorizontal).padding(.bottom, AppSpacing.xs)
 
             ScrollView(showsIndicators: false) {
@@ -131,7 +132,7 @@ struct InvStockSubview: View {
             Text(label).font(AppTypography.micro).foregroundColor(AppColors.textSecondaryDark)
         }
         .frame(maxWidth: .infinity).padding(.vertical, AppSpacing.sm)
-        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
+        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
     }
 }
 
@@ -175,7 +176,7 @@ struct InvAlertsSubview: View {
                             }
                         }
                         .padding(.horizontal, AppSpacing.sm).padding(.vertical, AppSpacing.xs)
-                        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
+                        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
                     }
                 }
@@ -217,7 +218,8 @@ struct InvTransfersSubview: View {
             Text(status.uppercased()).font(AppTypography.nano).foregroundColor(color)
                 .padding(.horizontal, 8).padding(.vertical, 3).background(color.opacity(0.12)).cornerRadius(4)
         }
-        .padding(AppSpacing.sm).background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
+        .padding(AppSpacing.sm)
+        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 
@@ -265,8 +267,8 @@ struct InvFlaggedSubview: View {
                 }
             }
         }
-        .padding(AppSpacing.cardPadding).background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusLarge)
-        .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge).stroke(AppColors.border, lineWidth: 0.5))
+        .padding(AppSpacing.cardPadding)
+        .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 }

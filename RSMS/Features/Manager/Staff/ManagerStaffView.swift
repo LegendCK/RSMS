@@ -185,7 +185,7 @@ struct StaffRosterSubview: View {
             Spacer()
         }
         .padding(AppSpacing.sm)
-        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
+        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 
@@ -209,7 +209,7 @@ struct StaffRosterSubview: View {
             Text(label).font(AppTypography.micro).foregroundColor(AppColors.textSecondaryDark)
         }
         .frame(maxWidth: .infinity).padding(.vertical, AppSpacing.sm)
-        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
+        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
     }
 
     private func syncStaff() async {
@@ -280,8 +280,7 @@ struct StaffShiftsSubview: View {
                 )
                 .datePickerStyle(.graphical)
                 .padding(AppSpacing.sm)
-                .background(AppColors.backgroundSecondary)
-                .cornerRadius(AppSpacing.radiusLarge)
+                .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
                 .padding(.horizontal, AppSpacing.screenHorizontal)
 
                 HStack {
@@ -431,8 +430,7 @@ struct StaffShiftsSubview: View {
                 .font(AppTypography.iconSmall)
         }
         .padding(AppSpacing.sm)
-        .background(AppColors.backgroundSecondary)
-        .cornerRadius(AppSpacing.radiusMedium)
+        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 }
@@ -684,8 +682,12 @@ struct ManagerCreateStaffSheet: View {
                                 }
                             },
                             glassConfig: .thin,
-                            cornerRadius: AppSpacing.radiusLarge
+                            cornerRadius: AppSpacing.radiusMedium,
+                            showShadow: false,
+                            borderColor: AppColors.textPrimaryDark.opacity(0.12),
+                            borderWidth: 0.75
                         )
+                        .shadow(color: Color.black.opacity(0.10), radius: 8, x: 0, y: 8)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
 
                         ModernCardView(
@@ -712,8 +714,12 @@ struct ManagerCreateStaffSheet: View {
                                 }
                             },
                             glassConfig: .thin,
-                            cornerRadius: AppSpacing.radiusLarge
+                            cornerRadius: AppSpacing.radiusMedium,
+                            showShadow: false,
+                            borderColor: AppColors.textPrimaryDark.opacity(0.12),
+                            borderWidth: 0.75
                         )
+                        .shadow(color: Color.black.opacity(0.10), radius: 8, x: 0, y: 8)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
 
                         Button {

@@ -85,7 +85,7 @@ struct MgrRevenueSubview: View {
                     }
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, AppSpacing.lg)
-                .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusLarge)
+                .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
                 .padding(.horizontal, AppSpacing.screenHorizontal)
 
                 // Daily bars

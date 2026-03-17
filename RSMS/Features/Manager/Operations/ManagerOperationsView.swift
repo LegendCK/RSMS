@@ -88,7 +88,7 @@ struct ManagerOperationsView: View {
             }
         }
         .padding(AppSpacing.sm)
-        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
+        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 
@@ -155,8 +155,7 @@ struct ManagerOperationsView: View {
             }
         }
         .padding(AppSpacing.cardPadding)
-        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusLarge)
-        .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge).stroke(AppColors.border, lineWidth: 0.5))
+        .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 
@@ -200,8 +199,7 @@ struct ManagerOperationsView: View {
             Text("Items: \(items)").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
         }
         .padding(AppSpacing.cardPadding)
-        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusLarge)
-        .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge).stroke(AppColors.border, lineWidth: 0.5))
+        .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 
@@ -222,7 +220,7 @@ struct ManagerOperationsView: View {
                 Divider().background(AppColors.border)
                 activityRow(action: "Transfer Received", detail: "Sport Diver ×2 from Newark DC", by: "Daniel Park", time: "Yesterday")
             }
-            .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
+            .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.sm)
             .padding(.bottom, AppSpacing.xxxl)
@@ -253,7 +251,7 @@ struct ManagerOperationsView: View {
             Text(label).font(AppTypography.micro).foregroundColor(AppColors.textSecondaryDark)
         }
         .frame(maxWidth: .infinity).padding(.vertical, AppSpacing.sm)
-        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
+        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
     }
 
     private func sLabel(_ t: String) -> some View {
