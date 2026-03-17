@@ -1,8 +1,8 @@
 //
 //  ProductListView.swift
-//  infosys2
+//  RSMS
 //
-//  Product listing grid filtered by category.
+//  Minimal editorial product grid — luxury retail aesthetic.
 //
 
 import SwiftUI
@@ -18,8 +18,8 @@ struct ProductListView: View {
 
     enum SortOption: String, CaseIterable {
         case featured = "Featured"
-        case priceLow = "Price: Low to High"
-        case priceHigh = "Price: High to Low"
+        case priceLow = "Price ↑"
+        case priceHigh = "Price ↓"
         case newest = "Newest"
     }
 
@@ -34,34 +34,29 @@ struct ProductListView: View {
             filtered = filtered.filter { $0.productTypeName == typeFilter }
         }
         switch sortOption {
-        case .featured:
-            return filtered.sorted { $0.isFeatured && !$1.isFeatured }
-        case .priceLow:
-            return filtered.sorted { $0.price < $1.price }
-        case .priceHigh:
-            return filtered.sorted { $0.price > $1.price }
-        case .newest:
-            return filtered.sorted { $0.createdAt > $1.createdAt }
+        case .featured: return filtered.sorted { $0.isFeatured && !$1.isFeatured }
+        case .priceLow: return filtered.sorted { $0.price < $1.price }
+        case .priceHigh: return filtered.sorted { $0.price > $1.price }
+        case .newest: return filtered.sorted { $0.createdAt > $1.createdAt }
         }
     }
 
     private let columns = [
-        GridItem(.flexible(), spacing: AppSpacing.md),
-        GridItem(.flexible(), spacing: AppSpacing.md)
+        GridItem(.flexible(), spacing: 1),
+        GridItem(.flexible(), spacing: 1)
     ]
 
     var body: some View {
         ZStack {
-            AppColors.backgroundPrimary
-                .ignoresSafeArea()
+            Color.white.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                    // Sort bar
+                VStack(spacing: 0) {
+                    // Minimal sort bar
                     HStack {
                         Text("\(filteredProducts.count) items")
-                            .font(AppTypography.bodySmall)
-                            .foregroundColor(AppColors.textSecondaryDark)
+                            .font(.system(size: 11, weight: .light))
+                            .foregroundColor(.black.opacity(0.5))
 
                         Spacer()
 
@@ -78,29 +73,35 @@ struct ProductListView: View {
                             }
                         } label: {
                             HStack(spacing: 4) {
-                                Text("Sort")
-                                    .font(AppTypography.bodySmall)
-                                    .foregroundColor(AppColors.accent)
+                                Text("SORT")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .tracking(2)
+                                    .foregroundColor(.black)
                                 Image(systemName: "arrow.up.arrow.down")
-                                    .font(AppTypography.sortIcon)
-                                    .foregroundColor(AppColors.accent)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.black)
                             }
                         }
                     }
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
 
-                    // Product grid
-                    LazyVGrid(columns: columns, spacing: AppSpacing.md) {
+                    Rectangle()
+                        .fill(Color.black.opacity(0.07))
+                        .frame(height: 1)
+
+                    // 2-column grid with 1pt gap (Zara-style)
+                    LazyVGrid(columns: columns, spacing: 1) {
                         ForEach(filteredProducts) { product in
                             NavigationLink(destination: ProductDetailView(product: product)) {
                                 productTile(product)
                             }
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
+
+                    Spacer().frame(height: 48)
                 }
-                .padding(.top, AppSpacing.md)
-                .padding(.bottom, AppSpacing.xxxl)
             }
         }
         .navigationTitle(productTypeFilter ?? categoryFilter ?? "All Products")
@@ -113,84 +114,72 @@ struct ProductListView: View {
     }
 
     private func productTile(_ product: Product) -> some View {
-        LuxuryCardView {
-            VStack(alignment: .leading, spacing: 0) {
-                // Image
-                ZStack {
+        VStack(alignment: .leading, spacing: 0) {
+            // Fixed 3:4 aspect ratio image area — uniform across all tiles
+            GeometryReader { geo in
+                ZStack(alignment: .bottom) {
                     ProductArtworkView(
                         imageSource: product.imageName,
-                        fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock.fill" : "bag.fill",
+                        fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock" : "bag",
                         cornerRadius: 0
                     )
-                        .frame(height: 180)
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+                    .background(Color(.systemGray6))
 
-                    // Wishlist heart
-                    VStack {
+                    // Limited badge at bottom-left
+                    if product.isLimitedEdition {
                         HStack {
+                            Text("LIMITED")
+                                .font(.system(size: 7, weight: .bold))
+                                .tracking(1.5)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(AppColors.accent)
                             Spacer()
-                            Button(action: {
-                                product.isWishlisted.toggle()
-                                try? modelContext.save()
-                            }) {
-                                Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
-                                    .font(AppTypography.heartIconSmall)
-                                    .foregroundColor(product.isWishlisted ? AppColors.error : AppColors.textPrimaryDark)
-                                    .padding(8)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Circle())
-                            }
                         }
-                        Spacer()
+                    }
+                }
+                .overlay(alignment: .topTrailing) {
+                    // Wishlist button — top-right
+                    Button(action: {
+                        product.isWishlisted.toggle()
+                        try? modelContext.save()
+                    }) {
+                        Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
+                            .font(.system(size: 13, weight: .light))
+                            .foregroundColor(product.isWishlisted ? AppColors.accent : .black)
+                            .padding(9)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
                     }
                     .padding(8)
-
-                    // Limited edition badge
-                    if product.isLimitedEdition {
-                        VStack {
-                            Spacer()
-                            HStack {
-                                Text("LIMITED")
-                                    .font(AppTypography.overline)
-                                    .tracking(1)
-                                    .foregroundColor(AppColors.textPrimaryLight)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(AppColors.accent)
-                                    .cornerRadius(4)
-                                Spacer()
-                            }
-                            .padding(8)
-                        }
-                    }
                 }
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: AppSpacing.radiusLarge,
-                        bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: AppSpacing.radiusLarge
-                    )
-                )
-
-                // Details
-                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                    Text(product.brand.uppercased())
-                        .font(AppTypography.overline)
-                        .tracking(1)
-                        .foregroundColor(AppColors.accent)
-
-                    Text(product.name)
-                        .font(AppTypography.label)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                        .lineLimit(1)
-
-                    Text(product.formattedPrice)
-                        .font(AppTypography.priceSmall)
-                        .foregroundColor(AppColors.textSecondaryDark)
-                }
-                .padding(AppSpacing.sm)
             }
+            .aspectRatio(3/4, contentMode: .fit)   // ← fixed ratio: all tiles identical
+
+            // Info block — fixed height so text rows align across columns
+            VStack(alignment: .leading, spacing: 3) {
+                Text(product.brand.uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+                Text(product.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.black)
+                    .lineLimit(1)
+                Text(product.formattedPrice)
+                    .font(.system(size: 13, weight: .light))
+                    .foregroundColor(.black.opacity(0.55))
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white)
         }
+        .background(Color.white)
     }
 }
 

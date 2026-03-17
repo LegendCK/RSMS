@@ -1,8 +1,8 @@
 //
 //  OnboardingView.swift
-//  infosys2
+//  RSMS
 //
-//  Onboarding pager with 3 luxury-themed pages, skip, and get started.
+//  Dark luxury onboarding — centered icon glow, bold title, pill dots, Continue button.
 //
 
 import SwiftUI
@@ -26,75 +26,159 @@ struct OnboardingView: View {
         ),
         OnboardingPageData(
             icon: "calendar.badge.clock",
-            title: "Book Appointments & Manage Orders",
-            subtitle: "Schedule private viewings and track your orders with white-glove service.",
+            title: "White-Glove Service",
+            subtitle: "Schedule private viewings and track your orders with dedicated concierge service.",
             accentDetail: "Services"
         )
     ]
 
     var body: some View {
         ZStack {
-            AppColors.backgroundPrimary
-                .ignoresSafeArea()
+            Color(hex: "0D0D0D").ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Top bar with Skip
+                // Skip button
                 HStack {
                     Spacer()
                     if currentPage < pages.count - 1 {
                         Button(action: { appState.completeOnboarding() }) {
                             Text("Skip")
-                                .font(AppTypography.bodyMedium)
-                                .foregroundColor(AppColors.textSecondaryDark)
+                                .font(.system(size: 13, weight: .light))
+                                .foregroundColor(.white.opacity(0.4))
+                                .padding(.trailing, 24)
+                                .padding(.top, 20)
                         }
                     }
                 }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
-                .padding(.top, AppSpacing.md)
-                .frame(height: 44)
+                .frame(height: 60)
 
                 // Pages
                 TabView(selection: $currentPage) {
                     ForEach(0..<pages.count, id: \.self) { index in
-                        OnboardingPageView(data: pages[index])
+                        pageContent(pages[index])
                             .tag(index)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(.easeInOut, value: currentPage)
 
-                // Custom page indicators + button
-                VStack(spacing: AppSpacing.xl) {
-                    // Page dots
-                    HStack(spacing: AppSpacing.xs) {
+                // Bottom controls
+                VStack(spacing: 28) {
+                    // Pill dots
+                    HStack(spacing: 6) {
                         ForEach(0..<pages.count, id: \.self) { index in
                             Capsule()
-                                .fill(index == currentPage ? AppColors.accent : AppColors.neutral700)
-                                .frame(width: index == currentPage ? 24 : 8, height: 8)
+                                .fill(index == currentPage ? AppColors.accent : Color.white.opacity(0.2))
+                                .frame(width: index == currentPage ? 24 : 6, height: 6)
                                 .animation(.easeInOut(duration: 0.3), value: currentPage)
                         }
                     }
 
                     // Action button
                     if currentPage == pages.count - 1 {
-                        PrimaryButton(title: "Get Started") {
-                            appState.completeOnboarding()
+                        Button(action: { appState.completeOnboarding() }) {
+                            Text("GET STARTED")
+                                .font(.system(size: 14, weight: .semibold))
+                                .tracking(3)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 54)
+                                .background(AppColors.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                        .padding(.horizontal, 28)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                     } else {
-                        SecondaryButton(title: "Next") {
-                            withAnimation {
-                                currentPage += 1
-                            }
+                        Button(action: { withAnimation { currentPage += 1 } }) {
+                            Text("CONTINUE")
+                                .font(.system(size: 14, weight: .semibold))
+                                .tracking(3)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 54)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .strokeBorder(Color.white.opacity(0.35), lineWidth: 1.5)
+                                )
                         }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                        .padding(.horizontal, 28)
                         .transition(.opacity)
                     }
                 }
-                .padding(.bottom, AppSpacing.xxxl)
+                .padding(.bottom, 52)
                 .animation(.easeInOut, value: currentPage)
             }
+        }
+    }
+
+    private func pageContent(_ data: OnboardingPageData) -> some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            // Icon with glow rings
+            ZStack {
+                // Outer glow
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [AppColors.accent.opacity(0.18), Color.clear],
+                            center: .center,
+                            startRadius: 30,
+                            endRadius: 130
+                        )
+                    )
+                    .frame(width: 260, height: 260)
+
+                // Decorative rings
+                Circle()
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                    .frame(width: 200, height: 200)
+
+                Circle()
+                    .stroke(AppColors.accent.opacity(0.25), lineWidth: 1)
+                    .frame(width: 150, height: 150)
+
+                Circle()
+                    .stroke(AppColors.accent.opacity(0.5), lineWidth: 1)
+                    .frame(width: 110, height: 110)
+
+                // Icon
+                Image(systemName: data.icon)
+                    .font(.system(size: 54, weight: .light))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [AppColors.accent, AppColors.accent.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+
+            Spacer().frame(height: 52)
+
+            // Text — left aligned
+            VStack(alignment: .leading, spacing: 10) {
+                Text(data.accentDetail.uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(4)
+                    .foregroundColor(AppColors.accent)
+
+                Text(data.title)
+                    .font(.system(size: 32, weight: .black))
+                    .foregroundColor(.white)
+                    .lineSpacing(3)
+
+                Text(data.subtitle)
+                    .font(.system(size: 15, weight: .light))
+                    .foregroundColor(.white.opacity(0.55))
+                    .lineSpacing(5)
+                    .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 32)
+
+            Spacer()
+            Spacer()
         }
     }
 }

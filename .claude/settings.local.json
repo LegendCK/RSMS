@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /Users/ekanshjindal/Internship/Infosys/RSMS-3/RSMS/**/*.swift)",
+      "Bash(xargs ls:*)"
+    ]
+  }
+}

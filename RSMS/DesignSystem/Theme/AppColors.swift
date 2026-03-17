@@ -24,6 +24,17 @@ struct AppColors {
     /// Deeper maroon for contrast
     static let accentDark = Color(hex: "600000")
 
+    // MARK: - Luxury Silver Accents
+
+    /// Silverish-white — luxury surface tint
+    static let silver = Color(hex: "E8E8E8")
+
+    /// Platinum — premium metallic reference
+    static let platinum = Color(hex: "F0EFED")
+
+    /// Pearl — ultra-light warm silver for cards
+    static let pearl = Color(hex: "F8F7F5")
+
     // MARK: - Secondary Brand Colors
 
     /// Dark gray — secondary accent

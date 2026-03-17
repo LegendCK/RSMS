@@ -17,23 +17,21 @@ struct PrimaryButton: View {
             HStack(spacing: AppSpacing.xs) {
                 if isLoading {
                     ProgressView()
-                        .tint(AppColors.textPrimaryLight)
-                        .scaleEffect(0.8)
+                        .tint(.white)
+                        .scaleEffect(0.85)
                 }
                 Text(title.uppercased())
-                    .font(AppTypography.buttonPrimary)
-                    .tracking(1.5)
+                    .font(.system(size: 14, weight: .semibold))
+                    .tracking(2)
             }
             .frame(maxWidth: .infinity)
             .frame(height: AppSpacing.touchTarget + 8)
-            .foregroundColor(AppColors.textPrimaryLight)
+            .foregroundColor(.white)
             .background(AppColors.accent)
-            .clipShape(Capsule())
-            .liquidShadow(LiquidShadow.subtle)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .disabled(isLoading)
-        .opacity(isLoading ? 0.8 : 1.0)
-        .scaleEffect(isLoading ? 0.99 : 1.0)
+        .opacity(isLoading ? 0.7 : 1.0)
     }
 }
 

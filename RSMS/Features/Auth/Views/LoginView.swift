@@ -1,8 +1,8 @@
 //
 //  LoginView.swift
-//  infosys2
+//  RSMS
 //
-//  Premium login screen with luxury branding.
+//  Editorial luxury login — Zara/H&M inspired black & maroon.
 //
 
 import SwiftUI
@@ -18,142 +18,132 @@ struct LoginView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppColors.backgroundPrimary
-                    .ignoresSafeArea()
+                Color.white.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        // Brand header
-                        VStack(spacing: AppSpacing.sm) {
-                            Image(systemName: "diamond.fill")
-                                .font(AppTypography.brandIcon)
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [AppColors.accent, AppColors.accentLight],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
 
-                            Text("MAISON LUXE")
-                                .font(AppTypography.heading2)
-                                .tracking(6)
-                                .foregroundColor(AppColors.textPrimaryDark)
-                        }
-                        .padding(.top, AppSpacing.hero)
-                        .padding(.bottom, AppSpacing.xxxl)
+                        // Black editorial top band
+                        ZStack(alignment: .bottomLeading) {
+                            Rectangle()
+                                .fill(Color.black)
+                                .frame(height: 220)
 
-                        // Welcome text
-                        VStack(spacing: AppSpacing.xs) {
-                            Text("Welcome Back")
-                                .font(AppTypography.displaySmall)
-                                .foregroundColor(AppColors.textPrimaryDark)
-
-                            Text("Sign in to your account")
-                                .font(AppTypography.bodyMedium)
-                                .foregroundColor(AppColors.textSecondaryDark)
-                        }
-                        .padding(.bottom, AppSpacing.xxxl)
-
-                        // Input fields
-                        VStack(spacing: AppSpacing.xl) {
-                            LuxuryTextField(
-                                placeholder: "Email",
-                                text: $viewModel.loginEmail,
-                                icon: "envelope"
-                            )
-                            .keyboardType(.emailAddress)
-
-                            LuxuryTextField(
-                                placeholder: "Password",
-                                text: $viewModel.loginPassword,
-                                isSecure: true,
-                                icon: "lock"
-                            )
-                        }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-
-                        // Forgot password
-                        HStack {
-                            Spacer()
-                            Button(action: { showForgotPassword = true }) {
-                                Text("Forgot Password?")
-                                    .font(AppTypography.bodySmall)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("MAISON LUXE")
+                                    .font(.system(size: 10, weight: .black))
+                                    .tracking(6)
                                     .foregroundColor(AppColors.accent)
+                                Text("Welcome\nBack.")
+                                    .font(.system(size: 40, weight: .black))
+                                    .foregroundColor(.white)
+                                    .lineSpacing(2)
                             }
+                            .padding(.horizontal, 28)
+                            .padding(.bottom, 28)
                         }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-                        .padding(.top, AppSpacing.md)
+                        .frame(height: 220)
 
-                        // Login button
-                        PrimaryButton(
-                            title: "Sign In",
-                            isLoading: viewModel.isLoading
-                        ) {
-                            viewModel.login(appState: appState)
-                        }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-                        .padding(.top, AppSpacing.xxl)
+                        // Form area
+                        VStack(spacing: 0) {
+                            VStack(spacing: AppSpacing.xl) {
+                                LuxuryTextField(
+                                    placeholder: "Email",
+                                    text: $viewModel.loginEmail,
+                                    icon: "envelope"
+                                )
+                                .keyboardType(.emailAddress)
 
-                        // Divider
-                        HStack(spacing: AppSpacing.md) {
-                            GoldDivider(opacity: 0.2)
-                            Text("OR")
-                                .font(AppTypography.caption)
-                                .tracking(2)
-                                .foregroundColor(AppColors.neutral500)
-                            GoldDivider(opacity: 0.2)
-                        }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-                        .padding(.vertical, AppSpacing.xl)
-
-                        // Sign up link
-                        VStack(spacing: AppSpacing.xs) {
-                            Text("New to Maison Luxe?")
-                                .font(AppTypography.bodySmall)
-                                .foregroundColor(AppColors.textSecondaryDark)
-
-                            SecondaryButton(title: "Create Account") {
-                                showSignUp = true
+                                LuxuryTextField(
+                                    placeholder: "Password",
+                                    text: $viewModel.loginPassword,
+                                    isSecure: true,
+                                    icon: "lock"
+                                )
                             }
-                            .padding(.horizontal, AppSpacing.screenHorizontal)
-                        }
+                            .padding(.horizontal, 24)
+                            .padding(.top, 36)
 
-                        // Guest access
-                        VStack(spacing: AppSpacing.xs) {
+                            // Forgot password
+                            HStack {
+                                Spacer()
+                                Button(action: { showForgotPassword = true }) {
+                                    Text("Forgot Password?")
+                                        .font(.system(size: 13, weight: .light))
+                                        .foregroundColor(AppColors.accent)
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.top, 12)
+
+                            // Sign in button — maroon, iOS-native rounded
+                            Button(action: { viewModel.login(appState: appState) }) {
+                                HStack {
+                                    if viewModel.isLoading {
+                                        ProgressView().tint(.white)
+                                    } else {
+                                        Text("SIGN IN")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .tracking(2)
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 52)
+                                .background(AppColors.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.top, 28)
+
+                            // Divider
                             HStack(spacing: AppSpacing.md) {
-                                GoldDivider(opacity: 0.15)
+                                Rectangle().fill(Color.black.opacity(0.1)).frame(height: 1)
                                 Text("OR")
-                                    .font(AppTypography.caption)
+                                    .font(.system(size: 10, weight: .medium))
                                     .tracking(2)
-                                    .foregroundColor(AppColors.neutral500)
-                                GoldDivider(opacity: 0.15)
+                                    .foregroundColor(.black.opacity(0.3))
+                                Rectangle().fill(Color.black.opacity(0.1)).frame(height: 1)
                             }
-                            .padding(.horizontal, AppSpacing.screenHorizontal)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 24)
 
+                            // Create account — maroon outlined, iOS-native rounded
+                            Button(action: { showSignUp = true }) {
+                                Text("CREATE ACCOUNT")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .tracking(2)
+                                    .foregroundColor(AppColors.accent)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 52)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .strokeBorder(AppColors.accent, lineWidth: 1.5)
+                                    )
+                            }
+                            .padding(.horizontal, 24)
+
+                            // Guest access
                             Button(action: { Task { await appState.continueAsGuest() } }) {
                                 Text("Browse as Guest")
-                                    .font(AppTypography.bodySmall)
-                                    .foregroundColor(AppColors.textSecondaryDark)
+                                    .font(.system(size: 13, weight: .light))
+                                    .foregroundColor(.black.opacity(0.45))
                                     .underline()
                             }
-                        }
-                        .padding(.top, AppSpacing.lg)
+                            .padding(.top, 20)
 
-                        // Staff note
-                        Text("Staff accounts are provisioned by management")
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.neutral600)
-                            .padding(.top, AppSpacing.lg)
-                            .padding(.bottom, AppSpacing.xxl)
+                            Text("Staff accounts are provisioned by management")
+                                .font(.system(size: 11, weight: .light))
+                                .foregroundColor(.black.opacity(0.3))
+                                .padding(.top, 16)
+                                .padding(.bottom, 48)
+                        }
                     }
                 }
                 .opacity(contentOpacity)
             }
             .onAppear {
-                withAnimation(.easeIn(duration: 0.6)) {
-                    contentOpacity = 1
-                }
+                withAnimation(.easeIn(duration: 0.5)) { contentOpacity = 1 }
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) { }
