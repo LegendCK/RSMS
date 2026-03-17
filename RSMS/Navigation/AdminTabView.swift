@@ -1,9 +1,9 @@
 //
 //  AdminTabView.swift
-//  infosys2
+//  RSMS
 //
-//  Corporate Admin enterprise tab bar — 5 scalable modules.
-//  Dashboard | Operations | Catalog | Organization | Insights
+//  Corporate Admin — 4 tab bar modules.
+//  Dashboard | Catalog | Operations | Profile
 //
 
 import SwiftUI
@@ -18,44 +18,38 @@ struct AdminTabView: View {
                 .ignoresSafeArea()
 
             TabView(selection: $selectedTab) {
-                AdminDashboardView()
+                NavigationStack { AdminDashboardView() }
                     .tabItem {
                         Image(systemName: selectedTab == 0 ? "square.grid.2x2.fill" : "square.grid.2x2")
                         Text("Dashboard")
                     }
                     .tag(0)
 
-                OperationsView()
+                NavigationStack { CatalogView() }
                     .tabItem {
-                        Image(systemName: selectedTab == 1 ? "shippingbox.fill" : "shippingbox")
-                        Text("Operations")
+                        Image(systemName: selectedTab == 1 ? "tag.fill" : "tag")
+                        Text("Catalog")
                     }
                     .tag(1)
 
-                CatalogView()
+                NavigationStack { OperationsView() }
                     .tabItem {
-                        Image(systemName: selectedTab == 2 ? "tag.fill" : "tag")
-                        Text("Catalog")
+                        Image(systemName: selectedTab == 2 ? "shippingbox.fill" : "shippingbox")
+                        Text("Operations")
                     }
                     .tag(2)
 
-                OrganizationView()
+                NavigationStack { AdminProfileView() }
                     .tabItem {
-                        Image(systemName: selectedTab == 3 ? "building.2.fill" : "building.2")
-                        Text("Organization")
+                        Image(systemName: selectedTab == 3 ? "person.fill" : "person")
+                        Text("Profile")
                     }
                     .tag(3)
-
-                InsightsView()
-                    .tabItem {
-                        Image(systemName: selectedTab == 4 ? "chart.bar.fill" : "chart.bar")
-                        Text("Insights")
-                    }
-                    .tag(4)
             }
             .tint(AppColors.accent)
             .tabBarMinimizeBehavior(.onScrollDown)
             .toolbarColorScheme(.dark, for: .tabBar)
+            .toolbar(removing: .sidebarToggle)
             .modifier(AppleMusicTabBarModifier())
         }
     }

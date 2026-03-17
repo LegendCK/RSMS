@@ -1,8 +1,8 @@
 //
 //  ForgotPasswordView.swift
-//  infosys2
+//  RSMS
 //
-//  Password reset flow with email input.
+//  Password reset — clean white, matching login/signup aesthetic.
 //
 
 import SwiftUI
@@ -14,65 +14,88 @@ struct ForgotPasswordView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppColors.backgroundPrimary
-                    .ignoresSafeArea()
+                Color.white.ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    Spacer()
-                        .frame(height: AppSpacing.hero)
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
 
-                    // Icon
-                    // Icon
-                    ZStack {
-                        Circle()
-                            .stroke(AppColors.secondary.opacity(0.2), lineWidth: 1)
-                            .frame(width: 100, height: 100)
+                        // ── Brand Mark ──────────────────────────────
+                        VStack(spacing: 10) {
+                            Image(systemName: "diamond.fill")
+                                .font(.system(size: 38, weight: .regular))
+                                .foregroundColor(AppColors.accent)
+                            Text("MAISON LUXE")
+                                .font(.system(size: 15, weight: .semibold))
+                                .tracking(6)
+                                .foregroundColor(.black)
+                        }
+                        .padding(.top, 72)
+                        .padding(.bottom, 36)
 
-                        Circle()
-                            .stroke(AppColors.accent.opacity(0.3), lineWidth: 1)
-                            .frame(width: 80, height: 80)
+                        // ── Icon ────────────────────────────────────
+                        ZStack {
+                            Circle()
+                                .fill(AppColors.accent.opacity(0.07))
+                                .frame(width: 90, height: 90)
+                            Image(systemName: "key.viewfinder")
+                                .font(.system(size: 40, weight: .ultraLight))
+                                .foregroundColor(AppColors.accent)
+                        }
+                        .padding(.bottom, 28)
 
-                        Image(systemName: "key.fill")
-                            .font(AppTypography.keyIcon)
-                            .foregroundColor(AppColors.accent)
-                            .rotationEffect(.degrees(-45))
+                        // ── Title ────────────────────────────────────
+                        VStack(spacing: 8) {
+                            Text("Forgot Password?")
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(.black)
+                            Text("Enter your email and we'll send\na secure reset link.")
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(3)
+                        }
+                        .padding(.bottom, 44)
+
+                        // ── Email Field ──────────────────────────────
+                        authUnderlineField(
+                            placeholder: "Email Address",
+                            text: $viewModel.resetEmail,
+                            icon: "envelope",
+                            keyboardType: .emailAddress
+                        )
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 36)
+
+                        // ── Send Button ──────────────────────────────
+                        VStack(spacing: 20) {
+                            Button {
+                                viewModel.resetPassword()
+                            } label: {
+                                Group {
+                                    if viewModel.isLoading {
+                                        ProgressView().tint(.white)
+                                    } else {
+                                        Text("SEND RESET LINK")
+                                            .font(.system(size: 15, weight: .bold))
+                                            .tracking(2)
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 56)
+                                .background(AppColors.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+                            .disabled(viewModel.isLoading)
+
+                            Button("Back to Sign In") { dismiss() }
+                                .font(.system(size: 14, weight: .regular))
+                                .underline()
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 60)
                     }
-                    .padding(.bottom, AppSpacing.xl)
-
-                    // Header
-                    VStack(spacing: AppSpacing.xs) {
-                        Text("Reset Password")
-                            .font(AppTypography.displaySmall)
-                            .foregroundColor(AppColors.textPrimaryDark)
-
-                        Text("Enter your email and we'll send you\na link to reset your password")
-                            .font(AppTypography.bodyMedium)
-                            .foregroundColor(AppColors.textSecondaryDark)
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(4)
-                    }
-                    .padding(.bottom, AppSpacing.xxxl)
-
-                    // Email field
-                    LuxuryTextField(
-                        placeholder: "Email Address",
-                        text: $viewModel.resetEmail,
-                        icon: "envelope"
-                    )
-                    .keyboardType(.emailAddress)
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
-
-                    // Reset button
-                    PrimaryButton(
-                        title: "Send Reset Link",
-                        isLoading: viewModel.isLoading
-                    ) {
-                        viewModel.resetPassword()
-                    }
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
-                    .padding(.top, AppSpacing.xxl)
-
-                    Spacer()
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -80,12 +103,12 @@ struct ForgotPasswordView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark")
-                            .font(AppTypography.closeButton)
-                            .foregroundColor(AppColors.textPrimaryDark)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
                     }
                 }
             }
-            .alert("Success", isPresented: $viewModel.showResetSuccess) {
+            .alert("Reset Link Sent", isPresented: $viewModel.showResetSuccess) {
                 Button("OK") { dismiss() }
             } message: {
                 Text("A password reset link has been sent to your email address.")

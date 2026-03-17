@@ -1,10 +1,9 @@
 //
 //  ManagerDashboardView.swift
-//  infosys2
+//  RSMS
 //
 //  Boutique Manager store command center.
-//  Store KPIs, daily sales, top products, staff on duty, alerts, quick actions.
-//  Profile/Settings via nav bar avatar (sheet).
+//  Maroon gradient header, KPIs, alerts, top sellers, staff, quick actions.
 //
 
 import SwiftUI
@@ -16,7 +15,6 @@ struct ManagerDashboardView: View {
     @Query private var allUsers: [User]
     @State private var showProfile = false
 
-    // Store-scoped metrics (simulated — in production these would filter by store)
     private var storeStaff: [User] {
         allUsers.filter { $0.role == .salesAssociate || $0.role == .inventoryController }
     }
@@ -26,11 +24,19 @@ struct ManagerDashboardView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary.ignoresSafeArea()
+            ZStack(alignment: .top) {
+                Color(.systemGroupedBackground).ignoresSafeArea()
+
+                // Maroon top glow
+                LinearGradient(
+                    colors: [AppColors.accent.opacity(0.13), Color.clear],
+                    startPoint: .top,
+                    endPoint: .init(x: 0.5, y: 0.22)
+                )
+                .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppSpacing.xxl) {
+                    VStack(spacing: 24) {
                         storeHeader
                         dailySalesStrip
                         kpiGrid
@@ -38,36 +44,39 @@ struct ManagerDashboardView: View {
                         topProductsSection
                         staffOnDutySection
                         quickActionsGrid
-                        Spacer().frame(height: AppSpacing.xxxl)
+                        Spacer().frame(height: 40)
                     }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("Dashboard")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("MAISON LUXE")
+                        .font(.system(size: 12, weight: .black))
+                        .tracking(4)
+                        .foregroundColor(.primary)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: AppSpacing.sm) {
+                    HStack(spacing: 14) {
                         Button(action: {}) {
                             Image(systemName: "bell.badge")
-                                .font(AppTypography.bellIcon)
-                                .foregroundColor(AppColors.textPrimaryDark)
+                                .font(.system(size: 16, weight: .light))
+                                .foregroundColor(.primary)
                         }
                         Button(action: { showProfile = true }) {
                             ZStack {
-                                Circle().fill(AppColors.backgroundTertiary).frame(width: 30, height: 30)
-                                Text(managerInitials).font(AppTypography.avatarSmall).foregroundColor(AppColors.secondary)
+                                Circle()
+                                    .fill(AppColors.accent.opacity(0.12))
+                                    .frame(width: 30, height: 30)
+                                Text(managerInitials)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(AppColors.accent)
                             }
                         }
                     }
                 }
             }
-            .sheet(isPresented: $showProfile) {
-                ManagerProfileView()
-            }
+            .sheet(isPresented: $showProfile) { ManagerProfileView() }
         }
     }
 
@@ -79,23 +88,21 @@ struct ManagerDashboardView: View {
     // MARK: - Store Header
 
     private var storeHeader: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                Text("Good \(greeting),")
-                    .font(AppTypography.bodyMedium).foregroundColor(AppColors.textSecondaryDark)
-                Text(appState.currentUserName.split(separator: " ").first.map(String.init) ?? "Manager")
-                    .font(AppTypography.displaySmall).foregroundColor(AppColors.textPrimaryDark)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("BOUTIQUE MANAGER")
-                    .font(AppTypography.overline).tracking(2).foregroundColor(AppColors.secondary)
-                Text(Date(), style: .date)
-                    .font(AppTypography.caption).foregroundColor(AppColors.neutral500)
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            Text("GOOD \(greeting.uppercased())")
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(3)
+                .foregroundColor(AppColors.accent)
+            Text(appState.currentUserName.split(separator: " ").first.map(String.init) ?? "Manager")
+                .font(.system(size: 34, weight: .black))
+                .foregroundColor(.primary)
+            Text(Date(), style: .date)
+                .font(.system(size: 12, weight: .light))
+                .foregroundColor(.secondary)
         }
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-        .padding(.top, AppSpacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
     }
 
     private var greeting: String {
@@ -106,45 +113,49 @@ struct ManagerDashboardView: View {
     // MARK: - Daily Sales Strip
 
     private var dailySalesStrip: some View {
-        VStack(spacing: AppSpacing.sm) {
-            sectionLabel("TODAY'S PERFORMANCE")
+        VStack(spacing: 10) {
+            sectionHeader("TODAY'S PERFORMANCE")
 
             HStack(spacing: 0) {
                 salesPill(value: "$42,800", label: "Today", icon: "dollarsign.circle.fill", color: AppColors.accent)
-                vertDivider
+                Rectangle().fill(Color(.systemGray5)).frame(width: 1, height: 40)
                 salesPill(value: "7", label: "Transactions", icon: "creditcard.fill", color: AppColors.secondary)
-                vertDivider
+                Rectangle().fill(Color(.systemGray5)).frame(width: 1, height: 40)
                 salesPill(value: "$6,114", label: "Avg. Ticket", icon: "chart.line.uptrend.xyaxis", color: AppColors.success)
             }
-            .background(AppColors.backgroundSecondary)
-            .cornerRadius(AppSpacing.radiusLarge)
-            .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge).stroke(AppColors.accent.opacity(0.2), lineWidth: 0.5))
-            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+            .padding(.horizontal, 20)
         }
     }
 
     private func salesPill(value: String, label: String, icon: String, color: Color) -> some View {
         VStack(spacing: 4) {
-            Image(systemName: icon).font(AppTypography.alertIcon).foregroundColor(color)
-            Text(value).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-            Text(label).font(AppTypography.micro).foregroundColor(AppColors.textSecondaryDark)
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .light))
+                .foregroundColor(color)
+            Text(value)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.primary)
+            Text(label)
+                .font(.system(size: 10, weight: .light))
+                .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, AppSpacing.md)
-    }
-
-    private var vertDivider: some View {
-        Rectangle().fill(AppColors.border).frame(width: 0.5, height: 40)
+        .padding(.vertical, 14)
     }
 
     // MARK: - KPI Grid
 
     private var kpiGrid: some View {
-        VStack(spacing: AppSpacing.sm) {
-            sectionLabel("STORE OVERVIEW")
+        VStack(spacing: 10) {
+            sectionHeader("STORE OVERVIEW")
 
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: AppSpacing.sm),
-                                GridItem(.flexible(), spacing: AppSpacing.sm)], spacing: AppSpacing.sm) {
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                spacing: 12
+            ) {
                 kpiCard(icon: "chart.bar.fill", iconColor: AppColors.accent,
                         value: "$248K", label: "MTD Revenue", badge: "+8.2%", positive: true)
                 kpiCard(icon: "person.2.fill", iconColor: AppColors.secondary,
@@ -154,43 +165,56 @@ struct ManagerDashboardView: View {
                 kpiCard(icon: "exclamationmark.triangle.fill", iconColor: AppColors.warning,
                         value: "\(lowStockCount)", label: "Low Stock", badge: "\(outOfStockCount) out", positive: false)
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.horizontal, 20)
         }
     }
 
     private func kpiCard(icon: String, iconColor: Color, value: String, label: String, badge: String, positive: Bool) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: icon).font(AppTypography.iconSmall).foregroundColor(iconColor)
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .ultraLight))
+                    .foregroundColor(iconColor)
                 Spacer()
-                Text(badge).font(AppTypography.micro)
+                Text(badge)
+                    .font(.system(size: 9, weight: .medium))
                     .foregroundColor(positive ? AppColors.success : AppColors.warning)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background((positive ? AppColors.success : AppColors.warning).opacity(0.12))
-                    .cornerRadius(4)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background((positive ? AppColors.success : AppColors.warning).opacity(0.1))
+                    .clipShape(Capsule())
             }
-            Text(value).font(AppTypography.heading1).foregroundColor(AppColors.textPrimaryDark)
-            Text(label).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+            Text(value)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.primary)
+            Text(label)
+                .font(.system(size: 11, weight: .light))
+                .foregroundColor(.secondary)
         }
-        .padding(AppSpacing.sm)
-        .background(AppColors.backgroundSecondary)
-        .cornerRadius(AppSpacing.radiusMedium)
-        .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium).stroke(AppColors.border, lineWidth: 0.5))
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - Alerts
 
     private var alertsSection: some View {
-        VStack(spacing: AppSpacing.sm) {
+        VStack(spacing: 10) {
             HStack {
-                sectionLabel("ALERTS")
+                sectionHeader("ALERTS")
                 Spacer()
-                Text("3").font(AppTypography.trendBadge).foregroundColor(AppColors.textPrimaryLight)
-                    .padding(.horizontal, 7).padding(.vertical, 3).background(AppColors.warning).cornerRadius(10)
+                Text("3")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(AppColors.warning)
+                    .clipShape(Capsule())
+                    .padding(.trailing, 20)
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
 
-            VStack(spacing: AppSpacing.xs) {
+            VStack(spacing: 10) {
                 alertRow(icon: "exclamationmark.triangle.fill", color: AppColors.error,
                          title: "Heritage Bag — 1 unit", detail: "Reorder or request transfer", time: "15m")
                 alertRow(icon: "doc.text.fill", color: AppColors.warning,
@@ -198,84 +222,132 @@ struct ManagerDashboardView: View {
                 alertRow(icon: "calendar.badge.clock", color: AppColors.info,
                          title: "VIP Appointment", detail: "Mrs. Chen — 3:00 PM private viewing", time: "in 2h")
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.horizontal, 20)
         }
     }
 
     private func alertRow(icon: String, color: Color, title: String, detail: String, time: String) -> some View {
-        HStack(spacing: AppSpacing.sm) {
-            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 3, height: 40)
-            Image(systemName: icon).font(AppTypography.alertIcon).foregroundColor(color).frame(width: 24)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark).lineLimit(1)
-                Text(detail).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark).lineLimit(1)
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(color)
+                .frame(width: 3, height: 40)
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(color)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                Text(detail)
+                    .font(.system(size: 11, weight: .light))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
             }
             Spacer()
-            Text(time).font(AppTypography.micro).foregroundColor(AppColors.neutral500)
+            Text(time)
+                .font(.system(size: 10, weight: .light))
+                .foregroundColor(.secondary)
         }
-        .padding(.horizontal, AppSpacing.sm).padding(.vertical, AppSpacing.xs)
-        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - Top Products
 
     private var topProductsSection: some View {
-        VStack(spacing: AppSpacing.sm) {
+        VStack(spacing: 10) {
             HStack {
-                sectionLabel("TOP SELLERS TODAY")
+                sectionHeader("TOP SELLERS TODAY")
                 Spacer()
                 Button(action: {}) {
-                    Text("View All").font(AppTypography.caption).foregroundColor(AppColors.accent)
+                    HStack(spacing: 3) {
+                        Text("View All")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppColors.accent)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(AppColors.accent)
+                    }
                 }
+                .padding(.trailing, 20)
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppSpacing.sm) {
+                HStack(spacing: 12) {
                     ForEach(Array(allProducts.sorted { $0.price > $1.price }.prefix(5)), id: \.id) { product in
                         topProductCard(product)
                     }
                 }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.horizontal, 20)
             }
         }
     }
 
     private func topProductCard(_ product: Product) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+        VStack(alignment: .leading, spacing: 8) {
             ProductArtworkView(
                 imageSource: product.imageName,
-                fallbackSymbol: "bag.fill",
-                cornerRadius: AppSpacing.radiusMedium
+                fallbackSymbol: "bag",
+                cornerRadius: 10
             )
             .frame(width: 120, height: 90)
-            Text(product.name).font(AppTypography.caption).foregroundColor(AppColors.textPrimaryDark).lineLimit(1)
-            Text(product.formattedPrice).font(AppTypography.avatarSmall).foregroundColor(AppColors.accent)
+            .clipped()
+            .background(Color(.systemGray6))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            Text(product.name)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+            Text(product.formattedPrice)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(AppColors.accent)
         }
         .frame(width: 120)
+        .padding(10)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - Staff On Duty
 
     private var staffOnDutySection: some View {
-        VStack(spacing: AppSpacing.sm) {
-            sectionLabel("STAFF ON DUTY")
+        VStack(spacing: 10) {
+            sectionHeader("STAFF ON DUTY")
 
-            HStack(spacing: AppSpacing.sm) {
+            HStack(spacing: 12) {
                 ForEach(storeStaff.prefix(4)) { user in
-                    VStack(spacing: 4) {
+                    VStack(spacing: 5) {
                         ZStack {
-                            Circle().fill(staffColor(user.role).opacity(0.15)).frame(width: 44, height: 44)
-                            Text(staffInitials(user.name)).font(AppTypography.avatarMedium).foregroundColor(staffColor(user.role))
+                            Circle()
+                                .fill(staffColor(user.role).opacity(0.12))
+                                .frame(width: 44, height: 44)
+                            Text(staffInitials(user.name))
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(staffColor(user.role))
                         }
-                        Text(user.name.split(separator: " ").first.map(String.init) ?? "").font(AppTypography.micro).foregroundColor(AppColors.textSecondaryDark)
+                        Text(user.name.split(separator: " ").first.map(String.init) ?? "")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.primary)
                         Text(user.role == .salesAssociate ? "Sales" : "Inv.")
-                            .font(AppTypography.nano).foregroundColor(staffColor(user.role))
+                            .font(.system(size: 9, weight: .light))
+                            .foregroundColor(staffColor(user.role))
                     }
                     .frame(maxWidth: .infinity)
                 }
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.vertical, 16)
+            .padding(.horizontal, 20)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+            .padding(.horizontal, 20)
         }
     }
 
@@ -283,7 +355,7 @@ struct ManagerDashboardView: View {
         switch role {
         case .salesAssociate: return AppColors.info
         case .inventoryController: return AppColors.success
-        default: return AppColors.neutral400
+        default: return .secondary
         }
     }
 
@@ -295,10 +367,10 @@ struct ManagerDashboardView: View {
     // MARK: - Quick Actions
 
     private var quickActionsGrid: some View {
-        VStack(spacing: AppSpacing.sm) {
-            sectionLabel("QUICK ACTIONS")
+        VStack(spacing: 10) {
+            sectionHeader("QUICK ACTIONS")
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: AppSpacing.sm) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 actionTile(icon: "checkmark.circle.fill", label: "Approve", color: AppColors.success)
                 actionTile(icon: "arrow.left.arrow.right", label: "Transfer", color: AppColors.info)
                 actionTile(icon: "calendar.badge.plus", label: "VIP Event", color: AppColors.secondary)
@@ -306,26 +378,38 @@ struct ManagerDashboardView: View {
                 actionTile(icon: "doc.text.fill", label: "Report", color: AppColors.warning)
                 actionTile(icon: "exclamationmark.bubble.fill", label: "Flag Item", color: AppColors.error)
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.horizontal, 20)
         }
     }
 
     private func actionTile(icon: String, label: String, color: Color) -> some View {
-        VStack(spacing: AppSpacing.xs) {
-            Image(systemName: icon).font(AppTypography.iconAction).foregroundColor(color)
-            Text(label).font(AppTypography.actionLink).foregroundColor(AppColors.textSecondaryDark)
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .ultraLight))
+                .foregroundColor(color)
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
         }
-        .frame(maxWidth: .infinity).frame(height: 72)
-        .background(AppColors.backgroundSecondary).cornerRadius(AppSpacing.radiusMedium)
-        .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium).stroke(AppColors.border, lineWidth: 0.5))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 80)
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - Helpers
 
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text).font(AppTypography.overline).tracking(2).foregroundColor(AppColors.accent)
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .tracking(3)
+            .foregroundColor(.primary.opacity(0.45))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.horizontal, 20)
     }
 }
 

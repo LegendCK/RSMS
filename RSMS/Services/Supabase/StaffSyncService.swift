@@ -124,7 +124,7 @@ final class StaffSyncService {
 
             // Restore admin session
             if let adminSession {
-                try? await client.auth.setSession(
+                _ = try? await client.auth.setSession(
                     accessToken: adminSession.accessToken,
                     refreshToken: adminSession.refreshToken
                 )
@@ -136,7 +136,7 @@ final class StaffSyncService {
 
         } catch {
             if let adminSession {
-                try? await client.auth.setSession(
+                _ = try? await client.auth.setSession(
                     accessToken: adminSession.accessToken,
                     refreshToken: adminSession.refreshToken
                 )

@@ -3,8 +3,7 @@
 //  RSMS
 //
 //  Corporate Admin enterprise command center.
-//  KPI metrics, system health, alerts, quick actions, activity feed.
-//  Profile/Settings accessible from nav bar avatar — not a separate tab.
+//  Maroon gradient header, KPI metrics, system health, alerts, quick actions, activity feed.
 //
 
 import SwiftUI
@@ -20,15 +19,11 @@ struct AdminDashboardView: View {
     @Query private var allCategories: [Category]
     @State private var showProfile = false
 
-    // Quick Action sheets
     @State private var showAddSKU = false
     @State private var showAddStaff = false
     @State private var showAddStore = false
 
-    // Haptic feedback
     private let impact = UIImpactFeedbackGenerator(style: .medium)
-
-    // MARK: - Computed Metrics
 
     private var staffCount: Int { allUsers.filter { $0.role != .customer }.count }
     private var lowStockCount: Int { allProducts.filter { $0.stockCount <= 3 }.count }
@@ -38,9 +33,16 @@ struct AdminDashboardView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
+            ZStack(alignment: .top) {
+                Color(.systemGroupedBackground).ignoresSafeArea()
+
+                // Maroon top glow
+                LinearGradient(
+                    colors: [AppColors.accent.opacity(0.13), Color.clear],
+                    startPoint: .top,
+                    endPoint: .init(x: 0.5, y: 0.22)
+                )
+                .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
@@ -57,42 +59,35 @@ struct AdminDashboardView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("Dashboard")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("MAISON LUXE")
+                        .font(.system(size: 12, weight: .black))
+                        .tracking(4)
+                        .foregroundColor(.primary)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: AppSpacing.sm) {
+                    HStack(spacing: 14) {
                         Button(action: {}) {
                             Image(systemName: "bell.badge")
-                                .font(AppTypography.bellIcon)
-                                .foregroundColor(AppColors.textPrimaryDark)
+                                .font(.system(size: 16, weight: .light))
+                                .foregroundColor(.primary)
                         }
                         Button(action: { showProfile = true }) {
                             ZStack {
                                 Circle()
-                                    .fill(AppColors.backgroundTertiary)
+                                    .fill(AppColors.accent.opacity(0.12))
                                     .frame(width: 30, height: 30)
                                 Text(adminInitials)
-                                    .font(AppTypography.avatarSmall)
+                                    .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(AppColors.accent)
                             }
                         }
                     }
                 }
             }
-            .sheet(isPresented: $showProfile) {
-                AdminProfileView()
-            }
-            .sheet(isPresented: $showAddSKU) {
-                CreateProductSheet(modelContext: modelContext, categories: allCategories)
-            }
-            .sheet(isPresented: $showAddStaff) {
-                CreateUserSheet(modelContext: modelContext)
-            }
-            .sheet(isPresented: $showAddStore) {
-                CreateStoreSheet()
-            }
+            .sheet(isPresented: $showProfile) { AdminProfileView() }
+            .sheet(isPresented: $showAddSKU) { CreateProductSheet(modelContext: modelContext, categories: allCategories) }
+            .sheet(isPresented: $showAddStaff) { CreateUserSheet(modelContext: modelContext) }
+            .sheet(isPresented: $showAddStore) { CreateStoreSheet() }
         }
     }
 
@@ -105,28 +100,21 @@ struct AdminDashboardView: View {
     // MARK: - Welcome Header
 
     private var welcomeHeader: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Good \(greeting),")
-                    .font(AppTypography.bodyMedium)
-                    .foregroundColor(AppColors.textSecondaryDark)
-                Text(appState.currentUserName.split(separator: " ").first.map(String.init) ?? "Admin")
-                    .font(AppTypography.displaySmall)
-                    .foregroundColor(AppColors.textPrimaryDark)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("CORPORATE ADMIN")
-                    .font(AppTypography.overline)
-                    .tracking(2)
-                    .foregroundColor(AppColors.accent)
-                Text(Date(), style: .date)
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.neutral500)
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            Text("GOOD \(greeting.uppercased())")
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(3)
+                .foregroundColor(AppColors.accent)
+            Text(appState.currentUserName.split(separator: " ").first.map(String.init) ?? "Admin")
+                .font(.system(size: 34, weight: .black))
+                .foregroundColor(.primary)
+            Text(Date(), style: .date)
+                .font(.system(size: 12, weight: .light))
+                .foregroundColor(.secondary)
         }
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-        .padding(.top, AppSpacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
     }
 
     private var greeting: String {
@@ -134,11 +122,11 @@ struct AdminDashboardView: View {
         return h < 12 ? "Morning" : h < 17 ? "Afternoon" : "Evening"
     }
 
-    // MARK: - Metrics Grid (3x2)
+    // MARK: - Metrics Grid
 
     private var metricsGrid: some View {
         VStack(spacing: 12) {
-            sectionLabel("KEY METRICS")
+            sectionHeader("KEY METRICS")
             LazyVGrid(
                 columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
                 spacing: 12
@@ -156,80 +144,52 @@ struct AdminDashboardView: View {
                 metricCard(icon: "cube.box.fill", iconColor: AppColors.secondaryLight,
                            value: "\(totalInventoryUnits)", label: "Total Units", badge: "\(limitedCount) limited", badgePositive: true)
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.horizontal, 20)
         }
     }
 
     private func metricCard(icon: String, iconColor: Color, value: String, label: String, badge: String, badgePositive: Bool) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(iconColor.opacity(0.12))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(iconColor)
-                }
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .ultraLight))
+                    .foregroundColor(iconColor)
                 Spacer()
                 Text(badge)
-                    .font(AppTypography.micro)
+                    .font(.system(size: 9, weight: .medium))
                     .foregroundColor(badgePositive ? AppColors.success : AppColors.warning)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background((badgePositive ? AppColors.success : AppColors.warning).opacity(0.12))
-                    .cornerRadius(4)
+                    .background((badgePositive ? AppColors.success : AppColors.warning).opacity(0.1))
+                    .clipShape(Capsule())
             }
             Text(value)
-                .font(AppTypography.heading1)
-                .foregroundColor(AppColors.textPrimaryDark)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.primary)
             Text(label)
-                .font(AppTypography.caption)
-                .foregroundColor(AppColors.textSecondaryDark)
+                .font(.system(size: 11, weight: .light))
+                .foregroundColor(.secondary)
         }
         .padding(14)
-        .background(
-            ZStack {
-                // Frosted glass base
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
-                // Subtle top highlight
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.7), Color.white.opacity(0.3)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.8), Color.white.opacity(0.2)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 4)
-        .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - System Health
 
     private var systemHealthBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                healthPill(icon: "checkmark.circle.fill", text: "API", color: AppColors.success)
-                healthPill(icon: "checkmark.circle.fill", text: "Database", color: AppColors.success)
-                healthPill(icon: "checkmark.circle.fill", text: "Payments", color: AppColors.success)
-                healthPill(icon: "exclamationmark.circle.fill", text: "Sync", color: AppColors.warning)
+        VStack(spacing: 10) {
+            sectionHeader("SYSTEM HEALTH")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    healthPill(icon: "checkmark.circle.fill", text: "API", color: AppColors.success)
+                    healthPill(icon: "checkmark.circle.fill", text: "Database", color: AppColors.success)
+                    healthPill(icon: "checkmark.circle.fill", text: "Payments", color: AppColors.success)
+                    healthPill(icon: "exclamationmark.circle.fill", text: "Sync", color: AppColors.warning)
+                }
+                .padding(.horizontal, 20)
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
         }
     }
 
@@ -239,18 +199,14 @@ struct AdminDashboardView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(color)
             Text(text)
-                .font(AppTypography.micro)
-                .foregroundColor(AppColors.textSecondaryDark)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.primary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(.ultraThinMaterial)
-        .overlay(
-            Capsule()
-                .stroke(Color.white.opacity(0.5), lineWidth: 0.8)
-        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color(.secondarySystemGroupedBackground))
         .clipShape(Capsule())
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - Alerts
@@ -258,16 +214,16 @@ struct AdminDashboardView: View {
     private var alertsSection: some View {
         VStack(spacing: 12) {
             HStack {
-                sectionLabel("ALERTS")
+                sectionHeader("ALERTS")
                 Spacer()
                 Text("3")
-                    .font(AppTypography.nano)
-                    .foregroundColor(AppColors.textPrimaryLight)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(AppColors.warning)
-                    .cornerRadius(10)
-                    .padding(.trailing, AppSpacing.screenHorizontal)
+                    .clipShape(Capsule())
+                    .padding(.trailing, 20)
             }
 
             VStack(spacing: 10) {
@@ -278,7 +234,7 @@ struct AdminDashboardView: View {
                 alertRow(icon: "person.badge.plus", color: AppColors.info,
                          title: "Access Request", detail: "Sophia Laurent requests catalog edit", time: "5h")
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.horizontal, 20)
         }
     }
 
@@ -286,77 +242,51 @@ struct AdminDashboardView: View {
         HStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(color)
-                .frame(width: 3, height: 44)
+                .frame(width: 3, height: 40)
 
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(color)
-                .frame(width: 24)
+                .frame(width: 22)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(AppTypography.label)
-                    .foregroundColor(AppColors.textPrimaryDark)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
                     .lineLimit(1)
                 Text(detail)
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.textSecondaryDark)
+                    .font(.system(size: 11, weight: .light))
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
             }
             Spacer()
             Text(time)
-                .font(AppTypography.micro)
-                .foregroundColor(AppColors.neutral500)
+                .font(.system(size: 10, weight: .light))
+                .foregroundColor(.secondary)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.65), Color.white.opacity(0.3)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.8), color.opacity(0.15)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
     }
 
-    // MARK: - Quick Actions (3x2)
+    // MARK: - Quick Actions
 
     private var quickActionsGrid: some View {
         VStack(spacing: 12) {
-            sectionLabel("QUICK ACTIONS")
+            sectionHeader("QUICK ACTIONS")
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
                       spacing: 12) {
                 actionTile(icon: "plus.square.fill", label: "Add SKU", color: AppColors.accent) {
-                    impact.impactOccurred()
-                    showAddSKU = true
+                    impact.impactOccurred(); showAddSKU = true
                 }
                 actionTile(icon: "person.badge.plus", label: "Add Staff", color: AppColors.secondary) {
-                    impact.impactOccurred()
-                    showAddStaff = true
+                    impact.impactOccurred(); showAddStaff = true
                 }
                 actionTile(icon: "building.2.fill", label: "Add Store", color: AppColors.info) {
-                    impact.impactOccurred()
-                    showAddStore = true
+                    impact.impactOccurred(); showAddStore = true
                 }
                 actionTile(icon: "arrow.left.arrow.right", label: "Transfer", color: AppColors.success) {
                     impact.impactOccurred()
@@ -368,60 +298,28 @@ struct AdminDashboardView: View {
                     impact.impactOccurred()
                 }
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.horizontal, 20)
         }
     }
 
     private func actionTile(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(color.opacity(0.14))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(color)
-                }
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .ultraLight))
+                    .foregroundColor(color)
                 Text(label)
-                    .font(AppTypography.actionLink)
-                    .foregroundColor(AppColors.textSecondaryDark)
-                    .multilineTextAlignment(.center)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.leading)
                     .lineLimit(2)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 88)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.75),
-                                    color.opacity(0.06),
-                                    Color.white.opacity(0.35)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.9), color.opacity(0.2)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
-            .shadow(color: color.opacity(0.12), radius: 10, x: 0, y: 4)
-            .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 80)
+            .padding(14)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
         }
         .buttonStyle(LiquidPressButtonStyle())
     }
@@ -431,53 +329,34 @@ struct AdminDashboardView: View {
     private var activityFeed: some View {
         VStack(spacing: 12) {
             HStack {
-                sectionLabel("ACTIVITY")
+                sectionHeader("ACTIVITY")
                 Spacer()
                 Button(action: {}) {
-                    Text("View All")
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.accent)
+                    HStack(spacing: 3) {
+                        Text("View All")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppColors.accent)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(AppColors.accent)
+                    }
                 }
-                .padding(.trailing, AppSpacing.screenHorizontal)
+                .padding(.trailing, 20)
             }
 
             VStack(spacing: 0) {
                 activityItem(action: "SKU Created", detail: "Artisan Timepiece — Limited Edition", by: "V. Sterling", time: "10m")
-                Divider().background(AppColors.border.opacity(0.4)).padding(.horizontal, 14)
+                Divider().padding(.horizontal, 14)
                 activityItem(action: "Price Override", detail: "Diamond Pendant — $15,800 → $16,200", by: "V. Sterling", time: "1h")
-                Divider().background(AppColors.border.opacity(0.4)).padding(.horizontal, 14)
+                Divider().padding(.horizontal, 14)
                 activityItem(action: "Staff Provisioned", detail: "Isabella Moreau → Sales Associate", by: "J. Beaumont", time: "3h")
-                Divider().background(AppColors.border.opacity(0.4)).padding(.horizontal, 14)
+                Divider().padding(.horizontal, 14)
                 activityItem(action: "Stock Transfer", detail: "Classic Flap Bag — NYC → Paris (2 units)", by: "D. Park", time: "6h")
             }
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.7), Color.white.opacity(0.4)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.9), Color.white.opacity(0.3)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .shadow(color: Color.black.opacity(0.06), radius: 14, x: 0, y: 5)
-            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+            .padding(.horizontal, 20)
         }
     }
 
@@ -495,20 +374,20 @@ struct AdminDashboardView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(action)
-                        .font(AppTypography.label)
-                        .foregroundColor(AppColors.textPrimaryDark)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.primary)
                     Spacer()
                     Text(time)
-                        .font(AppTypography.iconCompact)
-                        .foregroundColor(AppColors.neutral500)
+                        .font(.system(size: 10, weight: .light))
+                        .foregroundColor(.secondary)
                 }
                 Text(detail)
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.textSecondaryDark)
+                    .font(.system(size: 11, weight: .light))
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
-                Text(by)
-                    .font(AppTypography.micro)
-                    .foregroundColor(AppColors.secondary)
+                Text("by \(by)")
+                    .font(.system(size: 10, weight: .light))
+                    .foregroundColor(AppColors.accent.opacity(0.8))
             }
         }
         .padding(.horizontal, 14)
@@ -517,13 +396,13 @@ struct AdminDashboardView: View {
 
     // MARK: - Helpers
 
-    private func sectionLabel(_ text: String) -> some View {
+    private func sectionHeader(_ text: String) -> some View {
         Text(text)
-            .font(AppTypography.overline)
-            .tracking(2)
-            .foregroundColor(AppColors.accent)
+            .font(.system(size: 9, weight: .semibold))
+            .tracking(3)
+            .foregroundColor(.primary.opacity(0.45))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.horizontal, 20)
     }
 }
 
@@ -562,12 +441,10 @@ struct CreateStoreSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
+                Color(.systemGroupedBackground).ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppSpacing.xl) {
-                        // Header
+                    VStack(spacing: 24) {
                         VStack(spacing: 6) {
                             ZStack {
                                 Circle()
@@ -578,56 +455,53 @@ struct CreateStoreSheet: View {
                                     .foregroundColor(AppColors.info)
                             }
                             Text("Add New Store")
-                                .font(AppTypography.displaySmall)
-                                .foregroundColor(AppColors.textPrimaryDark)
+                                .font(.system(size: 24, weight: .black))
+                                .foregroundColor(.primary)
                             Text("Register a boutique or distribution center")
-                                .font(AppTypography.bodyMedium)
-                                .foregroundColor(AppColors.textSecondaryDark)
+                                .font(.system(size: 14, weight: .light))
+                                .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
                         }
-                        .padding(.top, AppSpacing.xl)
+                        .padding(.top, 24)
 
-                        // Type picker
-                        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        VStack(alignment: .leading, spacing: 10) {
                             Text("STORE TYPE")
-                                .font(AppTypography.overline)
-                                .tracking(2)
+                                .font(.system(size: 9, weight: .semibold))
+                                .tracking(3)
                                 .foregroundColor(AppColors.accent)
-                                .padding(.horizontal, AppSpacing.screenHorizontal)
+                                .padding(.horizontal, 20)
 
                             ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: AppSpacing.xs) {
+                                HStack(spacing: 8) {
                                     ForEach(StoreType.allCases, id: \.self) { type in
                                         Button(action: { storeType = type }) {
                                             Text(type.rawValue)
-                                                .font(AppTypography.caption)
-                                                .foregroundColor(storeType == type ? AppColors.textPrimaryLight : AppColors.textSecondaryDark)
-                                                .padding(.horizontal, AppSpacing.md)
-                                                .padding(.vertical, AppSpacing.xs)
-                                                .background(storeType == type ? AppColors.accent : AppColors.backgroundTertiary)
-                                                .cornerRadius(AppSpacing.radiusSmall)
+                                                .font(.system(size: 13, weight: storeType == type ? .semibold : .regular))
+                                                .foregroundColor(storeType == type ? .white : .primary)
+                                                .padding(.horizontal, 16)
+                                                .padding(.vertical, 9)
+                                                .background(storeType == type ? AppColors.accent : Color(.secondarySystemGroupedBackground))
+                                                .clipShape(Capsule())
+                                                .overlay(Capsule().strokeBorder(storeType == type ? Color.clear : Color(.systemGray4), lineWidth: 1))
                                         }
+                                        .buttonStyle(PlainButtonStyle())
                                     }
                                 }
-                                .padding(.horizontal, AppSpacing.screenHorizontal)
+                                .padding(.horizontal, 20)
                             }
                         }
 
-                        // Fields
-                        VStack(spacing: AppSpacing.lg) {
+                        VStack(spacing: 16) {
                             LuxuryTextField(placeholder: "Store Name", text: $storeName, icon: "building.2")
                             LuxuryTextField(placeholder: "City", text: $storeCity, icon: "mappin")
                             LuxuryTextField(placeholder: "Country", text: $storeCountry, icon: "globe")
                             LuxuryTextField(placeholder: "Manager Name (optional)", text: $storeManager, icon: "person")
                         }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                        .padding(.horizontal, 20)
 
-                        PrimaryButton(title: "Create Store") {
-                            createStore()
-                        }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-                        .padding(.top, AppSpacing.md)
-                        .padding(.bottom, AppSpacing.xxxl)
+                        PrimaryButton(title: "Create Store") { createStore() }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 40)
                     }
                 }
             }
@@ -636,21 +510,17 @@ struct CreateStoreSheet: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark")
-                            .font(AppTypography.closeButton)
-                            .foregroundColor(AppColors.textPrimaryDark)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
                     }
                 }
             }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) { }
-            } message: {
-                Text(errorMessage)
-            }
+            } message: { Text(errorMessage) }
             .alert("Store Created!", isPresented: $isCreated) {
                 Button("Done") { dismiss() }
-            } message: {
-                Text("\(storeName) has been added to your store network.")
-            }
+            } message: { Text("\(storeName) has been added to your store network.") }
         }
     }
 

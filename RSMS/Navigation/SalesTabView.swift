@@ -1,9 +1,9 @@
 //
 //  SalesTabView.swift
-//  infosys2
+//  RSMS
 //
-//  Sales Associate & After-Sales Specialist tab bar — 5 modules.
-//  Dashboard | Clients | Appointments | Selling | After-Sales
+//  Sales Associate — 4 tab bar modules.
+//  Dashboard | Clients | Appointments | Profile
 //
 
 import SwiftUI
@@ -18,44 +18,38 @@ struct SalesTabView: View {
                 .ignoresSafeArea()
 
             TabView(selection: $selectedTab) {
-                SalesDashboardView()
+                NavigationStack { SalesDashboardView() }
                     .tabItem {
                         Image(systemName: selectedTab == 0 ? "square.grid.2x2.fill" : "square.grid.2x2")
                         Text("Dashboard")
                     }
                     .tag(0)
 
-                SalesClientsView()
+                NavigationStack { SalesClientsView() }
                     .tabItem {
                         Image(systemName: selectedTab == 1 ? "person.2.fill" : "person.2")
                         Text("Clients")
                     }
                     .tag(1)
 
-                SalesAppointmentsView()
+                NavigationStack { SalesAppointmentsView() }
                     .tabItem {
-                        Image(systemName: selectedTab == 2 ? "calendar.badge.clock" : "calendar")
-                        Text("Appointments")
+                        Image(systemName: selectedTab == 2 ? "calendar.fill" : "calendar")
+                        Text("Schedule")
                     }
                     .tag(2)
 
-                AssistedSellingView()
+                NavigationStack { SalesProfileView() }
                     .tabItem {
-                        Image(systemName: selectedTab == 3 ? "bag.fill" : "bag")
-                        Text("Selling")
+                        Image(systemName: selectedTab == 3 ? "person.fill" : "person")
+                        Text("Profile")
                     }
                     .tag(3)
-
-                SalesAfterSalesView()
-                    .tabItem {
-                        Image(systemName: selectedTab == 4 ? "wrench.and.screwdriver.fill" : "wrench.and.screwdriver")
-                        Text("After-Sales")
-                    }
-                    .tag(4)
             }
             .tint(AppColors.accent)
             .tabBarMinimizeBehavior(.onScrollDown)
             .toolbarColorScheme(.dark, for: .tabBar)
+            .toolbar(removing: .sidebarToggle)
             .modifier(AppleMusicTabBarModifier())
         }
     }

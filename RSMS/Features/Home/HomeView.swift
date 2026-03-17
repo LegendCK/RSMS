@@ -1,12 +1,18 @@
 ////  HomeView.swift
 //  RSMS
 //
-//  Home screen with hero banner, featured products, and category strip.
-//  View All / See All buttons are wired to the correct destination views.
+//  Luxury home — maroon gradient header, carousel banner, category filter pills, featured + new arrivals.
 //
 
 import SwiftUI
 import SwiftData
+
+private struct BannerData {
+    let label: String
+    let title: String
+    let subtitle: String
+    let buttonText: String
+}
 
 struct HomeView: View {
     @Environment(AppState.self) var appState
@@ -16,316 +22,395 @@ struct HomeView: View {
     private var categories: [Category]
     @Query private var allProducts: [Product]
 
-    // Navigation state
+    @State private var selectedCategoryName: String? = nil
+    @State private var currentBanner = 0
     @State private var showAllCategories = false
     @State private var showAllFeatured = false
     @State private var showAllArrivals = false
 
+    private let banners: [BannerData] = [
+        BannerData(label: "NEW SEASON", title: "Spring\n2026", subtitle: "Curated luxury for the modern connoisseur.", buttonText: "Shop Now"),
+        BannerData(label: "LIMITED EDITION", title: "Exclusive\nDrops", subtitle: "One-of-a-kind pieces from elite artisans.", buttonText: "Explore"),
+        BannerData(label: "PRIVATE ACCESS", title: "Members\nOnly", subtitle: "Unlock bespoke collections reserved for you.", buttonText: "Discover")
+    ]
+
+    private var filteredProducts: [Product] {
+        guard let name = selectedCategoryName else { return allProducts }
+        return allProducts.filter { $0.categoryName == name }
+    }
+
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
+            ZStack(alignment: .top) {
+                Color(.systemGroupedBackground).ignoresSafeArea()
+
+                // Maroon top glow
+                LinearGradient(
+                    colors: [AppColors.accent.opacity(0.13), Color.clear],
+                    startPoint: .top,
+                    endPoint: .init(x: 0.5, y: 0.28)
+                )
+                .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 28) {
-                        heroBanner
-                        categoriesSection
+                    VStack(spacing: 0) {
+                        bannerCarousel
+                        categorySection
                         featuredSection
                         newArrivalsSection
+                        Spacer().frame(height: 48)
                     }
-                    .padding(.bottom, 40)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                // Centre brand wordmark — no leading item so it never truncates to "M …"
+                ToolbarItem(placement: .principal) {
                     Text("MAISON LUXE")
-                        .font(AppTypography.navTitle)
-                        .tracking(3)
-                        .foregroundColor(AppColors.accent)
+                        .font(.system(size: 13, weight: .black))
+                        .tracking(5)
+                        .foregroundColor(.primary)
                 }
+                // Trailing: bell and cart at identical visual height
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 14) {
+                    HStack(alignment: .center, spacing: 20) {
                         Button(action: {}) {
                             Image(systemName: "bell")
-                                .font(AppTypography.bellIcon)
-                                .foregroundStyle(Color.primary)
+                                .font(.system(size: 17, weight: .light))
+                                .foregroundStyle(.primary)
                         }
                         CartShortcutButton()
                     }
                 }
             }
-            // Full-screen navigation destinations
-            .navigationDestination(isPresented: $showAllCategories) {
-                CategoriesView()
-            }
-            .navigationDestination(isPresented: $showAllFeatured) {
-                ProductListView(categoryFilter: nil)
-            }
-            .navigationDestination(isPresented: $showAllArrivals) {
-                ProductListView(categoryFilter: nil)
-            }
+            .navigationDestination(isPresented: $showAllCategories) { CategoriesView() }
+            .navigationDestination(isPresented: $showAllFeatured) { ProductListView(categoryFilter: nil) }
+            .navigationDestination(isPresented: $showAllArrivals) { ProductListView(categoryFilter: nil) }
         }
     }
 
-    // MARK: - Hero Banner
+    // MARK: - Banner Carousel
 
-    private var heroBanner: some View {
-        ZStack(alignment: .bottomLeading) {
-            // System material background — native iOS feel
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.regularMaterial)
-                .frame(height: 210)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(AppColors.accent)
-                        .frame(height: 2)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
+    private var bannerCarousel: some View {
+        VStack(spacing: 12) {
+            TabView(selection: $currentBanner) {
+                ForEach(0..<banners.count, id: \.self) { index in
+                    bannerCard(banners[index])
+                        .tag(index)
+                        .padding(.horizontal, 16)
                 }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(height: 200)
 
-            // Content
+            // Dots
+            HStack(spacing: 5) {
+                ForEach(0..<banners.count, id: \.self) { index in
+                    Capsule()
+                        .fill(index == currentBanner ? AppColors.accent : Color(.systemGray4))
+                        .frame(width: index == currentBanner ? 20 : 5, height: 5)
+                        .animation(.easeInOut(duration: 0.25), value: currentBanner)
+                }
+            }
+        }
+        .padding(.top, 16)
+        .padding(.bottom, 4)
+    }
+
+    private func bannerCard(_ data: BannerData) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+
+            // Accent bar
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(AppColors.accent.opacity(0.7))
+                    .frame(width: 3, height: 80)
+                    .padding(.trailing, 28)
+                    .padding(.bottom, 36)
+            }
+
             VStack(alignment: .leading, spacing: 8) {
-                Text("NEW COLLECTION")
-                    .font(AppTypography.overline)
-                    .tracking(3)
+                Text(data.label)
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(4)
                     .foregroundColor(AppColors.accent)
 
-                Text("Spring 2026")
-                    .font(AppTypography.displayMedium)
-                    .foregroundColor(Color.primary)
+                Text(data.title)
+                    .font(.system(size: 34, weight: .black))
+                    .foregroundColor(.primary)
+                    .lineSpacing(2)
 
-                Text("Discover the essence of modern luxury")
-                    .font(AppTypography.bodyMedium)
-                    .foregroundColor(Color.secondary)
+                Text(data.subtitle)
+                    .font(.system(size: 12, weight: .light))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
 
-                Spacer().frame(height: 4)
+                Button(action: { showAllFeatured = true }) {
+                    Text(data.buttonText)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 9)
+                        .background(AppColors.accent)
+                        .clipShape(Capsule())
+                }
+                .padding(.top, 2)
+            }
+            .padding(.horizontal, 22)
+            .padding(.bottom, 22)
+        }
+        .frame(maxWidth: .infinity, minHeight: 200)
+        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+    }
 
-                HStack(spacing: 5) {
-                    Text("Explore")
-                        .font(AppTypography.buttonSecondary)
-                        .foregroundColor(AppColors.accent)
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 12, weight: .semibold))
+    // MARK: - Category Filter Pills
+
+    private var categorySection: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Categories")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(.primary)
+                Spacer()
+                Button(action: { showAllCategories = true }) {
+                    Text("View All")
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundColor(AppColors.accent)
                 }
             }
-            .padding(20)
-            .padding(.bottom, 16)
-
-            // Decorative diamond
-            Image(systemName: "diamond.fill")
-                .font(AppTypography.iconDecorative)
-                .foregroundColor(AppColors.accent.opacity(0.07))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .padding(.trailing, 24)
-                .padding(.top, 20)
-        }
-        .frame(height: 210)
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-        .padding(.top, AppSpacing.sm)
-        .shadow(color: Color.black.opacity(0.06), radius: 14, x: 0, y: 4)
-    }
-
-    // MARK: - Categories Strip
-
-    private var categoriesSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(title: "Categories") {
-                showAllCategories = true
-            }
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 12)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+                HStack(spacing: 8) {
+                    categoryPill(name: "All", isSelected: selectedCategoryName == nil) {
+                        withAnimation(.easeInOut(duration: 0.2)) { selectedCategoryName = nil }
+                    }
                     ForEach(categories) { category in
-                        NavigationLink(destination: ProductListView(categoryFilter: category.name)) {
-                            categoryChip(category)
+                        categoryPill(name: category.name, isSelected: selectedCategoryName == category.name) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedCategoryName = selectedCategoryName == category.name ? nil : category.name
+                            }
                         }
-                        .buttonStyle(PlainButtonStyle())
                     }
                 }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.horizontal, 20)
             }
+            .padding(.bottom, 24)
         }
     }
 
-    private func categoryChip(_ category: Category) -> some View {
-        VStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(.regularMaterial)
-                    .frame(width: 64, height: 64)
-                    .overlay(
-                        Circle()
-                            .strokeBorder(AppColors.accent.opacity(0.15), lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
-
-                Image(systemName: category.icon)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundColor(AppColors.accent)
-            }
-
-            Text(category.name)
-                .font(AppTypography.caption)
-                .foregroundColor(Color.secondary)
-                .lineLimit(1)
+    private func categoryPill(name: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(name)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .foregroundColor(isSelected ? .white : .primary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(isSelected ? Color.primary : Color(.secondarySystemGroupedBackground))
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule().strokeBorder(isSelected ? Color.clear : Color(.systemGray4), lineWidth: 1)
+                )
         }
-        .frame(width: 74)
+        .buttonStyle(PlainButtonStyle())
     }
 
-    // MARK: - Featured Products
+    // MARK: - Featured Section
 
     private var featuredSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(title: "Featured") {
-                showAllFeatured = true
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(title: "FEATURED", action: { showAllFeatured = true })
 
             if featuredProducts.isEmpty {
                 emptyBanner(icon: "star", message: "No featured products yet")
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 14) {
+                    HStack(spacing: 12) {
                         ForEach(featuredProducts) { product in
                             NavigationLink(destination: ProductDetailView(product: product)) {
-                                productCard(product)
+                                featuredCard(product)
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
                     }
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
                 }
             }
         }
+        .padding(.bottom, 24)
+    }
+
+    private func featuredCard(_ product: Product) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topTrailing) {
+                ZStack(alignment: .bottomLeading) {
+                    ProductArtworkView(
+                        imageSource: product.imageName,
+                        fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock" : "bag",
+                        cornerRadius: 0
+                    )
+                    .frame(width: 150, height: 200)
+                    .clipped()
+                    .background(Color(.systemGray6))
+
+                    if product.isLimitedEdition {
+                        Text("LIMITED")
+                            .font(.system(size: 7, weight: .bold))
+                            .tracking(1.5)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(AppColors.accent)
+                    }
+                }
+                .frame(width: 150, height: 200)
+
+                Image(systemName: "bookmark")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(7)
+                    .background(Color.black.opacity(0.25))
+                    .clipShape(Circle())
+                    .padding(8)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(product.brand.uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+                Text(product.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                Text(product.formattedPrice)
+                    .font(.system(size: 13, weight: .light))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .frame(width: 150, alignment: .leading)
+        }
+        .frame(width: 150)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - New Arrivals
 
     private var newArrivalsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(title: "New Arrivals") {
-                showAllArrivals = true
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(title: "NEW ARRIVALS", action: { showAllArrivals = true })
 
-            if allProducts.isEmpty {
+            if filteredProducts.isEmpty {
                 emptyBanner(icon: "shippingbox", message: "No products available")
             } else {
-                VStack(spacing: 10) {
-                    ForEach(Array(allProducts.prefix(4))) { product in
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible(), spacing: 12)
+                    ],
+                    spacing: 12
+                ) {
+                    ForEach(filteredProducts.prefix(6)) { product in
                         NavigationLink(destination: ProductDetailView(product: product)) {
-                            productRow(product)
+                            productCard(product)
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
             }
         }
-    }
-
-    // MARK: - Shared Components
-
-    private func sectionHeader(title: String, action: @escaping () -> Void) -> some View {
-        HStack {
-            Text(title)
-                .font(AppTypography.heading2)
-                .foregroundColor(Color.primary)
-            Spacer()
-            Button(action: action) {
-                HStack(spacing: 3) {
-                    Text("View All")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppColors.accent)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(AppColors.accent)
-                }
-            }
-        }
-        .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 
     private func productCard(_ product: Product) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
-                ProductArtworkView(
-                    imageSource: product.imageName,
-                    fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock.fill" : "bag.fill",
-                    cornerRadius: 0
-                )
-                .frame(width: 175, height: 195)
+                GeometryReader { geo in
+                    ZStack(alignment: .bottomLeading) {
+                        ProductArtworkView(
+                            imageSource: product.imageName,
+                            fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock" : "bag",
+                            cornerRadius: 0
+                        )
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .background(Color(.systemGray6))
 
-                if product.isLimitedEdition {
-                    Text("LIMITED")
-                        .font(AppTypography.overline)
-                        .tracking(1)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(AppColors.accent)
-                        .cornerRadius(4)
-                        .padding(10)
+                        if product.isLimitedEdition {
+                            Text("LIMITED")
+                                .font(.system(size: 7, weight: .bold))
+                                .tracking(1.5)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(AppColors.accent)
+                        }
+                    }
                 }
+                .aspectRatio(3/4, contentMode: .fit)
+
+                Image(systemName: "bookmark")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(7)
+                    .background(Color.black.opacity(0.25))
+                    .clipShape(Circle())
+                    .padding(8)
             }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(product.brand.uppercased())
-                    .font(AppTypography.overline)
-                    .tracking(1)
-                    .foregroundColor(AppColors.accent)
-
-                Text(product.name)
-                    .font(AppTypography.label)
-                    .foregroundColor(Color.primary)
-                    .lineLimit(1)
-
-                Text(product.formattedPrice)
-                    .font(AppTypography.priceSmall)
-                    .foregroundColor(Color.secondary)
-            }
-            .padding(12)
-        }
-        .frame(width: 175)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: Color.black.opacity(0.07), radius: 10, x: 0, y: 3)
-    }
-
-    private func productRow(_ product: Product) -> some View {
-        HStack(spacing: 14) {
-            ProductArtworkView(
-                imageSource: product.imageName,
-                fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock.fill" : "bag.fill",
-                cornerRadius: AppSpacing.radiusMedium
-            )
-            .frame(width: 72, height: 72)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(product.brand.uppercased())
-                    .font(AppTypography.overline)
-                    .tracking(1)
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(2)
                     .foregroundColor(AppColors.accent)
-
                 Text(product.name)
-                    .font(AppTypography.label)
-                    .foregroundColor(Color.primary)
-
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
                 Text(product.formattedPrice)
-                    .font(AppTypography.priceSmall)
-                    .foregroundColor(Color.secondary)
+                    .font(.system(size: 13, weight: .light))
+                    .foregroundColor(.secondary)
             }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color(.tertiaryLabel))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
         }
-        .padding(14)
         .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 1)
+    }
+
+    // MARK: - Shared Helpers
+
+    private func sectionHeader(title: String, action: @escaping () -> Void) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(3)
+                .foregroundColor(.primary.opacity(0.5))
+            Spacer()
+            Button(action: action) {
+                HStack(spacing: 3) {
+                    Text("View All")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppColors.accent)
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 14)
     }
 
     private func emptyBanner(icon: String, message: String) -> some View {
@@ -333,14 +418,12 @@ struct HomeView: View {
             Image(systemName: icon)
                 .foregroundColor(AppColors.accent.opacity(0.5))
             Text(message)
-                .font(AppTypography.bodyMedium)
-                .foregroundColor(Color.secondary)
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, AppSpacing.screenHorizontal)
+        .padding(.horizontal, 20)
     }
 }
 

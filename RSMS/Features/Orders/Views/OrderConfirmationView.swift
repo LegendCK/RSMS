@@ -11,6 +11,7 @@ import SwiftUI
 struct OrderConfirmationView: View {
     let order: Order
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
 
     @State private var checkmarkScale: CGFloat  = 0.1
     @State private var ringProgress: Double      = 0
@@ -119,7 +120,12 @@ struct OrderConfirmationView: View {
                                 .cornerRadius(AppSpacing.radiusMedium)
                         }
 
-                        Button { dismiss() } label: {
+                        Button {
+                            // Dismiss this view (and any parent sheet), then
+                            // reset the home NavigationStack path to root.
+                            dismiss()
+                            appState.navigateToHome()
+                        } label: {
                             Text("Continue Shopping")
                                 .font(AppTypography.buttonSecondary)
                                 .foregroundColor(AppColors.accent)

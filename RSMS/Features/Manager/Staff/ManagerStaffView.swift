@@ -774,7 +774,7 @@ struct ManagerCreateStaffSheet: View {
 
     @MainActor
     private func createStaff() async {
-        guard let storeId else {
+        guard storeId != nil else {
             errorMessage = "Your manager account is not assigned to a boutique store."
             showError = true
             return

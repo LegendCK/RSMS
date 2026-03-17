@@ -103,7 +103,7 @@ struct ProductDetailView: View {
 
     var body: some View {
         ZStack {
-            AppColors.backgroundPrimary.ignoresSafeArea()
+            Color.white.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -114,31 +114,18 @@ struct ProductDetailView: View {
                     // ── Product Info ────────────────────────────────
                     VStack(alignment: .leading, spacing: AppSpacing.lg) {
 
-                        // Limited edition badge + brand + name + stars
                         headerSection
-
-                        // Price + stock
                         priceStockRow
-
-                        // Color picker
                         colorPickerSection
-
-                        // Size picker
                         if needsSizeSelector { sizePickerSection }
 
-                        GoldDivider()
-
-                        // Description
+                        Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
                         descriptionSection
-
-                        GoldDivider()
-
-                        // Details
+                        Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
                         detailsSection
 
-                        // Specifications
                         if !product.parsedAttributes.isEmpty {
-                            GoldDivider()
+                            Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
                             specificationsSection
                         }
 
@@ -152,7 +139,20 @@ struct ProductDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                CartShortcutButton()
+                HStack(spacing: 16) {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3)) {
+                            product.isWishlisted.toggle()
+                            try? modelContext.save()
+                        }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }) {
+                        Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
+                            .font(.system(size: 16, weight: .light))
+                            .foregroundColor(product.isWishlisted ? AppColors.accent : .black)
+                    }
+                    CartShortcutButton()
+                }
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -252,14 +252,16 @@ struct ProductDetailView: View {
                                     ProductArtworkView(
                                         imageSource: galleryImages[idx],
                                         fallbackSymbol: product.categoryName.lowercased().contains("watch") ? "clock.fill" : "bag.fill",
-                                        cornerRadius: 12
+                                        cornerRadius: 0
                                     )
                                     .frame(width: 58, height: 76)
+                                    .clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
+                                        RoundedRectangle(cornerRadius: 8)
                                             .stroke(
-                                                idx == currentImageIndex ? AppColors.accent : Color.white.opacity(0.3),
-                                                lineWidth: idx == currentImageIndex ? 2 : 1
+                                                idx == currentImageIndex ? AppColors.accent : Color.white.opacity(0.35),
+                                                lineWidth: idx == currentImageIndex ? 2.5 : 1
                                             )
                                     )
                                 }
@@ -333,28 +335,25 @@ struct ProductDetailView: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(product.brand.uppercased())
-                .font(AppTypography.overline)
+                .font(.system(size: 10, weight: .semibold))
                 .tracking(3)
                 .foregroundColor(AppColors.accent)
 
             Text(product.name)
-                .font(AppTypography.displaySmall)
-                .foregroundColor(AppColors.textPrimaryDark)
+                .font(.system(size: 26, weight: .bold))
+                .foregroundColor(.black)
 
-            HStack(spacing: AppSpacing.xxs) {
+            HStack(spacing: 4) {
                 ForEach(0..<5) { i in
                     Image(systemName: i < Int(product.rating) ? "star.fill" : (Double(i) < product.rating ? "star.leadinghalf.filled" : "star"))
-                        .font(AppTypography.starRating)
+                        .font(.system(size: 11))
                         .foregroundColor(AppColors.accent)
                 }
                 Text(String(format: "%.1f", product.rating))
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.textSecondaryDark)
-                Text("(\(Int.random(in: 28...312)) reviews)")
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.neutral600)
+                    .font(.system(size: 11, weight: .light))
+                    .foregroundColor(.black.opacity(0.5))
             }
         }
     }
@@ -502,109 +501,68 @@ struct ProductDetailView: View {
     // MARK: - Bottom Action Bar
 
     private var bottomActionBar: some View {
-        VStack(spacing: AppSpacing.sm) {
+        VStack(spacing: 0) {
+            // Stock + cart indicator
             HStack(spacing: 6) {
                 Circle()
                     .fill(stockColor)
-                    .frame(width: 7, height: 7)
+                    .frame(width: 6, height: 6)
                 Text(stockLabel)
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.textSecondaryDark)
+                    .font(.system(size: 11, weight: .light))
+                    .foregroundColor(.black.opacity(0.55))
                 Spacer()
                 if cartItemQuantity > 0 {
-                    Text("\(cartItemQuantity) in bag")
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.accent)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(AppColors.accent.opacity(0.08), in: Capsule())
+                    Button(action: { navigateToCart = true }) {
+                        Text("\(cartItemQuantity) in bag — View")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppColors.accent)
+                    }
                 }
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 10)
 
-            HStack(spacing: AppSpacing.sm) {
-                Button(action: {
-                    withAnimation(.spring(response: 0.3)) {
-                        product.isWishlisted.toggle()
-                        try? modelContext.save()
-                    }
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                }) {
-                    Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
-                        .font(AppTypography.toolbarIcon)
-                        .foregroundColor(product.isWishlisted ? AppColors.error : AppColors.textPrimaryDark)
-                        .frame(width: AppSpacing.touchTarget, height: AppSpacing.touchTarget)
-                        .background(AppColors.backgroundTertiary, in: RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
-                }
-                .buttonStyle(.plain)
-
+            HStack(spacing: 10) {
+                // Add to Bag — primary maroon
                 Button(action: { handleAddToBag() }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: cartItemQuantity > 0 ? "plus.circle.fill" : "bag.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .scaleEffect(bagIconScale)
-                        Text(
-                            variantStockCount > 0
-                            ? (cartItemQuantity > 0 ? "Add Another" : "Add to Bag")
-                            : "Out of Stock"
-                        )
-                        .font(AppTypography.buttonPrimary)
-                    }
-                    .foregroundColor(AppColors.textPrimaryLight)
+                    Text(
+                        variantStockCount > 0
+                        ? (addedToBag ? "Added" : (cartItemQuantity > 0 ? "Add Another" : "Add to Bag"))
+                        : "Out of Stock"
+                    )
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: AppSpacing.touchTarget)
+                    .frame(height: 52)
                     .background(addedToBag ? AppColors.success : AppColors.accent)
-                    .cornerRadius(AppSpacing.radiusMedium)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .animation(.spring(response: 0.3), value: addedToBag)
+                    .scaleEffect(bagIconScale)
                 }
-                .opacity(variantStockCount > 0 ? 1.0 : 0.5)
+                .opacity(variantStockCount > 0 ? 1.0 : 0.4)
                 .disabled(variantStockCount == 0 && !appState.isGuest)
-            }
 
-            HStack(spacing: AppSpacing.sm) {
+                // Buy Now — maroon outlined
                 Button(action: { handleBuyNow() }) {
                     Text("Buy Now")
-                        .font(AppTypography.buttonSecondary)
-                        .foregroundColor(variantStockCount > 0 ? AppColors.accent : AppColors.neutral600)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 46)
-                        .background(AppColors.backgroundTertiary)
-                        .cornerRadius(AppSpacing.radiusMedium)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(variantStockCount > 0 ? AppColors.accent : AppColors.accent.opacity(0.3))
+                        .frame(width: 118)
+                        .frame(height: 52)
                         .overlay(
-                            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                                .stroke(variantStockCount > 0 ? AppColors.accent : AppColors.neutral600.opacity(0.3), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(variantStockCount > 0 ? AppColors.accent : AppColors.accent.opacity(0.3), lineWidth: 1.5)
                         )
                 }
                 .disabled(variantStockCount == 0 && !appState.isGuest)
-
-                if cartItemQuantity > 0 {
-                    Button(action: { navigateToCart = true }) {
-                        Text("View Bag")
-                            .font(AppTypography.buttonSecondary)
-                            .foregroundColor(AppColors.textPrimaryDark)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 46)
-                            .background(AppColors.backgroundSecondary)
-                            .cornerRadius(AppSpacing.radiusMedium)
-                    }
-                }
             }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
         }
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-        .padding(.top, AppSpacing.sm)
-        .padding(.bottom, AppSpacing.sm)
         .background(
-            .ultraThinMaterial,
-            in: RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
-                .stroke(Color.white.opacity(0.3), lineWidth: 0.7)
-        )
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-        .padding(.top, 8)
-        .shadow(color: .black.opacity(0.08), radius: 10, y: -2)
-        .background(
-            AppColors.backgroundPrimary.opacity(0.9)
+            Color.white
+                .shadow(color: .black.opacity(0.06), radius: 12, y: -4)
                 .ignoresSafeArea(edges: .bottom)
         )
     }

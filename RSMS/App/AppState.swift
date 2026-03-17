@@ -27,6 +27,14 @@ class AppState {
         set { UserDefaults.standard.set(newValue, forKey: "hasCompletedOnboarding") }
     }
 
+    // MARK: - Navigation
+    var homeNavigationPath: NavigationPath = NavigationPath()
+
+    /// Pops the customer Home NavigationStack all the way back to HomeView.
+    func navigateToHome() {
+        homeNavigationPath = NavigationPath()
+    }
+
     // MARK: - Session state
     var isAuthenticated: Bool = false
     var isGuest: Bool = false                // true when browsing without an account

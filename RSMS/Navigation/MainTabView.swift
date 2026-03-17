@@ -24,9 +24,10 @@ struct MainTabView: View {
                 loadingState
             } else {
                 TabView {
-                    // Home Tab
+                    // Home Tab — path bound to AppState so any screen can pop to root
                     Tab("Home", systemImage: "house.fill") {
-                        NavigationStack {
+                        @Bindable var state = appState
+                        NavigationStack(path: $state.homeNavigationPath) {
                             HomeView()
                         }
                     }
@@ -55,6 +56,7 @@ struct MainTabView: View {
                 .tint(AppColors.accent)  // Active tab tint (maroon)
                 .tabBarMinimizeBehavior(.onScrollDown)  // Collapse on scroll
                 .toolbarColorScheme(.dark, for: .tabBar)  // Dark styling
+                .toolbar(removing: .sidebarToggle)  // Remove auto-injected "M..." account button
                 .modifier(AppleMusicTabBarModifier())  // Apply Apple Music glass design
             }
         }

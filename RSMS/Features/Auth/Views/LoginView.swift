@@ -1,8 +1,8 @@
 //
 //  LoginView.swift
-//  infosys2
+//  RSMS
 //
-//  Premium login screen with luxury branding.
+//  Luxury login — clean white, diamond logo mark, underline fields.
 //
 
 import SwiftUI
@@ -10,150 +10,146 @@ import SwiftUI
 struct LoginView: View {
     @Environment(AppState.self) var appState
     @State private var viewModel = AuthViewModel()
-
     @State private var showSignUp = false
     @State private var showForgotPassword = false
+    @State private var showPassword = false
     @State private var contentOpacity: Double = 0
 
     var body: some View {
         NavigationStack {
             ZStack {
-                AppColors.backgroundPrimary
-                    .ignoresSafeArea()
+                Color.white.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        // Brand header
-                        VStack(spacing: AppSpacing.sm) {
+
+                        // ── Brand Mark ──────────────────────────────
+                        VStack(spacing: 10) {
                             Image(systemName: "diamond.fill")
-                                .font(AppTypography.brandIcon)
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [AppColors.accent, AppColors.accentLight],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
+                                .font(.system(size: 38, weight: .regular))
+                                .foregroundColor(AppColors.accent)
 
                             Text("MAISON LUXE")
-                                .font(AppTypography.heading2)
+                                .font(.system(size: 15, weight: .semibold))
                                 .tracking(6)
-                                .foregroundColor(AppColors.textPrimaryDark)
+                                .foregroundColor(.black)
                         }
-                        .padding(.top, AppSpacing.hero)
-                        .padding(.bottom, AppSpacing.xxxl)
+                        .padding(.top, 72)
+                        .padding(.bottom, 36)
 
-                        // Welcome text
-                        VStack(spacing: AppSpacing.xs) {
+                        // ── Title ────────────────────────────────────
+                        VStack(spacing: 6) {
                             Text("Welcome Back")
-                                .font(AppTypography.displaySmall)
-                                .foregroundColor(AppColors.textPrimaryDark)
-
+                                .font(.system(size: 30, weight: .bold))
+                                .foregroundColor(.black)
                             Text("Sign in to your account")
-                                .font(AppTypography.bodyMedium)
-                                .foregroundColor(AppColors.textSecondaryDark)
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundColor(.secondary)
                         }
-                        .padding(.bottom, AppSpacing.xxxl)
+                        .padding(.bottom, 44)
 
-                        // Input fields
-                        VStack(spacing: AppSpacing.xl) {
-                            LuxuryTextField(
+                        // ── Form Fields ──────────────────────────────
+                        VStack(spacing: 28) {
+                            // Email
+                            authUnderlineField(
                                 placeholder: "Email",
                                 text: $viewModel.loginEmail,
-                                icon: "envelope"
+                                icon: "envelope",
+                                keyboardType: .emailAddress
                             )
-                            .keyboardType(.emailAddress)
 
-                            LuxuryTextField(
-                                placeholder: "Password",
-                                text: $viewModel.loginPassword,
-                                isSecure: true,
-                                icon: "lock"
-                            )
-                        }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-
-                        // Forgot password
-                        HStack {
-                            Spacer()
-                            Button(action: { showForgotPassword = true }) {
-                                Text("Forgot Password?")
-                                    .font(AppTypography.bodySmall)
-                                    .foregroundColor(AppColors.accent)
+                            // Password
+                            VStack(spacing: 0) {
+                                authPasswordField(
+                                    placeholder: "Password",
+                                    text: $viewModel.loginPassword,
+                                    showPassword: $showPassword
+                                )
+                                HStack {
+                                    Spacer()
+                                    Button("Forgot Password?") { showForgotPassword = true }
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(AppColors.accent)
+                                        .padding(.top, 10)
+                                }
                             }
                         }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-                        .padding(.top, AppSpacing.md)
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 40)
 
-                        // Login button
-                        PrimaryButton(
-                            title: "Sign In",
-                            isLoading: viewModel.isLoading
-                        ) {
-                            viewModel.login(appState: appState)
-                        }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-                        .padding(.top, AppSpacing.xxl)
-
-                        // Divider
-                        HStack(spacing: AppSpacing.md) {
-                            GoldDivider(opacity: 0.2)
-                            Text("OR")
-                                .font(AppTypography.caption)
-                                .tracking(2)
-                                .foregroundColor(AppColors.neutral500)
-                            GoldDivider(opacity: 0.2)
-                        }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-                        .padding(.vertical, AppSpacing.xl)
-
-                        // Sign up link
-                        VStack(spacing: AppSpacing.xs) {
-                            Text("New to Maison Luxe?")
-                                .font(AppTypography.bodySmall)
-                                .foregroundColor(AppColors.textSecondaryDark)
-
-                            SecondaryButton(title: "Create Account") {
-                                showSignUp = true
+                        // ── Actions ──────────────────────────────────
+                        VStack(spacing: 16) {
+                            // Sign In
+                            Button {
+                                viewModel.login(appState: appState)
+                            } label: {
+                                Group {
+                                    if viewModel.isLoading {
+                                        ProgressView().tint(.white)
+                                    } else {
+                                        Text("SIGN IN")
+                                            .font(.system(size: 15, weight: .bold))
+                                            .tracking(2)
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 56)
+                                .background(AppColors.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             }
-                            .padding(.horizontal, AppSpacing.screenHorizontal)
-                        }
+                            .disabled(viewModel.isLoading)
 
-                        // Guest access
-                        VStack(spacing: AppSpacing.xs) {
-                            HStack(spacing: AppSpacing.md) {
-                                GoldDivider(opacity: 0.15)
-                                Text("OR")
-                                    .font(AppTypography.caption)
-                                    .tracking(2)
-                                    .foregroundColor(AppColors.neutral500)
-                                GoldDivider(opacity: 0.15)
+                            orDivider
+
+                            // Create Account
+                            VStack(spacing: 10) {
+                                Text("New to Maison Luxe?")
+                                    .font(.system(size: 13, weight: .regular))
+                                    .foregroundColor(.secondary)
+
+                                Button { showSignUp = true } label: {
+                                    Text("CREATE ACCOUNT")
+                                        .font(.system(size: 15, weight: .bold))
+                                        .tracking(2)
+                                        .foregroundColor(AppColors.accent)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 56)
+                                        .background(Color(.systemGray6))
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                .strokeBorder(AppColors.accent, lineWidth: 1.5)
+                                        )
+                                }
                             }
-                            .padding(.horizontal, AppSpacing.screenHorizontal)
 
-                            Button(action: { Task { await appState.continueAsGuest() } }) {
+                            orDivider
+
+                            // Guest
+                            Button {
+                                Task { await appState.continueAsGuest() }
+                            } label: {
                                 Text("Browse as Guest")
-                                    .font(AppTypography.bodySmall)
-                                    .foregroundColor(AppColors.textSecondaryDark)
+                                    .font(.system(size: 14, weight: .regular))
                                     .underline()
+                                    .foregroundColor(.secondary)
                             }
-                        }
-                        .padding(.top, AppSpacing.lg)
 
-                        // Staff note
-                        Text("Staff accounts are provisioned by management")
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.neutral600)
-                            .padding(.top, AppSpacing.lg)
-                            .padding(.bottom, AppSpacing.xxl)
+                            Text("Staff accounts are provisioned by management")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundColor(.secondary.opacity(0.6))
+                                .multilineTextAlignment(.center)
+                                .padding(.top, 2)
+                        }
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 60)
                     }
                 }
                 .opacity(contentOpacity)
             }
             .onAppear {
-                withAnimation(.easeIn(duration: 0.6)) {
-                    contentOpacity = 1
-                }
+                withAnimation(.easeIn(duration: 0.4)) { contentOpacity = 1 }
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) { }
@@ -167,6 +163,94 @@ struct LoginView: View {
                 ForgotPasswordView()
             }
         }
+    }
+
+    // MARK: - Shared Field Components
+
+    private var orDivider: some View {
+        HStack(spacing: 14) {
+            Rectangle().fill(Color(.systemGray5)).frame(height: 1)
+            Text("OR")
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(2)
+                .foregroundColor(.secondary.opacity(0.5))
+            Rectangle().fill(Color(.systemGray5)).frame(height: 1)
+        }
+    }
+}
+
+// MARK: - Reusable Underline Field Helpers
+
+/// Plain underline text field used across auth screens
+func authUnderlineField(
+    placeholder: String,
+    text: Binding<String>,
+    icon: String,
+    keyboardType: UIKeyboardType = .default,
+    isSecure: Bool = false
+) -> some View {
+    HStack(spacing: 14) {
+        Image(systemName: icon)
+            .font(.system(size: 15, weight: .light))
+            .foregroundColor(.secondary)
+            .frame(width: 18)
+
+        if isSecure {
+            SecureField(placeholder, text: text)
+                .font(.system(size: 16))
+        } else {
+            TextField(placeholder, text: text)
+                .font(.system(size: 16))
+                .keyboardType(keyboardType)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+        }
+    }
+    .padding(.bottom, 14)
+    .overlay(alignment: .bottom) {
+        Rectangle()
+            .fill(Color(.systemGray4))
+            .frame(height: 1)
+    }
+}
+
+/// Password field with show/hide toggle
+func authPasswordField(
+    placeholder: String,
+    text: Binding<String>,
+    showPassword: Binding<Bool>
+) -> some View {
+    HStack(spacing: 14) {
+        Image(systemName: "lock")
+            .font(.system(size: 15, weight: .light))
+            .foregroundColor(.secondary)
+            .frame(width: 18)
+
+        Group {
+            if showPassword.wrappedValue {
+                TextField(placeholder, text: text)
+                    .font(.system(size: 16))
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+            } else {
+                SecureField(placeholder, text: text)
+                    .font(.system(size: 16))
+            }
+        }
+
+        Button {
+            showPassword.wrappedValue.toggle()
+        } label: {
+            Image(systemName: showPassword.wrappedValue ? "eye" : "eye.slash")
+                .font(.system(size: 15, weight: .light))
+                .foregroundColor(.secondary)
+        }
+    }
+    .padding(.bottom, 14)
+    .overlay(alignment: .bottom) {
+        Rectangle()
+            .fill(Color(.systemGray4))
+            .frame(height: 1)
     }
 }
 
