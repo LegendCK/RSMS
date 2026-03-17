@@ -63,6 +63,9 @@ struct AppColors {
     /// Off-white for light accents
     static let backgroundWarmWhite = Color(hex: "F9F9F9")
 
+    /// Card surface used in light UI (legacy name from earlier palette)
+    static let surfaceDark = Color(hex: "F5F5F5")
+
     // MARK: - Neutrals
 
     static let neutral900 = Color(hex: "0A0A0A")
@@ -103,4 +106,3 @@ struct AppColors {
     static let dividerLight = Color(hex: "E6E6E6")
     static let border = Color(hex: "999999")
 }
-

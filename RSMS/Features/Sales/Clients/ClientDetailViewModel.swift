@@ -17,6 +17,22 @@ final class ClientDetailViewModel {
     var orders: [OrderDTO] = []
     var appointments: [AppointmentDTO] = []
     var serviceTickets: [ServiceTicketDTO] = []
+    
+    var upcomingAppointments: [AppointmentDTO] {
+        let now = Date()
+        return appointments
+            .filter { $0.scheduledAt >= now }
+            .filter { Self.isUpcomingStatus($0.status) || $0.status == "in_progress" }
+            .sorted { $0.scheduledAt < $1.scheduledAt }
+    }
+    
+    var pastAppointments: [AppointmentDTO] {
+        let now = Date()
+        return appointments
+            .filter { $0.scheduledAt < now || Self.isPastStatus($0.status) }
+            .filter { $0.status != "requested" }
+            .sorted { $0.scheduledAt > $1.scheduledAt }
+    }
 
     // MARK: - Loading states
     var isLoadingHistory = false
@@ -72,6 +88,24 @@ final class ClientDetailViewModel {
 
     var blob: ClientNotesBlob {
         ClientNotesBlob.from(jsonString: client.notes)
+    }
+
+    private static func isUpcomingStatus(_ status: String) -> Bool {
+        switch status {
+        case "scheduled", "confirmed":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func isPastStatus(_ status: String) -> Bool {
+        switch status {
+        case "completed", "cancelled", "no_show":
+            return true
+        default:
+            return false
+        }
     }
 
     /// Lifetime value — sum of all completed order totals
