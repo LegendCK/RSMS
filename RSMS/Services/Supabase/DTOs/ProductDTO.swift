@@ -98,12 +98,12 @@ struct ProductDTO: Codable, Identifiable {
         }
     }
 
-    /// Formatted price string in USD.
+    /// Formatted price string in INR.
     var formattedPrice: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: price)) ?? "$\(price)"
+        formatter.currencyCode = "INR"
+        return formatter.string(from: NSNumber(value: price)) ?? "INR \(price)"
     }
 }
 

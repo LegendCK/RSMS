@@ -275,7 +275,7 @@ struct CreateProductSheet: View {
                             LuxuryTextField(placeholder: "Product Name", text: $name, icon: "tag")
                             LuxuryTextField(placeholder: "Brand", text: $brand, icon: "building")
                             LuxuryTextField(placeholder: "Description", text: $description, icon: "text.alignleft")
-                            LuxuryTextField(placeholder: "Price (USD)", text: $price, icon: "dollarsign.circle")
+                            LuxuryTextField(placeholder: "Price (INR)", text: $price, icon: "indianrupeesign.circle")
                             LuxuryTextField(placeholder: "Stock Count", text: $stockCount, icon: "shippingbox")
                         }
                         .padding(.horizontal, AppSpacing.screenHorizontal)

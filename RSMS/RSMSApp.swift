@@ -31,6 +31,9 @@ struct RSMSApp: App {
             InventoryByLocation.self,
             StoreLocation.self,
             StaffShift.self,
+            PricingPolicySettings.self,
+            IndianTaxRule.self,
+            RegionalPriceRule.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

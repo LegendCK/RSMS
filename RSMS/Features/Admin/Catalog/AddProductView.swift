@@ -138,9 +138,9 @@ struct AddProductView: View {
                             divider
 
                             // Price
-                            fieldRow(label: "Price (USD) *") {
+                            fieldRow(label: "Price (INR) *") {
                                 HStack(spacing: 4) {
-                                    Text("$")
+                                    Text("₹")
                                         .font(AppTypography.bodyMedium)
                                         .foregroundColor(AppColors.neutral500)
                                     TextField("0.00", text: $priceText)
@@ -163,9 +163,9 @@ struct AddProductView: View {
                             divider
 
                             // Cost Price
-                            fieldRow(label: "Cost Price (USD)") {
+                            fieldRow(label: "Cost Price (INR)") {
                                 HStack(spacing: 4) {
-                                    Text("$")
+                                    Text("₹")
                                         .font(AppTypography.bodyMedium)
                                         .foregroundColor(AppColors.neutral500)
                                     TextField("0.00", text: $costPriceText)
