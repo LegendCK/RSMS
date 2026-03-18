@@ -24,6 +24,13 @@ struct BuyNowSheetView: View {
     @State private var showAddressManager = false
     @State private var showAddNewAddress  = false
 
+    // Inline address fallback (used when savedAddresses is empty)
+    @State private var inlineAddressLine1 = ""
+    @State private var inlineAddressLine2 = ""
+    @State private var inlineCity         = ""
+    @State private var inlineAddrState    = ""
+    @State private var inlineZip          = ""
+
     // Payment
     @State private var selectedPayment: BuyNowPayment = .applePay
     @State private var cardNumber  = ""
@@ -34,6 +41,8 @@ struct BuyNowSheetView: View {
     @State private var placedOrder: Order? = nil
     @State private var showConfirmation    = false
     @State private var isPlacing           = false
+    @State private var orderError: String? = nil
+    @State private var showOrderError      = false
 
     private var savedAddresses: [SavedAddress] {
         allAddresses
@@ -109,8 +118,19 @@ struct BuyNowSheetView: View {
                     OrderConfirmationView(order: order)
                 }
             }
+            .alert("Order Failed", isPresented: $showOrderError, actions: {
+                Button("OK", role: .cancel) {}
+            }, message: {
+                Text(orderError ?? "Something went wrong. Please try again.")
+            })
             .onAppear {
                 selectedAddress = savedAddresses.first(where: { $0.isDefault }) ?? savedAddresses.first
+            }
+            .onChange(of: appState.shouldNavigateHome) { _, newValue in
+                guard newValue else { return }
+                // Dismiss this sheet so navigateToHome() reaches HomeView
+                appState.shouldNavigateHome = false
+                dismiss()
             }
         }
     }
@@ -211,26 +231,22 @@ struct BuyNowSheetView: View {
             sectionHeader("SHIPPING ADDRESS")
 
             if savedAddresses.isEmpty {
-                // No saved addresses — prompt to add
-                Button(action: { showAddNewAddress = true }) {
+                // No saved addresses — show inline entry form so user can proceed immediately
+                VStack(spacing: AppSpacing.sm) {
+                    LuxuryTextField(placeholder: "Address Line 1*", text: $inlineAddressLine1)
+                    LuxuryTextField(placeholder: "Address Line 2 (optional)", text: $inlineAddressLine2)
                     HStack(spacing: AppSpacing.sm) {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(AppColors.accent)
-                        Text("Add Shipping Address")
-                            .font(AppTypography.label)
-                            .foregroundColor(AppColors.accent)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(AppColors.neutral600)
+                        LuxuryTextField(placeholder: "City*", text: $inlineCity)
+                        LuxuryTextField(placeholder: "State*", text: $inlineAddrState)
+                            .frame(maxWidth: 90)
                     }
-                    .padding(AppSpacing.cardPadding)
-                    .background(AppColors.backgroundSecondary)
-                    .cornerRadius(AppSpacing.radiusMedium)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                            .stroke(AppColors.accent.opacity(0.4), lineWidth: 1)
-                            .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [6]))
-                    )
+                    LuxuryTextField(placeholder: "ZIP*", text: $inlineZip)
+                        .keyboardType(.numberPad)
+
+                    Button("Save this address for next time") { showAddNewAddress = true }
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.accent)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             } else {
                 // Show saved addresses as a selectable list (max 3 shown)
@@ -377,6 +393,13 @@ struct BuyNowSheetView: View {
                     if let addr = selectedAddress {
                         reviewRow(icon: "mappin.circle.fill", title: "Deliver to", value: addr.shortSummary)
                         GoldDivider()
+                    } else if !inlineAddressLine1.isEmpty {
+                        reviewRow(
+                            icon: "mappin.circle.fill",
+                            title: "Deliver to",
+                            value: "\(inlineAddressLine1), \(inlineCity), \(inlineAddrState) \(inlineZip)"
+                        )
+                        GoldDivider()
                     }
                     reviewRow(icon: paymentIcon, title: "Payment", value: selectedPayment.title)
                     GoldDivider()
@@ -496,7 +519,14 @@ struct BuyNowSheetView: View {
 
     private var canContinue: Bool {
         switch currentStep {
-        case 0: return selectedAddress != nil
+        case 0:
+            // Either a saved address is selected, or the inline form has the required fields
+            if selectedAddress != nil { return true }
+            if !savedAddresses.isEmpty { return false }
+            return !inlineAddressLine1.trimmingCharacters(in: .whitespaces).isEmpty &&
+                   !inlineCity.trimmingCharacters(in: .whitespaces).isEmpty &&
+                   !inlineAddrState.trimmingCharacters(in: .whitespaces).isEmpty &&
+                   !inlineZip.trimmingCharacters(in: .whitespaces).isEmpty
         case 1:
             if selectedPayment == .creditCard {
                 return !cardNumber.isEmpty && !cardExpiry.isEmpty && !cardCVV.isEmpty
@@ -525,19 +555,39 @@ struct BuyNowSheetView: View {
     // MARK: - Place Order
 
     private func placeOrder() {
-        guard let addr = selectedAddress else { return }
         isPlacing = true
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        Task { await placeOrderAsync() }
+    }
 
+    @MainActor
+    private func placeOrderAsync() async {
+        defer { isPlacing = false }
+
+        // Build address JSON
         let addrJSON: String = {
-            let dict: [String: String] = [
-                "line1": addr.line1, "line2": addr.line2,
-                "city": addr.city, "state": addr.state,
-                "zip": addr.zip, "country": addr.country
-            ]
-            guard let data = try? JSONSerialization.data(withJSONObject: dict),
-                  let str = String(data: data, encoding: .utf8) else { return "{}" }
-            return str
+            if let addr = selectedAddress {
+                let d: [String: String] = [
+                    "line1": addr.line1, "line2": addr.line2,
+                    "city": addr.city, "state": addr.state,
+                    "zip": addr.zip, "country": addr.country
+                ]
+                guard let data = try? JSONSerialization.data(withJSONObject: d),
+                      let s = String(data: data, encoding: .utf8) else { return "{}" }
+                return s
+            }
+            // Inline address fallback
+            if !inlineAddressLine1.isEmpty {
+                let d: [String: String] = [
+                    "line1": inlineAddressLine1, "line2": inlineAddressLine2,
+                    "city": inlineCity, "state": inlineAddrState,
+                    "zip": inlineZip, "country": "US"
+                ]
+                guard let data = try? JSONSerialization.data(withJSONObject: d),
+                      let s = String(data: data, encoding: .utf8) else { return "{}" }
+                return s
+            }
+            return "{}"
         }()
 
         let itemArr: [[String: Any]] = [[
@@ -553,10 +603,10 @@ struct BuyNowSheetView: View {
             return str
         }()
 
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy"
-        let orderNum = "ML-ORD-\(dateFormatter.string(from: Date()))-\(String(format: "%04d", Int.random(in: 1000...9999)))"
+        let df = DateFormatter(); df.dateFormat = "yyyy"
+        let orderNum = "ML-ORD-\(df.string(from: Date()))-\(String(format: "%04d", Int.random(in: 1000...9999)))"
 
+        // 1. Save locally (always — source of truth for customer order history UI)
         let order = Order(
             orderNumber: orderNum,
             customerEmail: appState.currentUserEmail,
@@ -572,12 +622,38 @@ struct BuyNowSheetView: View {
         modelContext.insert(order)
         try? modelContext.save()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-            placedOrder = order
-            isPlacing   = false
-            showConfirmation = true
+        // 2. Sync to Supabase so sales associates can see this purchase in client history.
+        let resolvedClientId: UUID? = appState.currentUserProfile?.id ?? appState.currentClientProfile?.id
+        if let clientId = resolvedClientId {
+            print("[BuyNowSheetView] Starting Supabase sync for clientId: \(clientId), order: \(orderNum)")
+            do {
+                try await OrderService.shared.syncOrder(
+                    clientId: clientId,
+                    cartItems: [(
+                        productId: product.id,
+                        productName: product.name,
+                        quantity: 1,
+                        unitPrice: product.price
+                    )],
+                    orderNumber: orderNum,
+                    subtotal: subtotal,
+                    taxTotal: tax,
+                    grandTotal: total,
+                    channel: "online"
+                )
+                print("[BuyNowSheetView] ✅ Supabase sync succeeded for order: \(orderNum)")
+            } catch {
+                // Non-fatal: local order already saved. Log but don't block the user.
+                print("[BuyNowSheetView] ⚠️ Supabase sync failed (order saved locally): \(error)")
+            }
+        } else {
+            print("[BuyNowSheetView] No client UUID in AppState — skipping Supabase sync")
         }
+
+        // 3. Navigate to confirmation
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        placedOrder = order
+        showConfirmation = true
     }
 }
 

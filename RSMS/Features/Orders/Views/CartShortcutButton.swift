@@ -20,7 +20,12 @@ struct CartShortcutButton: View {
     }
 
     var body: some View {
-        NavigationLink(destination: CartView()) {
+        @Bindable var state = appState
+        
+        Button {
+            print("[CartShortcutButton] Tapped, setting showCart = true")
+            state.showCart = true
+        } label: {
             ZStack(alignment: .topTrailing) {
                 // Bag icon — NO top padding so it stays vertically centred with
                 // the adjacent bell icon in the toolbar HStack.

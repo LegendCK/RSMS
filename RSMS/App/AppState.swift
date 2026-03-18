@@ -29,10 +29,28 @@ class AppState {
 
     // MARK: - Navigation
     var homeNavigationPath: NavigationPath = NavigationPath()
+    var showCart: Bool = false  // Programmatic cart navigation
+
+    /// Set to true by navigateToHome(); CartView and BuyNowSheetView observe this
+    /// to dismiss themselves before the path is cleared.
+    var shouldNavigateHome: Bool = false
 
     /// Pops the customer Home NavigationStack all the way back to HomeView.
+    /// Also signals any sheet/nested-stack views (CartView, BuyNowSheetView) to dismiss.
     func navigateToHome() {
-        homeNavigationPath = NavigationPath()
+        print("[AppState] navigateToHome() called")
+        print("[AppState] Current homeNavigationPath count: \(homeNavigationPath.count)")
+        shouldNavigateHome   = true
+        showCart            = false  // Reset cart navigation
+        homeNavigationPath   = NavigationPath()
+        print("[AppState] homeNavigationPath cleared, new count: \(homeNavigationPath.count)")
+        
+        // Reset the flag after a brief delay to allow views to observe the change
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            shouldNavigateHome = false
+            print("[AppState] shouldNavigateHome reset to false")
+        }
     }
 
     // MARK: - Session state
