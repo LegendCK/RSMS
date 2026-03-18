@@ -98,6 +98,7 @@ struct UserInsertDTO: Codable {
 
 struct UserUpdateDTO: Codable {
     let role: String
+    let storeId: UUID?
     let firstName: String
     let lastName: String
     let phone: String?
@@ -105,6 +106,7 @@ struct UserUpdateDTO: Codable {
 
     enum CodingKeys: String, CodingKey {
         case role
+        case storeId = "store_id"
         case firstName = "first_name"
         case lastName  = "last_name"
         case phone
