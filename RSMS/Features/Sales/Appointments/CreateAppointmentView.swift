@@ -175,11 +175,9 @@ struct CreateAppointmentView: View {
                             .foregroundColor(AppColors.textPrimaryDark)
                         Spacer()
                         Picker("Status", selection: $vm.status) {
-                            Text("Scheduled").tag("scheduled")
-                            Text("Confirmed").tag("confirmed")
-                            Text("Completed").tag("completed")
-                            Text("Cancelled").tag("cancelled")
-                            Text("No Show").tag("no_show")
+                            ForEach(vm.statusOptions) { option in
+                                Text(option.title).tag(option.value)
+                            }
                         }
                         .tint(AppColors.accent)
                     }

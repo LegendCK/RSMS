@@ -132,6 +132,19 @@ final class ClientService {
             .value
     }
 
+    /// Fetches a batch of clients by IDs.
+    func fetchClients(ids: [UUID]) async throws -> [ClientDTO] {
+        let uniqueIds = Array(Set(ids))
+        guard !uniqueIds.isEmpty else { return [] }
+
+        return try await client
+            .from("clients")
+            .select()
+            .in("id", values: uniqueIds.map { $0.uuidString.lowercased() })
+            .execute()
+            .value
+    }
+
     /// Updates a client's full profile (associate-level: includes segment + notes blob).
     /// Records `updated_at` via Supabase trigger automatically.
     func updateClient(id: UUID, payload: ClientAssociateUpdateDTO) async throws -> ClientDTO {

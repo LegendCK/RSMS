@@ -68,6 +68,18 @@ final class StoreSyncService {
             .execute()
     }
 
+    /// Fetches active boutique stores for customer appointment booking.
+    func fetchActiveBoutiques() async throws -> [StoreDTO] {
+        return try await client
+            .from("stores")
+            .select()
+            .eq("is_active", value: true)
+            .eq("type", value: "boutique")
+            .order("name", ascending: true)
+            .execute()
+            .value
+    }
+
     private func pushLocalStores(modelContext: ModelContext) async throws {
         let locals = try deduplicatedLocals(modelContext: modelContext)
         for location in locals {

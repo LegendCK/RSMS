@@ -47,6 +47,30 @@ final class AppointmentService {
             .execute()
             .value
     }
+
+    /// Fetches requested appointments for a specific store.
+    func fetchRequestedAppointments(forStoreId storeId: UUID) async throws -> [AppointmentDTO] {
+        return try await client
+            .from("appointments")
+            .select()
+            .eq("store_id", value: storeId.uuidString.lowercased())
+            .eq("status", value: "requested")
+            .order("scheduled_at", ascending: true)
+            .execute()
+            .value
+    }
+
+    /// Fetches all appointments for a specific store.
+    func fetchAppointments(forStoreId storeId: UUID) async throws -> [AppointmentDTO] {
+        return try await client
+            .from("appointments")
+            .select()
+            .eq("store_id", value: storeId.uuidString.lowercased())
+            .in("status", values: ["requested", "scheduled", "confirmed", "in_progress", "completed", "cancelled", "no_show"])
+            .order("scheduled_at", ascending: true)
+            .execute()
+            .value
+    }
     
     /// Updates an existing appointment
     func updateAppointment(id: UUID, payload: AppointmentInsertDTO) async throws -> AppointmentDTO {

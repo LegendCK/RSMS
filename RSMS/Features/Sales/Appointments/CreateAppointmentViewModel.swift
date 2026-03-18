@@ -11,6 +11,11 @@ import SwiftUI
 @Observable
 @MainActor
 final class CreateAppointmentViewModel {
+    struct StatusOption: Identifiable {
+        let id: String
+        let title: String
+        let value: String
+    }
     
     // Form Data
     var selectedClientId: UUID?
@@ -39,6 +44,46 @@ final class CreateAppointmentViewModel {
 
     var isEditing: Bool {
         editingAppointment != nil
+    }
+
+    var statusOptions: [StatusOption] {
+        guard isEditing else { return [] }
+
+        let options: [StatusOption]
+        switch status {
+        case "requested":
+            options = [
+                .init(id: "confirmed", title: "Confirmed", value: "confirmed"),
+                .init(id: "cancelled", title: "Cancelled", value: "cancelled")
+            ]
+        case "scheduled", "confirmed", "in_progress":
+            options = [
+                .init(id: "completed", title: "Completed", value: "completed"),
+                .init(id: "cancelled", title: "Cancelled", value: "cancelled")
+            ]
+        case "completed":
+            options = [.init(id: "completed", title: "Completed", value: "completed")]
+        case "cancelled":
+            options = [.init(id: "cancelled", title: "Cancelled", value: "cancelled")]
+        case "no_show":
+            options = [.init(id: "no_show", title: "No Show", value: "no_show")]
+        default:
+            options = [
+                .init(id: "completed", title: "Completed", value: "completed"),
+                .init(id: "cancelled", title: "Cancelled", value: "cancelled")
+            ]
+        }
+
+        if options.contains(where: { $0.value == status }) {
+            return options
+        }
+
+        let current = StatusOption(
+            id: "current-\(status)",
+            title: status.replacingOccurrences(of: "_", with: " ").capitalized,
+            value: status
+        )
+        return [current] + options
     }
 
     var selectedClientName: String {

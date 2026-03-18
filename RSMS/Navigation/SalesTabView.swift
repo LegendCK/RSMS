@@ -34,7 +34,7 @@ struct SalesTabView: View {
 
                 NavigationStack { SalesAppointmentsView() }
                     .tabItem {
-                        Image(systemName: selectedTab == 2 ? "calendar.fill" : "calendar")
+                        Image(systemName: selectedTab == 2 ? "calendar.circle.fill" : "calendar.circle")
                         Text("Schedule")
                     }
                     .tag(2)

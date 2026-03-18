@@ -14,10 +14,14 @@ final class SalesAppointmentsViewModel {
     
     var appointments: [AppointmentDTO] = []
     var requestedAppointments: [AppointmentDTO] = []
+    var clientsById: [UUID: ClientDTO] = [:]
     
     var isLoading = false
     var showError = false
     var errorMessage = ""
+    var showRequestAlert = false
+    var requestAlertMessage = ""
+    private var lastRequestedIds: Set<UUID> = []
     
     var todayAppointments: [AppointmentDTO] {
         let calendar = Calendar.current
@@ -77,11 +81,21 @@ final class SalesAppointmentsViewModel {
                 return
             }
             
-            let fetchAppts = try await AppointmentService.shared.fetchAppointments(forAssociateId: me.id)
-            let fetchReqs = try await AppointmentService.shared.fetchRequestedAppointments()
+            let fetchAppts: [AppointmentDTO]
+            let fetchReqs: [AppointmentDTO]
+
+            if let storeId = me.storeId {
+                fetchAppts = try await AppointmentService.shared.fetchAppointments(forStoreId: storeId)
+                fetchReqs = try await AppointmentService.shared.fetchRequestedAppointments(forStoreId: storeId)
+            } else {
+                fetchAppts = try await AppointmentService.shared.fetchAppointments(forAssociateId: me.id)
+                fetchReqs = try await AppointmentService.shared.fetchRequestedAppointments()
+            }
             
             self.appointments = fetchAppts
             self.requestedAppointments = fetchReqs
+            await loadClientDetails(for: fetchAppts + fetchReqs)
+            handleRequestAlerts(with: fetchReqs)
             
         } catch {
             print("[SalesAppointmentsViewModel] Error: \(error.localizedDescription)")
@@ -93,6 +107,24 @@ final class SalesAppointmentsViewModel {
     func acceptRequest(_ request: AppointmentDTO) async {
         do {
             guard let me = await AuthService.shared.restoreSession() else { return }
+            let storeAppointments = try await AppointmentService.shared.fetchAppointments(forStoreId: request.storeId)
+            let hasConflict = storeAppointments.contains { existing in
+                guard existing.id != request.id else { return false }
+                guard ["scheduled", "confirmed", "in_progress", "requested"].contains(existing.status) else { return false }
+
+                let existingStart = existing.scheduledAt
+                let existingEnd = existingStart.addingTimeInterval(TimeInterval(existing.durationMinutes * 60))
+                let requestStart = request.scheduledAt
+                let requestEnd = requestStart.addingTimeInterval(TimeInterval(request.durationMinutes * 60))
+                return DateInterval(start: existingStart, end: existingEnd)
+                    .intersects(DateInterval(start: requestStart, end: requestEnd))
+            }
+
+            if hasConflict {
+                errorMessage = "This slot is no longer available. Another appointment already occupies that time."
+                showError = true
+                return
+            }
             
             let updatedDTO = AppointmentInsertDTO(
                 clientId: request.clientId,
@@ -113,6 +145,45 @@ final class SalesAppointmentsViewModel {
             await loadSchedule()
         } catch {
             print("[SalesAppointmentsViewModel] Error accepting requested appointment: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+            showError = true
         }
+    }
+
+    func customer(for appointment: AppointmentDTO) -> ClientDTO? {
+        clientsById[appointment.clientId]
+    }
+
+    private func loadClientDetails(for appointments: [AppointmentDTO]) async {
+        let clientIds = appointments.map(\.clientId)
+        guard !clientIds.isEmpty else {
+            clientsById = [:]
+            return
+        }
+
+        do {
+            let clients = try await ClientService.shared.fetchClients(ids: clientIds)
+            clientsById = Dictionary(uniqueKeysWithValues: clients.map { ($0.id, $0) })
+        } catch {
+            print("[SalesAppointmentsViewModel] Failed loading client details: \(error.localizedDescription)")
+            clientsById = [:]
+        }
+    }
+
+    private func handleRequestAlerts(with requests: [AppointmentDTO]) {
+        let current = Set(requests.map(\.id))
+
+        if lastRequestedIds.isEmpty, !current.isEmpty {
+            requestAlertMessage = "You have \(current.count) pending appointment request(s) for your boutique."
+            showRequestAlert = true
+        } else {
+            let added = current.subtracting(lastRequestedIds)
+            if !added.isEmpty {
+                requestAlertMessage = "\(added.count) new appointment request(s) received."
+                showRequestAlert = true
+            }
+        }
+
+        lastRequestedIds = current
     }
 }

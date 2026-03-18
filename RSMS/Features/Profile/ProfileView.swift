@@ -67,7 +67,9 @@ struct ProfileView: View {
 
                 // Boutique section
                 Section("Boutique") {
-                    Label("Book an Appointment", systemImage: "calendar")
+                    NavigationLink(destination: CustomerBookAppointmentView()) {
+                        Label("Book an Appointment", systemImage: "calendar")
+                    }
                     Label("Wishlist", systemImage: "heart")
                 }
 
