@@ -40,52 +40,55 @@ struct HomeView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .top) {
-                Color(.systemGroupedBackground).ignoresSafeArea()
+        @Bindable var state = appState
+        
+        ZStack(alignment: .top) {
+            Color(.systemGroupedBackground).ignoresSafeArea()
 
-                // Maroon top glow
-                LinearGradient(
-                    colors: [AppColors.accent.opacity(0.13), Color.clear],
-                    startPoint: .top,
-                    endPoint: .init(x: 0.5, y: 0.28)
-                )
-                .ignoresSafeArea()
+            // Maroon top glow
+            LinearGradient(
+                colors: [AppColors.accent.opacity(0.13), Color.clear],
+                startPoint: .top,
+                endPoint: .init(x: 0.5, y: 0.28)
+            )
+            .ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        bannerCarousel
-                        categorySection
-                        featuredSection
-                        newArrivalsSection
-                        Spacer().frame(height: 48)
-                    }
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    bannerCarousel
+                    categorySection
+                    featuredSection
+                    newArrivalsSection
+                    Spacer().frame(height: 48)
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                // Centre brand wordmark — no leading item so it never truncates to "M …"
-                ToolbarItem(placement: .principal) {
-                    Text("MAISON LUXE")
-                        .font(.system(size: 13, weight: .black))
-                        .tracking(5)
-                        .foregroundColor(.primary)
-                }
-                // Trailing: bell and cart at identical visual height
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(alignment: .center, spacing: 20) {
-                        Button(action: {}) {
-                            Image(systemName: "bell")
-                                .font(.system(size: 17, weight: .light))
-                                .foregroundStyle(.primary)
-                        }
-                        CartShortcutButton()
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // Centre brand wordmark — no leading item so it never truncates to "M …"
+            ToolbarItem(placement: .principal) {
+                Text("MAISON LUXE")
+                    .font(.system(size: 13, weight: .black))
+                    .tracking(5)
+                    .foregroundColor(.primary)
+            }
+            // Trailing: bell and cart at identical visual height
+            ToolbarItem(placement: .navigationBarTrailing) {
+                HStack(alignment: .center, spacing: 20) {
+                    Button(action: {}) {
+                        Image(systemName: "bell")
+                            .font(.system(size: 17, weight: .light))
+                            .foregroundStyle(.primary)
                     }
+                    CartShortcutButton()
                 }
             }
-            .navigationDestination(isPresented: $showAllCategories) { CategoriesView() }
-            .navigationDestination(isPresented: $showAllFeatured) { ProductListView(categoryFilter: nil) }
-            .navigationDestination(isPresented: $showAllArrivals) { ProductListView(categoryFilter: nil) }
+        }
+        .navigationDestination(isPresented: $showAllCategories) { CategoriesView() }
+        .navigationDestination(isPresented: $showAllFeatured) { ProductListView(categoryFilter: nil) }
+        .navigationDestination(isPresented: $showAllArrivals) { ProductListView(categoryFilter: nil) }
+        .navigationDestination(isPresented: $state.showCart) {
+            CartView()
         }
     }
 

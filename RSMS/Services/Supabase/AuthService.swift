@@ -68,30 +68,55 @@ final class AuthService {
 
     /// Attempts to load a customer profile from `clients` and map it to `UserDTO`.
     ///
-    /// **Why explicit `.eq("id", ...)`?**
-    /// During signup the profile is returned as the INSERT response (no SELECT RLS needed).
-    /// On every subsequent login this is a plain SELECT — it requires the RLS SELECT policy
-    /// `auth.uid() = id` to exist on `clients`. Filtering explicitly by the auth user's UUID
-    /// ensures exactly one row is returned even if that policy is missing (RLS disabled) or
-    /// the table has been seeded with multiple rows.
+    /// Strategy (two-pass):
+    /// 1. Query by `id = auth.uid` — works for customers who self-registered (clients.id == auth.uid).
+    /// 2. If that fails, fall back to `email = auth.email` — works for clients created offline
+    ///    by a sales associate before the customer had a Supabase Auth account.
     private func fetchClientProfile() async throws -> UserDTO? {
+        let uid: UUID
+        let email: String
         do {
-            let uid = try await client.auth.session.user.id
-            print("[AuthService] fetchClientProfile: querying clients for uid=\(uid)")
+            let session = try await client.auth.session
+            uid   = session.user.id
+            email = session.user.email ?? ""
+        } catch {
+            print("[AuthService] fetchClientProfile: no session — \(error.localizedDescription)")
+            return nil
+        }
+        print("[AuthService] fetchClientProfile: querying clients for uid=\(uid)")
 
+        // Pass 1: match by primary key (common path — customer self-registered via the app)
+        if let profile: ClientDTO = try? await client
+            .from("clients")
+            .select()
+            .eq("id", value: uid.uuidString.lowercased())
+            .single()
+            .execute()
+            .value {
+            print("[AuthService] fetchClientProfile: found by id — \(profile.email)")
+            return UserDTO(clientProfile: profile)
+        }
+
+        // Pass 2: match by email — handles clients pre-created by a sales associate
+        // (their clients.id won't match auth.uid since they had no auth account at creation).
+        guard !email.isEmpty else {
+            print("[AuthService] fetchClientProfile: id miss and no auth email — giving up")
+            return nil
+        }
+
+        print("[AuthService] fetchClientProfile: id miss — retrying by email: \(email)")
+        do {
             let profile: ClientDTO = try await client
                 .from("clients")
                 .select()
-                .eq("id", value: uid.uuidString.lowercased())
+                .eq("email", value: email.lowercased())
                 .single()
                 .execute()
                 .value
-
-            print("[AuthService] fetchClientProfile: found \(profile.email)")
+            print("[AuthService] fetchClientProfile: found by email — \(profile.email)")
             return UserDTO(clientProfile: profile)
         } catch {
-            // Log the real error so we can diagnose RLS / schema issues in the console.
-            print("[AuthService] fetchClientProfile failed: \(error.localizedDescription)")
+            print("[AuthService] fetchClientProfile failed (both passes): \(error.localizedDescription)")
             print("[AuthService] fetchClientProfile raw error: \(error)")
             return nil
         }

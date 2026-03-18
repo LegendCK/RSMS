@@ -10,7 +10,6 @@ import SwiftUI
 
 struct OrderConfirmationView: View {
     let order: Order
-    @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
 
     @State private var checkmarkScale: CGFloat  = 0.1
@@ -119,12 +118,15 @@ struct OrderConfirmationView: View {
                                 .background(AppColors.accent)
                                 .cornerRadius(AppSpacing.radiusMedium)
                         }
+                        .opacity(contentOpacity)
 
                         Button {
-                            // Dismiss this view (and any parent sheet), then
-                            // reset the home NavigationStack path to root.
-                            dismiss()
-                            appState.navigateToHome()
+                            print("[OrderConfirmationView] Continue Shopping tapped")
+                            Task { @MainActor in
+                                // Reset nested navigation states first before clearing the path
+                                print("[OrderConfirmationView] Calling navigateToHome()")
+                                appState.navigateToHome()
+                            }
                         } label: {
                             Text("Continue Shopping")
                                 .font(AppTypography.buttonSecondary)
@@ -138,9 +140,10 @@ struct OrderConfirmationView: View {
                                         .stroke(AppColors.accent.opacity(0.4), lineWidth: 1)
                                 )
                         }
+                        .opacity(contentOpacity)
+                        .disabled(contentOpacity < 0.9)
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
-                    .opacity(contentOpacity)
 
                     Spacer().frame(height: AppSpacing.xxl)
                 }

@@ -2,7 +2,21 @@
   "permissions": {
     "allow": [
       "Bash(wc -l /Users/ekanshjindal/Internship/Infosys/RSMS-3/RSMS/**/*.swift)",
-      "Bash(xargs ls:*)"
+      "Bash(xargs ls:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(xcodebuild -scheme RSMS -destination 'platform=iOS Simulator,name=iPhone 16' -quiet build)",
+      "Bash(find /Users/ekanshjindal/Internship/Infosys/RSMS-3 -name *.xcodeproj -o -name *.xcworkspace)",
+      "Bash(xcodebuild -scheme RSMS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -quiet build)",
+      "Bash(xcodebuild -project RSMS.xcodeproj -scheme RSMS -sdk iphonesimulator -destination 'platform=iOS Simulator,id=FEBBA866-9AA1-400C-8624-374A42B85E9C' build)",
+      "Bash(supabase --version)",
+      "Bash(brew install:*)",
+      "Bash(supabase functions:*)",
+      "Bash(supabase login:*)",
+      "mcp__273c6a24-6e97-47d4-a398-ca6fa25e45e6__deploy_edge_function",
+      "mcp__273c6a24-6e97-47d4-a398-ca6fa25e45e6__apply_migration"
     ]
   }
 }
