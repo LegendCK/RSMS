@@ -80,6 +80,19 @@ final class StoreSyncService {
             .value
     }
 
+    /// Fetches stores by ids.
+    func fetchStores(ids: [UUID]) async throws -> [StoreDTO] {
+        let uniqueIds = Array(Set(ids))
+        guard !uniqueIds.isEmpty else { return [] }
+
+        return try await client
+            .from("stores")
+            .select()
+            .in("id", values: uniqueIds.map { $0.uuidString.lowercased() })
+            .execute()
+            .value
+    }
+
     private func pushLocalStores(modelContext: ModelContext) async throws {
         let locals = try deduplicatedLocals(modelContext: modelContext)
         for location in locals {

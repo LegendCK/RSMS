@@ -92,8 +92,10 @@ final class SalesAppointmentsViewModel {
                 fetchReqs = try await AppointmentService.shared.fetchRequestedAppointments()
             }
             
-            self.appointments = fetchAppts
-            self.requestedAppointments = fetchReqs
+            self.appointments = fetchAppts.filter { normalizedStatus($0.status) != "requested" }
+            self.requestedAppointments = fetchReqs.filter {
+                normalizedStatus($0.status) == "requested" && $0.associateId == nil
+            }
             await loadClientDetails(for: fetchAppts + fetchReqs)
             handleRequestAlerts(with: fetchReqs)
             
@@ -110,7 +112,8 @@ final class SalesAppointmentsViewModel {
             let storeAppointments = try await AppointmentService.shared.fetchAppointments(forStoreId: request.storeId)
             let hasConflict = storeAppointments.contains { existing in
                 guard existing.id != request.id else { return false }
-                guard ["scheduled", "confirmed", "in_progress", "requested"].contains(existing.status) else { return false }
+                // Pending requests should not block acceptance; only active scheduled work blocks.
+                guard ["scheduled", "confirmed", "in_progress"].contains(existing.status) else { return false }
 
                 let existingStart = existing.scheduledAt
                 let existingEnd = existingStart.addingTimeInterval(TimeInterval(existing.durationMinutes * 60))
@@ -140,11 +143,34 @@ final class SalesAppointmentsViewModel {
             
             // Re-use `AppointmentService.shared.updateAppointment` which we'll add next
             _ = try await AppointmentService.shared.updateAppointment(id: request.id, payload: updatedDTO)
+            requestedAppointments.removeAll { $0.id == request.id }
             
             // Reload
             await loadSchedule()
         } catch {
             print("[SalesAppointmentsViewModel] Error accepting requested appointment: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    func rejectRequest(_ request: AppointmentDTO) async {
+        do {
+            let rejectedDTO = AppointmentInsertDTO(
+                clientId: request.clientId,
+                storeId: request.storeId,
+                associateId: request.associateId,
+                type: request.type,
+                status: "cancelled",
+                scheduledAt: request.scheduledAt,
+                durationMinutes: request.durationMinutes,
+                notes: request.notes,
+                videoLink: request.videoLink
+            )
+            _ = try await AppointmentService.shared.updateAppointment(id: request.id, payload: rejectedDTO)
+            requestedAppointments.removeAll { $0.id == request.id }
+            await loadSchedule()
+        } catch {
             errorMessage = error.localizedDescription
             showError = true
         }
@@ -185,5 +211,9 @@ final class SalesAppointmentsViewModel {
         }
 
         lastRequestedIds = current
+    }
+
+    private func normalizedStatus(_ status: String) -> String {
+        status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
