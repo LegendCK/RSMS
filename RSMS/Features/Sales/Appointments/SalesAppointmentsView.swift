@@ -40,6 +40,9 @@ struct SalesAppointmentsView: View {
                                 listSection
                             }
                         }
+                        // Force full rebuild when switching tabs so cached request cards
+                        // never bleed into the Upcoming / Today / Past sections.
+                        .id(selectedSection)
                     }
                     .refreshable {
                         await vm.loadSchedule()
@@ -76,6 +79,12 @@ struct SalesAppointmentsView: View {
             .task {
                 await vm.loadSchedule()
             }
+            .onChange(of: vm.pendingTabSwitch) { _, newTab in
+                if let tab = newTab {
+                    selectedSection = tab
+                    vm.pendingTabSwitch = nil
+                }
+            }
             .alert("Error", isPresented: $vm.showError) {
                 Button("OK", role: .cancel) { }
             } message: {
@@ -85,6 +94,11 @@ struct SalesAppointmentsView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(vm.requestAlertMessage)
+            }
+            .alert("Appointment Cancelled", isPresented: $vm.showCancellationAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(vm.cancellationAlertMessage)
             }
             .alert("Accept Appointment", isPresented: Binding(
                 get: { requestToAccept != nil },

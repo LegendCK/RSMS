@@ -122,6 +122,46 @@ final class AppointmentReminderService {
         }
     }
 
+    /// Removes any pending reminder notifications for a given appointment.
+    /// Call this after the customer cancels or reschedules an appointment.
+    func cancelReminders(for appointmentId: UUID) {
+        center.removePendingNotificationRequests(withIdentifiers: [
+            "appointment-reminder-\(appointmentId.uuidString)-24h",
+            "appointment-reminder-\(appointmentId.uuidString)-1h"
+        ])
+    }
+
+    /// Fires an immediate local notification alerting the sales associate that a customer
+    /// cancelled their appointment. Should be called from the SA's device when a cancellation
+    /// is detected on schedule refresh.
+    func notifyAssociateCancellation(appointmentDate: Date, customerName: String) async {
+        let granted = await ensureAuthorization()
+        guard granted else { return }
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        let dateStr = formatter.string(from: appointmentDate)
+
+        let content = UNMutableNotificationContent()
+        content.title = "Appointment Cancelled"
+        content.body = "\(customerName) cancelled their \(dateStr) appointment."
+        content.sound = .default
+
+        // Fire after 1 second so it appears as a banner even if the app is open.
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: "appt-cancelled-\(UUID().uuidString)",
+            content: content,
+            trigger: trigger
+        )
+        do {
+            try await add(request)
+        } catch {
+            print("[AppointmentReminderService] Failed to send cancellation notification: \(error)")
+        }
+    }
+
     private func normalizedStatus(_ status: String) -> String {
         status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }

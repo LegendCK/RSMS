@@ -62,4 +62,25 @@ struct AppointmentInsertDTO: Codable {
         case durationMinutes = "duration_minutes"
         case videoLink       = "video_link"
     }
+
+    // Custom encoder: Swift's default Codable omits nil optionals entirely (no key in JSON).
+    // Supabase PATCH leaves columns unchanged when a key is absent, so `associate_id` would
+    // never be cleared. We explicitly encode `null` so Supabase sets the column to NULL.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(clientId,        forKey: .clientId)
+        try c.encode(storeId,         forKey: .storeId)
+        // Always write the key — encode null when nil so Supabase clears the column.
+        if let id = associateId {
+            try c.encode(id,          forKey: .associateId)
+        } else {
+            try c.encodeNil(          forKey: .associateId)
+        }
+        try c.encode(type,            forKey: .type)
+        try c.encode(status,          forKey: .status)
+        try c.encode(scheduledAt,     forKey: .scheduledAt)
+        try c.encode(durationMinutes, forKey: .durationMinutes)
+        try c.encodeIfPresent(notes,     forKey: .notes)
+        try c.encodeIfPresent(videoLink, forKey: .videoLink)
+    }
 }

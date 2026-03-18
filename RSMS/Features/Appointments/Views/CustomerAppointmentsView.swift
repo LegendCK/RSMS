@@ -54,10 +54,67 @@ struct CustomerAppointmentsView: View {
                         .tracking(2)
                         .foregroundColor(AppColors.accent)
                 }
+                if canViewAppointments {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            vm.showBookingSheet = true
+                        } label: {
+                            Image(systemName: "calendar.badge.plus")
+                                .foregroundColor(AppColors.accent)
+                        }
+                    }
+                }
             }
             .task {
                 await vm.loadAppointments(clientId: appState.currentUserProfile?.id)
             }
+            // ── Book new appointment ─────────────────────────────────────────
+            .sheet(isPresented: $vm.showBookingSheet) {
+                if let clientId = appState.currentUserProfile?.id {
+                    CustomerBookAppointmentSheet(clientId: clientId) {
+                        Task { await vm.loadAppointments(clientId: clientId) }
+                    }
+                }
+            }
+            // ── Cancel confirmation ──────────────────────────────────────────
+            .alert("Cancel Appointment", isPresented: Binding(
+                get: { vm.appointmentToCancel != nil },
+                set: { if !$0 { vm.appointmentToCancel = nil } }
+            )) {
+                Button("Yes, Cancel", role: .destructive) {
+                    if let appt = vm.appointmentToCancel {
+                        Task { await vm.cancelAppointment(appt) }
+                    }
+                    vm.appointmentToCancel = nil
+                }
+                Button("Keep Appointment", role: .cancel) {
+                    vm.appointmentToCancel = nil
+                }
+            } message: {
+                Text("Are you sure you want to cancel this appointment? This cannot be undone.")
+            }
+            // ── Reschedule sheet ─────────────────────────────────────────────
+            .sheet(item: Binding(
+                get: { vm.appointmentToReschedule },
+                set: { vm.appointmentToReschedule = $0 }
+            )) { appt in
+                CustomerRescheduleSheet(appointment: appt) { newDate in
+                    Task { await vm.requestReschedule(appt, newDate: newDate) }
+                }
+            }
+            // ── Success feedback ─────────────────────────────────────────────
+            .alert("Done", isPresented: $vm.showSuccess) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(vm.successMessage)
+            }
+            // ── Boutique cancelled ───────────────────────────────────────────
+            .alert("Appointment Cancelled", isPresented: $vm.showSACancellationAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(vm.saCancellationMessage)
+            }
+            // ── Error feedback ───────────────────────────────────────────────
             .alert("Error", isPresented: $vm.showError) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -75,13 +132,19 @@ struct CustomerAppointmentsView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: AppSpacing.md) {
+        VStack(spacing: AppSpacing.lg) {
             Image(systemName: selectedSection == 0 ? "calendar.badge.clock" : "calendar.badge.checkmark")
                 .font(AppTypography.emptyStateIcon)
                 .foregroundColor(AppColors.accent.opacity(0.55))
             Text(selectedSection == 0 ? "No upcoming appointments" : "No past appointments")
                 .font(AppTypography.bodyMedium)
                 .foregroundColor(AppColors.textSecondaryDark)
+            if selectedSection == 0 {
+                SecondaryButton(title: "Book an Appointment") {
+                    vm.showBookingSheet = true
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+            }
         }
         .frame(maxWidth: .infinity)
     }
@@ -143,6 +206,38 @@ struct CustomerAppointmentsView: View {
                     .foregroundColor(AppColors.textSecondaryDark)
                     .lineLimit(2)
             }
+
+            // ── Cancel / Reschedule actions (upcoming tab only) ──────────────
+            if selectedSection == 0 && vm.canTakeAction(on: appointment) {
+                GoldDivider()
+                HStack(spacing: AppSpacing.sm) {
+                    Button {
+                        vm.appointmentToReschedule = appointment
+                    } label: {
+                        Label("Reschedule", systemImage: "calendar.badge.clock")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.accent)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(AppColors.accent.opacity(0.1))
+                            .clipShape(Capsule())
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Button {
+                        vm.appointmentToCancel = appointment
+                    } label: {
+                        Label("Cancel", systemImage: "xmark.circle")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.error)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(AppColors.error.opacity(0.1))
+                            .clipShape(Capsule())
+                    }
+                }
+            }
         }
         .padding()
         .background(AppColors.surfaceDark)
@@ -151,6 +246,9 @@ struct CustomerAppointmentsView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(AppColors.accent.opacity(0.2), lineWidth: 1)
         )
+        // Dim the card while a request is in flight
+        .opacity(vm.isProcessing ? 0.6 : 1)
+        .animation(.easeInOut(duration: 0.2), value: vm.isProcessing)
     }
 
     private func statusColor(_ status: String) -> Color {
