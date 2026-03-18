@@ -13,6 +13,7 @@ struct SalesAppointmentsView: View {
     @State private var selectedSection = 0 // 0 = Today, 1 = Upcoming, 2 = Past, 3 = Requests
     @State private var showCreateForm = false
     @State private var selectedAppointment: AppointmentDTO?
+    @State private var requestToAccept: AppointmentDTO?
 
     var body: some View {
         NavigationStack {
@@ -79,6 +80,29 @@ struct SalesAppointmentsView: View {
             } message: {
                 Text(vm.errorMessage)
             }
+            .alert("Appointment Requests", isPresented: $vm.showRequestAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(vm.requestAlertMessage)
+            }
+            .alert("Accept Appointment", isPresented: Binding(
+                get: { requestToAccept != nil },
+                set: { if !$0 { requestToAccept = nil } }
+            )) {
+                Button("Accept") {
+                    if let request = requestToAccept {
+                        Task { await vm.acceptRequest(request) }
+                    }
+                    requestToAccept = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    requestToAccept = nil
+                }
+            } message: {
+                if let request = requestToAccept {
+                    Text("Confirm \(request.scheduledAt.formatted(date: .abbreviated, time: .shortened)) • \(request.durationMinutes) min?")
+                }
+            }
         }
     }
     
@@ -91,16 +115,28 @@ struct SalesAppointmentsView: View {
             ForEach(vm.requestedAppointments) { request in
                 HStack(spacing: AppSpacing.md) {
                     VStack(alignment: .leading, spacing: 4) {
+                        if let customer = vm.customer(for: request) {
+                            Text(customer.fullName)
+                                .font(AppTypography.bodyMedium.bold())
+                                .foregroundColor(AppColors.textPrimaryDark)
+                            Text(customer.email)
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                        } else {
+                            Text("Customer #\(request.clientId.uuidString.prefix(8))")
+                                .font(AppTypography.bodyMedium.bold())
+                                .foregroundColor(AppColors.textPrimaryDark)
+                        }
                         Text(request.scheduledAt.formatted(date: .abbreviated, time: .shortened))
-                            .font(AppTypography.bodyMedium.bold())
-                            .foregroundColor(AppColors.textPrimaryDark)
+                            .font(AppTypography.bodyMedium)
+                            .foregroundColor(AppColors.textSecondaryDark)
                         Text("\(request.type.capitalized) • \(request.durationMinutes) min")
                             .font(AppTypography.caption)
                             .foregroundColor(AppColors.textSecondaryDark)
                     }
                     Spacer()
                     Button("Accept") {
-                        Task { await vm.acceptRequest(request) }
+                        requestToAccept = request
                     }
                     .font(AppTypography.buttonPrimary)
                     .padding(.horizontal, 16)
@@ -173,9 +209,20 @@ struct SalesAppointmentsView: View {
     private func appointmentCard(_ appointment: AppointmentDTO) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack {
-                Text(appointment.scheduledAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(AppTypography.bodyMedium.bold())
-                    .foregroundColor(AppColors.textPrimaryDark)
+                VStack(alignment: .leading, spacing: 2) {
+                    if let customer = vm.customer(for: appointment) {
+                        Text(customer.fullName)
+                            .font(AppTypography.bodyMedium.bold())
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        Text(customer.email)
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    } else {
+                        Text("Customer #\(appointment.clientId.uuidString.prefix(8))")
+                            .font(AppTypography.bodyMedium.bold())
+                            .foregroundColor(AppColors.textPrimaryDark)
+                    }
+                }
                 Spacer()
                 Text(appointment.type.uppercased())
                     .font(AppTypography.caption)
@@ -185,6 +232,11 @@ struct SalesAppointmentsView: View {
                     .background(AppColors.accent.opacity(0.1))
                     .cornerRadius(4)
             }
+
+            Text(appointment.scheduledAt.formatted(date: .abbreviated, time: .shortened))
+                .font(AppTypography.bodyMedium)
+                .foregroundColor(AppColors.textSecondaryDark)
+
             if let notes = appointment.notes {
                 Text(notes)
                     .font(AppTypography.bodyMedium)

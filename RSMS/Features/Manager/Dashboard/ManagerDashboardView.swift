@@ -18,6 +18,8 @@ struct ManagerDashboardView: View {
     @State private var showProfile = false
     @State private var isShowingCachedData = false
     @State private var statusMessage: String?
+    @State private var upcomingAppointments: [AppointmentDTO] = []
+    @State private var appointmentClientsById: [UUID: ClientDTO] = [:]
 
     private let service = ManagerDashboardService.shared
 
@@ -89,6 +91,7 @@ struct ManagerDashboardView: View {
                     operationalSignals(snapshot)
                     staffPerformanceSection(snapshot)
                     appointmentSection(snapshot)
+                    upcomingAppointmentsSection
                 } else {
                     loadingState
                 }
@@ -474,6 +477,72 @@ struct ManagerDashboardView: View {
         )
     }
 
+    private var upcomingAppointmentsSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            sectionTitle("UPCOMING APPOINTMENTS")
+
+            if upcomingAppointments.isEmpty {
+                dashboardCard(
+                    content: {
+                        Text("No upcoming appointments scheduled for this boutique.")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    },
+                    glassConfig: .regular,
+                    padding: AppSpacing.md
+                )
+            } else {
+                ForEach(upcomingAppointments.prefix(8)) { appointment in
+                    dashboardCard(
+                        content: {
+                            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                                HStack(spacing: AppSpacing.sm) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        if let client = appointmentClientsById[appointment.clientId] {
+                                            Text(client.fullName)
+                                                .font(AppTypography.label)
+                                                .foregroundColor(AppColors.textPrimaryDark)
+                                            Text(client.email)
+                                                .font(AppTypography.caption)
+                                                .foregroundColor(AppColors.textSecondaryDark)
+                                        } else {
+                                            Text("Customer #\(appointment.clientId.uuidString.prefix(8))")
+                                                .font(AppTypography.label)
+                                                .foregroundColor(AppColors.textPrimaryDark)
+                                        }
+                                    }
+                                    Spacer()
+                                    Text(appointment.status.replacingOccurrences(of: "_", with: " ").uppercased())
+                                        .font(AppTypography.nano)
+                                        .foregroundColor(AppColors.accent)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(AppColors.accent.opacity(0.12))
+                                        .clipShape(Capsule())
+                                }
+
+                                Text(appointment.scheduledAt.formatted(date: .abbreviated, time: .shortened))
+                                    .font(AppTypography.bodySmall)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+
+                                if let notes = appointment.notes, !notes.isEmpty {
+                                    Text(notes)
+                                        .font(AppTypography.caption)
+                                        .foregroundColor(AppColors.textSecondaryDark)
+                                        .lineLimit(2)
+                                }
+                            }
+                        },
+                        glassConfig: .regular,
+                        padding: AppSpacing.md
+                    )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var restrictedAccessView: some View {
         VStack(spacing: AppSpacing.lg) {
             Image(systemName: "lock.shield")
@@ -750,6 +819,7 @@ struct ManagerDashboardView: View {
         do {
             let fresh = try await service.refreshSnapshot(for: storeId)
             snapshot = fresh
+            await loadUpcomingAppointments(for: storeId)
             isShowingCachedData = false
             statusMessage = nil
         } catch {
@@ -759,6 +829,30 @@ struct ManagerDashboardView: View {
             } else {
                 statusMessage = error.localizedDescription
             }
+        }
+    }
+
+    private func loadUpcomingAppointments(for storeId: UUID) async {
+        do {
+            let all = try await AppointmentService.shared.fetchAppointments(forStoreId: storeId)
+            let now = Date()
+            let statuses = Set(["requested", "scheduled", "confirmed", "in_progress"])
+            let filtered = all
+                .filter { $0.scheduledAt >= now && statuses.contains($0.status) }
+                .sorted { $0.scheduledAt < $1.scheduledAt }
+
+            upcomingAppointments = filtered
+
+            let clientIds = filtered.map(\.clientId)
+            if clientIds.isEmpty {
+                appointmentClientsById = [:]
+            } else {
+                let clients = try await ClientService.shared.fetchClients(ids: clientIds)
+                appointmentClientsById = Dictionary(uniqueKeysWithValues: clients.map { ($0.id, $0) })
+            }
+        } catch {
+            upcomingAppointments = []
+            appointmentClientsById = [:]
         }
     }
 }
