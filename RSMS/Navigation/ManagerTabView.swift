@@ -2,8 +2,8 @@
 //  ManagerTabView.swift
 //  RSMS
 //
-//  Boutique Manager — 4 tab bar modules.
-//  Dashboard | Operations | Staff | Profile
+//  Boutique Manager: Dashboard | Operations | Staff | Profile
+//  Inventory Controller: Scanner | Operations | Staff | Profile
 //
 
 import SwiftUI
@@ -17,12 +17,17 @@ struct ManagerTabView: View {
         appState.currentUserRole == .boutiqueManager
     }
 
+    private var showsScanner: Bool {
+        appState.currentUserRole == .inventoryController
+    }
+
     var body: some View {
         ZStack {
             AppColors.backgroundPrimary
                 .ignoresSafeArea()
 
             TabView(selection: $selectedTab) {
+                // Boutique Manager: Dashboard tab
                 if showsDashboard {
                     NavigationStack { ManagerDashboardView() }
                         .tabItem {
@@ -30,6 +35,16 @@ struct ManagerTabView: View {
                             Text("Dashboard")
                         }
                         .tag(0)
+                }
+
+                // Inventory Controller: Scanner tab
+                if showsScanner {
+                    NavigationStack { ScannerView() }
+                        .tabItem {
+                            Image(systemName: "barcode.viewfinder")
+                            Text("Scanner")
+                        }
+                        .tag(scannerTabTag)
                 }
 
                 NavigationStack { ManagerOperationsView() }
@@ -60,22 +75,25 @@ struct ManagerTabView: View {
             .modifier(AppleMusicTabBarModifier())
             .onChange(of: showsDashboard) { _, newValue in
                 if !newValue && selectedTab == 0 {
-                    selectedTab = operationsTabTag
+                    selectedTab = showsScanner ? scannerTabTag : operationsTabTag
                 }
             }
         }
     }
 
+    /// Tag 0 is reserved for Dashboard (boutiqueManager) or Scanner (inventoryController).
+    private var scannerTabTag: Int { 0 }
+
     private var operationsTabTag: Int {
-        showsDashboard ? 1 : 0
+        (showsDashboard || showsScanner) ? 1 : 0
     }
 
     private var staffTabTag: Int {
-        showsDashboard ? 2 : 1
+        (showsDashboard || showsScanner) ? 2 : 1
     }
 
     private var profileTabTag: Int {
-        showsDashboard ? 3 : 2
+        (showsDashboard || showsScanner) ? 3 : 2
     }
 }
 
