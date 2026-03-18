@@ -42,4 +42,16 @@ final class ProfileService {
             .execute()
             .value
     }
+
+    /// Fetches all active associates for appointment assignment
+    func fetchActiveAssociates() async throws -> [UserDTO] {
+        return try await client
+            .from("users")
+            .select()
+            .eq("is_active", value: true)
+            .in("role", values: ["sales_associate", "boutique_manager"])
+            .order("first_name", ascending: true)
+            .execute()
+            .value
+    }
 }

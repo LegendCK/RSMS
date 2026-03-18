@@ -2,8 +2,8 @@
 //  AdminTabView.swift
 //  RSMS
 //
-//  Corporate Admin — 4 tab bar modules.
-//  Dashboard | Catalog | Operations | Profile
+//  Corporate Admin — 5 tab bar modules.
+//  Dashboard | Catalog | Operations | Organization | Profile
 //
 
 import SwiftUI
@@ -39,12 +39,19 @@ struct AdminTabView: View {
                     }
                     .tag(2)
 
-                NavigationStack { AdminProfileView() }
+                NavigationStack { OrganizationView() }
                     .tabItem {
-                        Image(systemName: selectedTab == 3 ? "person.fill" : "person")
-                        Text("Profile")
+                        Image(systemName: selectedTab == 3 ? "building.2.fill" : "building.2")
+                        Text("Organization")
                     }
                     .tag(3)
+
+                NavigationStack { AdminProfileView() }
+                    .tabItem {
+                        Image(systemName: selectedTab == 4 ? "person.fill" : "person")
+                        Text("Profile")
+                    }
+                    .tag(4)
             }
             .tint(AppColors.accent)
             .tabBarMinimizeBehavior(.onScrollDown)

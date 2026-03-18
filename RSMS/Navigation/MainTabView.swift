@@ -39,6 +39,13 @@ struct MainTabView: View {
                         }
                     }
 
+                    // Appointments Tab
+                    Tab("Appointments", systemImage: "calendar.badge.clock") {
+                        NavigationStack {
+                            CustomerAppointmentsView()
+                        }
+                    }
+
                     // Profile Tab
                     Tab("Profile", systemImage: "person.fill") {
                         NavigationStack {

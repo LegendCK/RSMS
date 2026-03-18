@@ -11,7 +11,8 @@ import SwiftUI
 struct ClientDetailView: View {
     @State private var vm: ClientDetailViewModel
     @State private var selectedTab = 0
-    private let tabs = ["Profile", "Purchases", "Appts", "After-Sales"]
+    @State private var selectedAppointment: AppointmentDTO?
+    private let tabs = ["Profile", "Purchases", "Appointments", "After-Sales"]
 
     init(client: ClientDTO) {
         _vm = State(initialValue: ClientDetailViewModel(client: client))
@@ -60,6 +61,11 @@ struct ClientDetailView: View {
         } message: { Text("Client profile updated successfully.") }
         .sheet(isPresented: $vm.isEditing) {
             ClientEditView(vm: vm)
+        }
+        .sheet(item: $selectedAppointment) { appt in
+            CreateAppointmentView(appointmentToEdit: appt) { _ in
+                Task { await vm.loadHistory() }
+            }
         }
     }
 
@@ -359,8 +365,51 @@ struct ClientDetailView: View {
                 } else if vm.appointments.isEmpty {
                     emptyState(icon: "calendar.badge.clock", message: "No appointments on record")
                 } else {
-                    ForEach(vm.appointments) { appt in
-                        appointmentRow(appt)
+                    let upcoming = vm.upcomingAppointments
+                    let past = vm.pastAppointments
+                    
+                    HStack {
+                        sectionHeader("UPCOMING APPOINTMENTS")
+                        Spacer()
+                    }
+                    
+                    if upcoming.isEmpty {
+                        sectionEmptyState(icon: "calendar.badge.clock", message: "No upcoming appointments")
+                    } else {
+                        ForEach(upcoming) { appt in
+                            Button {
+                                selectedAppointment = appt
+                            } label: {
+                                appointmentRow(appt)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    
+                    if !past.isEmpty {
+                        Spacer().frame(height: AppSpacing.sm)
+                        DisclosureGroup(
+                            content: {
+                                VStack(spacing: AppSpacing.md) {
+                                    ForEach(past) { appt in
+                                        Button {
+                                            selectedAppointment = appt
+                                        } label: {
+                                            appointmentRow(appt)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.top, AppSpacing.sm)
+                            },
+                            label: {
+                                Text("PAST APPOINTMENTS")
+                                    .font(AppTypography.overline)
+                                    .tracking(2)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            }
+                        )
+                        .accentColor(AppColors.textSecondaryDark)
                     }
                 }
                 Spacer().frame(height: 30)
@@ -555,6 +604,19 @@ struct ClientDetailView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+    }
+
+    private func sectionEmptyState(icon: String, message: String) -> some View {
+        VStack(spacing: AppSpacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 24, weight: .light))
+                .foregroundColor(AppColors.accent.opacity(0.4))
+            Text(message)
+                .font(AppTypography.bodyMedium)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppSpacing.lg)
     }
 
     // MARK: - Status colors

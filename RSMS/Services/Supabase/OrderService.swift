@@ -2,11 +2,12 @@
 //  OrderService.swift
 //  RSMS
 //
-//  Persists customer orders and order_items to Supabase so sales associates
-//  can view purchase history in the client dashboard.
+//  Persists customer orders to Supabase via the `create-order` Edge Function.
+//  The Edge Function runs with the service role key, bypassing RLS on orders/order_items.
+//  The caller's JWT is still validated server-side — only authenticated users can place orders.
 //
-//  Called from CheckoutView.placeOrder() immediately after the local SwiftData
-//  save — if Supabase sync fails the local order still exists (graceful degradation).
+//  Called from CheckoutView.placeOrder() immediately after the local SwiftData save.
+//  If Supabase sync fails the local order still exists (graceful degradation).
 //
 
 import Foundation
@@ -15,11 +16,13 @@ import Supabase
 enum OrderServiceError: LocalizedError {
     case noStoreAvailable
     case noClientId
+    case edgeFunctionError(String)
 
     var errorDescription: String? {
         switch self {
-        case .noStoreAvailable: return "No active store found. Order saved locally only."
-        case .noClientId:       return "Client ID unavailable. Order saved locally only."
+        case .noStoreAvailable:          return "No active store found. Order saved locally only."
+        case .noClientId:                return "Client ID unavailable. Order saved locally only."
+        case .edgeFunctionError(let msg): return "Order sync failed: \(msg)"
         }
     }
 }
@@ -29,15 +32,12 @@ final class OrderService {
     static let shared = OrderService()
     private let client = SupabaseManager.shared.client
 
-    /// Cached store ID — fetched once per session to avoid repeated queries.
-    private var cachedDefaultStoreId: UUID? = nil
-
     private init() {}
 
-    // MARK: - Sync order to Supabase
+    // MARK: - Sync order to Supabase via Edge Function
 
-    /// Writes the order header + all line items to Supabase.
-    /// Safe to call fire-and-forget; errors are logged but not thrown to caller.
+    /// Sends the order to the `create-order` Edge Function which uses the service role
+    /// key to insert into `orders` and `order_items`, bypassing RLS safely.
     func syncOrder(
         clientId: UUID,
         cartItems: [(productId: UUID, productName: String, quantity: Int, unitPrice: Double)],
@@ -47,80 +47,79 @@ final class OrderService {
         grandTotal: Double,
         channel: String      // "online" | "bopis" | "in_store" | "ship_from_store"
     ) async throws {
-        // 1. Resolve a store UUID (required FK in orders table)
-        let storeId = try await defaultStoreId()
 
-        // 2. Insert order header
-        let orderPayload = OrderInsertDTO(
-            orderNumber: orderNumber,
-            clientId: clientId,
-            storeId: storeId,
-            associateId: nil,
-            channel: channel,
-            status: "confirmed",
-            subtotal: subtotal,
-            taxTotal: taxTotal,
-            grandTotal: grandTotal,
-            currency: "USD",
-            isTaxFree: false,
-            notes: nil
-        )
+        struct CartItemPayload: Encodable {
+            let productId: String
+            let productName: String
+            let quantity: Int
+            let unitPrice: Double
+        }
 
-        let createdOrder: OrderDTO = try await client
-            .from("orders")
-            .insert(orderPayload)
-            .select()
-            .single()
-            .execute()
-            .value
+        struct CreateOrderPayload: Encodable {
+            let orderNumber: String
+            let cartItems: [CartItemPayload]
+            let subtotal: Double
+            let taxTotal: Double
+            let grandTotal: Double
+            let channel: String
+            let currency: String
+        }
 
-        print("[OrderService] Order \(createdOrder.orderNumber ?? orderNumber) saved to Supabase (id: \(createdOrder.id))")
+        struct EdgeResponse: Decodable {
+            let success: Bool?
+            let orderId: String?
+            let orderNumber: String?
+            let itemsInserted: Int?
+            let error: String?
+        }
 
-        // 3. Insert line items
-        guard !cartItems.isEmpty else { return }
-
-        let taxRate = grandTotal > 0 ? taxTotal / subtotal : 0.08
-        let itemPayloads: [OrderItemInsertDTO] = cartItems.map { item in
-            let lineTotal = item.unitPrice * Double(item.quantity)
-            let itemTax   = lineTotal * taxRate
-            return OrderItemInsertDTO(
-                orderId: createdOrder.id,
-                productId: item.productId,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                taxAmount: itemTax,
-                lineTotal: lineTotal
+        let items = cartItems.map {
+            CartItemPayload(
+                productId: $0.productId.uuidString,
+                productName: $0.productName,
+                quantity: $0.quantity,
+                unitPrice: $0.unitPrice
             )
         }
 
-        try await client
-            .from("order_items")
-            .insert(itemPayloads)
-            .execute()
+        let payload = CreateOrderPayload(
+            orderNumber: orderNumber,
+            cartItems: items,
+            subtotal: subtotal,
+            taxTotal: taxTotal,
+            grandTotal: grandTotal,
+            channel: channel,
+            currency: "USD"
+        )
 
-        print("[OrderService] \(itemPayloads.count) order item(s) saved for order \(createdOrder.id)")
-    }
+        print("[OrderService] Calling create-order edge function for order: \(orderNumber)")
 
-    // MARK: - Store resolution
-
-    /// Returns a valid store UUID. Caches the result for the session.
-    private func defaultStoreId() async throws -> UUID {
-        if let cached = cachedDefaultStoreId { return cached }
-
-        let stores: [StoreDTO] = try await client
-            .from("stores")
-            .select()
-            .eq("is_active", value: true)
-            .limit(1)
-            .execute()
-            .value
-
-        guard let store = stores.first else {
-            throw OrderServiceError.noStoreAvailable
+        // Explicitly fetch the current session token and attach it as the Authorization header.
+        // The Supabase Swift SDK does not always forward the bearer token automatically
+        // when invoking Edge Functions, causing a 401 at the gateway.
+        let accessToken: String
+        do {
+            let session = try await client.auth.session
+            accessToken = session.accessToken
+        } catch {
+            throw OrderServiceError.edgeFunctionError("No active session — cannot authenticate with edge function: \(error.localizedDescription)")
         }
 
-        cachedDefaultStoreId = store.id
-        print("[OrderService] Using store: \(store.name) (\(store.id))")
-        return store.id
+        let response: EdgeResponse = try await client.functions.invoke(
+            "create-order",
+            options: FunctionInvokeOptions(
+                headers: ["Authorization": "Bearer \(accessToken)"],
+                body: payload
+            )
+        )
+
+        if let errorMsg = response.error {
+            print("[OrderService] Edge function returned error: \(errorMsg)")
+            throw OrderServiceError.edgeFunctionError(errorMsg)
+        }
+
+        let orderId = response.orderId ?? "unknown"
+        let itemCount = response.itemsInserted ?? 0
+        print("[OrderService] ✅ Order \(orderNumber) saved to Supabase (id: \(orderId), items: \(itemCount))")
     }
 }

@@ -80,6 +80,12 @@ struct CheckoutView: View {
 
                 bottomBar
             }
+
+            // Loading overlay — shown while the order is being placed so the review
+            // step (which re-renders with an empty cart after items are deleted) is hidden.
+            if isPlacing {
+                placingOrderOverlay
+            }
         }
         .navigationTitle("Checkout")
         .navigationBarTitleDisplayMode(.inline)
@@ -102,6 +108,37 @@ struct CheckoutView: View {
         .onAppear {
             selectedAddress = savedAddresses.first(where: { $0.isDefault }) ?? savedAddresses.first
         }
+        .onChange(of: appState.shouldNavigateHome) { _, newValue in
+            guard newValue else { return }
+            print("[CheckoutView] shouldNavigateHome detected, resetting showConfirmation")
+            showConfirmation = false
+        }
+    }
+
+    // MARK: - Placing Order Overlay
+
+    private var placingOrderOverlay: some View {
+        ZStack {
+            AppColors.backgroundPrimary
+                .opacity(0.97)
+                .ignoresSafeArea()
+
+            VStack(spacing: AppSpacing.lg) {
+                ProgressView()
+                    .tint(AppColors.accent)
+                    .scaleEffect(1.6)
+
+                VStack(spacing: AppSpacing.xs) {
+                    Text("Placing Your Order")
+                        .font(AppTypography.heading3)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("Please wait a moment…")
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+            }
+        }
+        .transition(.opacity)
     }
 
     // MARK: - Step Indicator
@@ -531,9 +568,14 @@ struct CheckoutView: View {
 
     @MainActor
     private func placeOrderAsync() async {
-        // Snapshot cart items BEFORE deleting from context (needed for Supabase line items)
+        // Snapshot cart items AND prices BEFORE deleting from context.
+        // The computed properties subtotal/tax/shipping/total all read from `cartItems`,
+        // so they return 0 once the items are deleted — causing $25 total in Supabase.
         let snapshot: [(productId: UUID, productName: String, quantity: Int, unitPrice: Double)] =
             cartItems.map { ($0.productId, $0.productName, $0.quantity, $0.unitPrice) }
+        let snapshotSubtotal = subtotal
+        let snapshotTax      = tax
+        let snapshotTotal    = total
 
         // Build address JSON
         let addrJSON: String = {
@@ -578,9 +620,9 @@ struct CheckoutView: View {
             customerEmail: appState.currentUserEmail,
             status: .confirmed,
             orderItems: itemsJSON,
-            subtotal: subtotal,
-            tax: tax,
-            total: total,
+            subtotal: snapshotSubtotal,
+            tax: snapshotTax,
+            total: snapshotTotal,
             shippingAddress: addrJSON,
             fulfillmentType: selectedFulfillment,
             paymentMethod: selectedPayment.title
@@ -590,8 +632,11 @@ struct CheckoutView: View {
         try? modelContext.save()
 
         // 2. Sync to Supabase so sales associates can view purchase history.
-        //    The client's UUID lives in AppState (set during login from clients.id).
-        if let clientId = appState.currentUserProfile?.id {
+        //    Try currentUserProfile.id first (set by Supabase login), fall back to
+        //    currentClientProfile.id (set when profile was updated mid-session).
+        let resolvedClientId: UUID? = appState.currentUserProfile?.id ?? appState.currentClientProfile?.id
+
+        if let clientId = resolvedClientId {
             let channel: String
             switch selectedFulfillment {
             case .bopis:         channel = "bopis"
@@ -599,23 +644,27 @@ struct CheckoutView: View {
             case .inStore:       channel = "in_store"
             default:             channel = "online"
             }
+            print("[CheckoutView] Starting Supabase sync for clientId: \(clientId)")
             do {
                 try await OrderService.shared.syncOrder(
                     clientId: clientId,
                     cartItems: snapshot,
                     orderNumber: num,
-                    subtotal: subtotal,
-                    taxTotal: tax,
-                    grandTotal: total,
+                    subtotal: snapshotSubtotal,
+                    taxTotal: snapshotTax,
+                    grandTotal: snapshotTotal,
                     channel: channel
                 )
+                print("[CheckoutView] Supabase sync succeeded for order: \(num)")
             } catch {
                 // Non-fatal: local order already saved; associate view will be missing this
                 // order until next successful sync or manual Supabase insert.
-                print("[CheckoutView] Supabase sync failed (order still saved locally): \(error.localizedDescription)")
+                print("[CheckoutView] Supabase sync failed (order still saved locally): \(error)")
             }
         } else {
             print("[CheckoutView] No client UUID in AppState — skipping Supabase sync (guest/unauthenticated)")
+            print("[CheckoutView] currentUserProfile: \(String(describing: appState.currentUserProfile))")
+            print("[CheckoutView] currentClientProfile: \(String(describing: appState.currentClientProfile))")
         }
 
         // 3. Navigate to confirmation

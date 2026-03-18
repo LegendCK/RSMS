@@ -11,6 +11,7 @@ import SwiftData
 struct CartView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @Query private var allCartItems: [CartItem]
 
     @State private var navigateToCheckout = false
@@ -28,40 +29,44 @@ struct CartView: View {
     private var itemCount: Int   { cartItems.reduce(0) { $0 + $1.quantity } }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary.ignoresSafeArea()
+        ZStack {
+            AppColors.backgroundPrimary.ignoresSafeArea()
 
-                if appState.isGuest {
-                    guestState
-                } else if cartItems.isEmpty {
-                    emptyState
-                } else {
-                    cartContent
-                }
+            if appState.isGuest {
+                guestState
+            } else if cartItems.isEmpty {
+                emptyState
+            } else {
+                cartContent
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 1) {
-                        Text("Shopping Bag")
-                            .font(AppTypography.navTitle)
-                            .foregroundColor(AppColors.textPrimaryDark)
-                        if itemCount > 0 {
-                            Text("\(itemCount) \(itemCount == 1 ? "item" : "items")")
-                                .font(AppTypography.pico)
-                                .foregroundColor(AppColors.textSecondaryDark)
-                        }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 1) {
+                    Text("Shopping Bag")
+                        .font(AppTypography.navTitle)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    if itemCount > 0 {
+                        Text("\(itemCount) \(itemCount == 1 ? "item" : "items")")
+                            .font(AppTypography.pico)
+                            .foregroundColor(AppColors.textSecondaryDark)
                     }
                 }
             }
-            .navigationDestination(isPresented: $navigateToCheckout) {
-                CheckoutView()
-            }
-            .sheet(isPresented: $showGuestAuthGate) {
-                GuestAuthGateView(pendingAction: "Add to Bag")
-                    .presentationDetents([.large])
-            }
+        }
+        .navigationDestination(isPresented: $navigateToCheckout) {
+            CheckoutView()
+        }
+        .sheet(isPresented: $showGuestAuthGate) {
+            GuestAuthGateView(pendingAction: "Add to Bag")
+                .presentationDetents([.large])
+        }
+        .onChange(of: appState.shouldNavigateHome) { _, newValue in
+            guard newValue else { return }
+            print("[CartView] shouldNavigateHome detected, resetting navigateToCheckout and showCart")
+            navigateToCheckout = false
+            appState.showCart = false
         }
     }
 
@@ -108,6 +113,8 @@ struct CartView: View {
                     .foregroundColor(AppColors.textSecondaryDark)
                     .multilineTextAlignment(.center)
             }
+            SecondaryButton(title: "Continue Shopping") { dismiss() }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
         }
         .padding(.horizontal, AppSpacing.xxl)
     }
