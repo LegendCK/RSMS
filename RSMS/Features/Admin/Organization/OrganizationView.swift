@@ -77,6 +77,7 @@ struct OrganizationView: View {
 struct OrgBoutiquesSubview: View {
     @Binding var showCreateBoutique: Bool
     @Query(sort: \StoreLocation.name) private var stores: [StoreLocation]
+    @Query(sort: \User.createdAt, order: .reverse) private var allUsers: [User]
     @Environment(\.modelContext) private var modelContext
 
     @State private var editingStore: StoreLocation?
@@ -170,7 +171,9 @@ struct OrgBoutiquesSubview: View {
     }
 
     private func boutiqueCard(store: StoreLocation) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+        let assignedStaff = activeStaff(for: store)
+
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(store.name)
@@ -195,8 +198,20 @@ struct OrgBoutiquesSubview: View {
             HStack(spacing: AppSpacing.xl) {
                 detailCol(label: "Manager", value: store.managerName, color: AppColors.secondary)
                 detailCol(label: "Code", value: store.code, color: AppColors.accent)
-                detailCol(label: "Units", value: "\(store.capacityUnits)", color: AppColors.textPrimaryDark)
+                detailCol(label: "Staff", value: "\(assignedStaff.count)", color: AppColors.info)
                 detailCol(label: "Target", value: formatCurrency(store.monthlySalesTarget), color: AppColors.textPrimaryDark)
+            }
+
+            if !assignedStaff.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.2")
+                        .font(AppTypography.pico)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    Text("Assigned: \(staffSummary(assignedStaff))")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .lineLimit(1)
+                }
             }
         }
         .padding(AppSpacing.cardPadding)
@@ -221,6 +236,22 @@ struct OrgBoutiquesSubview: View {
         formatter.currencyCode = "USD"
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
+    }
+
+    private func activeStaff(for store: StoreLocation) -> [User] {
+        allUsers.filter {
+            $0.storeId == store.id &&
+            $0.role != .customer &&
+            $0.isActive
+        }
+    }
+
+    private func staffSummary(_ users: [User]) -> String {
+        let names = users.prefix(2).map(\.name)
+        if users.count <= 2 {
+            return names.joined(separator: ", ")
+        }
+        return "\(names.joined(separator: ", ")) +\(users.count - 2) more"
     }
 
     private func statPill(value: String, label: String, color: Color) -> some View {
@@ -261,6 +292,7 @@ struct OrgBoutiquesSubview: View {
 
 struct OrgBoutiqueDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \User.createdAt, order: .reverse) private var allUsers: [User]
     let store: StoreLocation
     let onManage: () -> Void
     let onDelete: () -> Void
@@ -289,6 +321,34 @@ struct OrgBoutiqueDetailView: View {
                     row("Manager", store.managerName)
                     row("Capacity", "\(store.capacityUnits) units")
                     row("Monthly Target", formatCurrency(store.monthlySalesTarget))
+                }
+
+                card("Assigned Staff", icon: "person.3.fill") {
+                    if assignedStaff.isEmpty {
+                        Text("No staff assigned to this store.")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    } else {
+                        ForEach(assignedStaff) { user in
+                            HStack(alignment: .top, spacing: AppSpacing.sm) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(user.name)
+                                        .font(AppTypography.bodySmall)
+                                        .foregroundColor(AppColors.textPrimaryDark)
+                                    Text(user.email)
+                                        .font(AppTypography.caption)
+                                        .foregroundColor(AppColors.textSecondaryDark)
+                                }
+                                Spacer()
+                                Text(user.role.rawValue)
+                                    .font(AppTypography.micro)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            }
+                            if user.id != assignedStaff.last?.id {
+                                Divider().background(AppColors.border)
+                            }
+                        }
+                    }
                 }
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -354,6 +414,14 @@ struct OrgBoutiqueDetailView: View {
         formatter.currencyCode = "USD"
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
+    }
+
+    private var assignedStaff: [User] {
+        allUsers.filter {
+            $0.storeId == store.id &&
+            $0.role != .customer &&
+            $0.isActive
+        }
     }
 }
 
@@ -644,6 +712,7 @@ struct OrgStoreEditorSheet: View {
 struct OrgStaffSubview: View {
     @Binding var showCreateStaff: Bool
     @Query(sort: \User.createdAt, order: .reverse) private var allUsers: [User]
+    @Query(sort: \StoreLocation.name) private var allStores: [StoreLocation]
     @Environment(\.modelContext) private var modelContext
     @State private var selectedRoleFilter: UserRole? = nil
     @State private var searchText = ""
@@ -776,8 +845,28 @@ struct OrgStaffSubview: View {
                             .cornerRadius(3)
                     }
                 }
-                Text(user.email).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+
+                HStack(spacing: 6) {
+                    Image(systemName: "envelope")
+                        .font(AppTypography.pico)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    Text(user.email)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .lineLimit(1)
+                        .textSelection(.enabled)
+                }
                 Text(user.role.rawValue).font(AppTypography.roleTag).foregroundColor(roleColor(user.role))
+
+                HStack(spacing: 6) {
+                    Image(systemName: "building.2")
+                        .font(AppTypography.pico)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    Text("Assigned: \(storeName(for: user))")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .lineLimit(1)
+                }
             }
             Spacer()
 
@@ -810,6 +899,11 @@ struct OrgStaffSubview: View {
     private func initials(_ name: String) -> String {
         let p = name.split(separator: " ")
         return p.count >= 2 ? "\(p[0].prefix(1))\(p[1].prefix(1))".uppercased() : String(name.prefix(2)).uppercased()
+    }
+
+    private func storeName(for user: User) -> String {
+        guard let storeId = user.storeId else { return "Unassigned" }
+        return allStores.first(where: { $0.id == storeId })?.name ?? "Unknown Store"
     }
 
     private func chipBtn(label: String, selected: Bool, action: @escaping () -> Void) -> some View {
