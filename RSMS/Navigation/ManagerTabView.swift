@@ -2,8 +2,8 @@
 //  ManagerTabView.swift
 //  RSMS
 //
-//  Boutique Manager / Inventory Controller tab modules.
-//  Dashboard (manager-only) | Operations | Inventory | Staff | Profile
+//  Boutique Manager — 4 tab bar modules.
+//  Dashboard | Operations | Staff | Profile
 //
 
 import SwiftUI
@@ -39,13 +39,6 @@ struct ManagerTabView: View {
                     }
                     .tag(operationsTabTag)
 
-                NavigationStack { ManagerInventoryView() }
-                    .tabItem {
-                        Image(systemName: selectedTab == inventoryTabTag ? "shippingbox.fill" : "shippingbox")
-                        Text("Inventory")
-                    }
-                    .tag(inventoryTabTag)
-
                 NavigationStack { ManagerStaffView() }
                     .tabItem {
                         Image(systemName: selectedTab == staffTabTag ? "person.2.fill" : "person.2")
@@ -78,15 +71,11 @@ struct ManagerTabView: View {
     }
 
     private var staffTabTag: Int {
-        showsDashboard ? 3 : 2
-    }
-
-    private var inventoryTabTag: Int {
         showsDashboard ? 2 : 1
     }
 
     private var profileTabTag: Int {
-        showsDashboard ? 4 : 3
+        showsDashboard ? 3 : 2
     }
 }
 

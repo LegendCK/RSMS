@@ -58,6 +58,8 @@ struct RSMSApp: App {
                 .environment(appState)
                 .onAppear {
                     seedDataIfNeeded()
+                    // Close any sessions that were left ACTIVE from a previous crash
+                    Task { await ScanManager.shared.cleanUpStaleSessions() }
                 }
         }
         .modelContainer(sharedModelContainer)
