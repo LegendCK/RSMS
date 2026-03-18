@@ -345,47 +345,339 @@ struct CatalogCategoriesSubview: View {
 // MARK: - Pricing Sub-view
 
 struct CatalogPricingSubview: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query private var policies: [PricingPolicySettings]
+    @Query(sort: \IndianTaxRule.goodsCategory) private var taxRules: [IndianTaxRule]
+    @Query private var regionalPriceRules: [RegionalPriceRule]
+    @Query(sort: \Product.name) private var products: [Product]
+
+    @State private var businessState: String = ""
+    @State private var freeShippingThreshold: String = ""
+    @State private var standardShippingFee: String = ""
+
+    @State private var taxCategory: String = ""
+    @State private var gstPercent: String = ""
+    @State private var cessPercent: String = ""
+    @State private var additionalTaxPercent: String = ""
+
+    @State private var selectedProductId: UUID?
+    @State private var regionalState: String = ""
+    @State private var regionalPriceText: String = ""
+
+    @State private var infoMessage: String = ""
+    @State private var showInfoMessage = false
+
+    private var policy: PricingPolicySettings {
+        policies.first ?? PricingPolicySettings()
+    }
+
+    private var categoryOptions: [String] {
+        let fromProducts = Set(products.map { $0.categoryName })
+        let fromRules = Set(taxRules.map { $0.goodsCategory })
+        return Array(fromProducts.union(fromRules)).sorted()
+    }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
-                pricingCard(title: "Tax Configuration", subtitle: "Regional tax rates and exemptions",
-                            icon: "percent", items: ["US Federal — 0%", "New York — 8.875%", "California — 7.25%", "EU VAT — 20%", "Japan — 10%"])
-
-                pricingCard(title: "Currency Settings", subtitle: "Multi-currency pricing",
-                            icon: "dollarsign.circle", items: ["USD — Primary", "EUR — Auto-convert", "GBP — Auto-convert", "JPY — Auto-convert"])
-
-                pricingCard(title: "Discount Rules", subtitle: "Automated discount tiers",
-                            icon: "tag", items: ["VIP Gold — 5% off", "VIP Platinum — 10% off", "Employee — 15% off", "Loyalty 1000+ pts — $50 credit"])
+                policyCard
+                taxConfigCard
+                regionalPricingCard
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.sm)
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .onAppear {
+            businessState = policy.businessState
+            freeShippingThreshold = String(format: "%.0f", policy.freeShippingThreshold)
+            standardShippingFee = String(format: "%.0f", policy.standardShippingFee)
+        }
+        .alert("Saved", isPresented: $showInfoMessage) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(infoMessage)
+        }
     }
 
-    private func pricingCard(title: String, subtitle: String, icon: String, items: [String]) -> some View {
+    private var policyCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack(spacing: AppSpacing.sm) {
-                Image(systemName: icon).font(AppTypography.iconMedium).foregroundColor(AppColors.accent)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                    Text(subtitle).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                }
-                Spacer()
-                Button(action: {}) {
-                    Text("Edit").font(AppTypography.editLink).foregroundColor(AppColors.accent)
-                }
-            }
+            header(title: "India Commerce Policy", subtitle: "Business state, shipping, and billing currency", icon: "building.columns")
             Divider().background(AppColors.border)
-            ForEach(items, id: \.self) { item in
-                Text(item).font(AppTypography.bodySmall).foregroundColor(AppColors.textSecondaryDark)
-                    .padding(.leading, AppSpacing.xl)
+
+            LuxuryTextField(placeholder: "Business Registration State", text: $businessState)
+            LuxuryTextField(placeholder: "Free Shipping Threshold", text: $freeShippingThreshold)
+                .keyboardType(.decimalPad)
+            LuxuryTextField(placeholder: "Standard Shipping Fee", text: $standardShippingFee)
+                .keyboardType(.decimalPad)
+
+            HStack {
+                Text("Currency")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                Spacer()
+                Text("INR")
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.accent)
+            }
+
+            Button(action: savePolicy) {
+                Text("Save Policy")
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryLight)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(AppColors.accent)
+                    .cornerRadius(AppSpacing.radiusMedium)
             }
         }
         .padding(AppSpacing.cardPadding)
         .background(AppColors.backgroundSecondary)
         .cornerRadius(AppSpacing.radiusLarge)
         .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge).stroke(AppColors.border, lineWidth: 0.5))
+    }
+
+    private var taxConfigCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            header(title: "GST Rules by Goods", subtitle: "CGST/SGST or IGST will be auto-applied at checkout", icon: "percent")
+            Divider().background(AppColors.border)
+
+            ForEach(taxRules) { rule in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(rule.goodsCategory)
+                            .font(AppTypography.label)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        Text("GST \(rule.gstPercent.formatted(.number.precision(.fractionLength(0...2))))% · Cess \(rule.cessPercent.formatted(.number.precision(.fractionLength(0...2))))%")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    Spacer()
+                    Button(rule.isActive ? "Disable" : "Enable") {
+                        rule.isActive.toggle()
+                        rule.updatedAt = Date()
+                        try? modelContext.save()
+                    }
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.accent)
+                }
+            }
+
+            Divider().background(AppColors.border)
+
+            Menu {
+                ForEach(categoryOptions, id: \.self) { category in
+                    Button(category) { taxCategory = category }
+                }
+            } label: {
+                HStack {
+                    Text(taxCategory.isEmpty ? "Select Goods Category" : taxCategory)
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(taxCategory.isEmpty ? AppColors.neutral500 : AppColors.textPrimaryDark)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .foregroundColor(AppColors.neutral500)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(AppColors.backgroundPrimary)
+                .cornerRadius(AppSpacing.radiusMedium)
+            }
+
+            LuxuryTextField(placeholder: "GST % (e.g. 18)", text: $gstPercent).keyboardType(.decimalPad)
+            LuxuryTextField(placeholder: "Compensation Cess % (optional)", text: $cessPercent).keyboardType(.decimalPad)
+            LuxuryTextField(placeholder: "Other Tax % (optional)", text: $additionalTaxPercent).keyboardType(.decimalPad)
+
+            Button(action: saveTaxRule) {
+                Text("Save GST Rule")
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryLight)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(AppColors.accent)
+                    .cornerRadius(AppSpacing.radiusMedium)
+            }
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusLarge)
+        .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge).stroke(AppColors.border, lineWidth: 0.5))
+    }
+
+    private var regionalPricingCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            header(title: "Regional Product Pricing", subtitle: "Override SKU prices by buyer state", icon: "map")
+            Divider().background(AppColors.border)
+
+            Menu {
+                ForEach(products) { product in
+                    Button(product.name) { selectedProductId = product.id }
+                }
+            } label: {
+                HStack {
+                    Text(selectedProductName)
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(selectedProductId == nil ? AppColors.neutral500 : AppColors.textPrimaryDark)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .foregroundColor(AppColors.neutral500)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(AppColors.backgroundPrimary)
+                .cornerRadius(AppSpacing.radiusMedium)
+            }
+
+            LuxuryTextField(placeholder: "Region State (e.g. Karnataka)", text: $regionalState)
+            LuxuryTextField(placeholder: "Override Price (INR)", text: $regionalPriceText).keyboardType(.decimalPad)
+
+            Button(action: saveRegionalPriceRule) {
+                Text("Save Regional Price")
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryLight)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(AppColors.accent)
+                    .cornerRadius(AppSpacing.radiusMedium)
+            }
+
+            Divider().background(AppColors.border)
+            ForEach(regionalPriceRules) { rule in
+                HStack {
+                    Text("\(productName(for: rule.productId)) · \(rule.regionState)")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    Spacer()
+                    Text(formatCurrency(rule.overridePrice))
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
+            }
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusLarge)
+        .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge).stroke(AppColors.border, lineWidth: 0.5))
+    }
+
+    private var selectedProductName: String {
+        guard let selectedProductId else { return "Select Product" }
+        return products.first(where: { $0.id == selectedProductId })?.name ?? "Select Product"
+    }
+
+    private func header(title: String, subtitle: String, icon: String) -> some View {
+        HStack(spacing: AppSpacing.sm) {
+            Image(systemName: icon).font(AppTypography.iconMedium).foregroundColor(AppColors.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
+                Text(subtitle).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+            }
+            Spacer()
+        }
+    }
+
+    private func savePolicy() {
+        guard let threshold = Double(freeShippingThreshold),
+              let shippingFee = Double(standardShippingFee),
+              !businessState.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            infoMessage = "Enter valid state and shipping values."
+            showInfoMessage = true
+            return
+        }
+
+        let target = policies.first ?? PricingPolicySettings()
+        if policies.isEmpty { modelContext.insert(target) }
+
+        target.businessState = businessState.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.currencyCode = "INR"
+        target.freeShippingThreshold = threshold
+        target.standardShippingFee = shippingFee
+        target.updatedAt = Date()
+        try? modelContext.save()
+
+        infoMessage = "India commerce policy saved."
+        showInfoMessage = true
+    }
+
+    private func saveTaxRule() {
+        guard !taxCategory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let gst = Double(gstPercent) else {
+            infoMessage = "Select a goods category and GST percentage."
+            showInfoMessage = true
+            return
+        }
+
+        let cess = Double(cessPercent) ?? 0
+        let additional = Double(additionalTaxPercent) ?? 0
+        let normalizedCategory = taxCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+        let existing = taxRules.first {
+            $0.goodsCategory.caseInsensitiveCompare(normalizedCategory) == .orderedSame
+        }
+
+        if let existing {
+            existing.gstPercent = gst
+            existing.cessPercent = cess
+            existing.additionalLevyPercent = additional
+            existing.isActive = true
+            existing.updatedAt = Date()
+        } else {
+            modelContext.insert(
+                IndianTaxRule(
+                    goodsCategory: normalizedCategory,
+                    gstPercent: gst,
+                    cessPercent: cess,
+                    additionalLevyPercent: additional
+                )
+            )
+        }
+        try? modelContext.save()
+
+        infoMessage = "GST rule saved."
+        showInfoMessage = true
+    }
+
+    private func saveRegionalPriceRule() {
+        guard let selectedProductId,
+              !regionalState.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let overridePrice = Double(regionalPriceText),
+              overridePrice > 0 else {
+            infoMessage = "Select a product and enter valid state and price."
+            showInfoMessage = true
+            return
+        }
+
+        let normalizedState = regionalState.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let existing = regionalPriceRules.first(where: {
+            $0.productId == selectedProductId &&
+            IndianPricingEngine.normalizeState($0.regionState) == IndianPricingEngine.normalizeState(normalizedState)
+        }) {
+            existing.overridePrice = overridePrice
+            existing.isActive = true
+            existing.updatedAt = Date()
+        } else {
+            modelContext.insert(
+                RegionalPriceRule(
+                    productId: selectedProductId,
+                    regionState: normalizedState,
+                    overridePrice: overridePrice
+                )
+            )
+        }
+        try? modelContext.save()
+
+        infoMessage = "Regional pricing rule saved."
+        showInfoMessage = true
+    }
+
+    private func productName(for id: UUID) -> String {
+        products.first(where: { $0.id == id })?.name ?? "Unknown Product"
+    }
+
+    private func formatCurrency(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "INR"
+        return formatter.string(from: NSNumber(value: value)) ?? "INR \(value)"
     }
 }
 
@@ -432,5 +724,14 @@ struct CatalogPromotionsSubview: View {
 
 #Preview {
     CatalogView()
-        .modelContainer(for: [Product.self, Category.self], inMemory: true)
+        .modelContainer(
+            for: [
+                Product.self,
+                Category.self,
+                PricingPolicySettings.self,
+                IndianTaxRule.self,
+                RegionalPriceRule.self
+            ],
+            inMemory: true
+        )
 }

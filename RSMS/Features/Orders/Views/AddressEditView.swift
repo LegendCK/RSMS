@@ -22,7 +22,7 @@ struct AddressEditView: View {
     @State private var city:    String = ""
     @State private var state:   String = ""
     @State private var zip:     String = ""
-    @State private var country: String = "US"
+    @State private var country: String = "IN"
     @State private var isDefault: Bool = false
     @State private var showValidationError = false
 
@@ -71,11 +71,11 @@ struct AddressEditView: View {
 
                         // City / State / ZIP
                         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                            sectionHeader("CITY & POSTCODE")
+                            sectionHeader("CITY & PINCODE")
                             LuxuryTextField(placeholder: "City*", text: $city)
                             HStack(spacing: AppSpacing.sm) {
                                 LuxuryTextField(placeholder: "State*", text: $state)
-                                LuxuryTextField(placeholder: "ZIP*", text: $zip)
+                                LuxuryTextField(placeholder: "PIN*", text: $zip)
                                     .keyboardType(.numberPad)
                                     .frame(maxWidth: 120)
                             }

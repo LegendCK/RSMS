@@ -14,6 +14,10 @@ struct CheckoutView: View {
     @Environment(\.dismiss) private var dismiss
     @Query private var allCartItems: [CartItem]
     @Query private var allAddresses: [SavedAddress]
+    @Query private var allProducts: [Product]
+    @Query private var pricingPolicies: [PricingPolicySettings]
+    @Query private var taxRules: [IndianTaxRule]
+    @Query private var regionalPriceRules: [RegionalPriceRule]
 
     @State private var currentStep = 0
 
@@ -52,9 +56,45 @@ struct CheckoutView: View {
             .sorted { $0.isDefault && !$1.isDefault }
     }
 
-    private var subtotal: Double { cartItems.reduce(0) { $0 + $1.lineTotal } }
-    private var tax:      Double { subtotal * 0.08 }
-    private var shipping: Double { selectedFulfillment == .bopis ? 0 : (subtotal > 500 ? 0 : 25) }
+    private var policy: PricingPolicySettings {
+        pricingPolicies.first ?? PricingPolicySettings()
+    }
+    private var buyerStateForTax: String {
+        if selectedFulfillment == .bopis {
+            return policy.businessState
+        }
+        if let selectedAddress {
+            return selectedAddress.state
+        }
+        if !addrState.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return addrState
+        }
+        return policy.businessState
+    }
+    private var pricing: PricingComputation {
+        let lineItems: [TaxableLineItem] = cartItems.map { item in
+            let goodsCategory = allProducts.first(where: { $0.id == item.productId })?.categoryName ?? "Default"
+            return TaxableLineItem(
+                productId: item.productId,
+                goodsCategory: goodsCategory,
+                baseUnitPrice: item.unitPrice,
+                quantity: item.quantity
+            )
+        }
+        return IndianPricingEngine.calculate(
+            items: lineItems,
+            buyerState: buyerStateForTax,
+            policy: policy,
+            regionalPrices: regionalPriceRules,
+            taxRules: taxRules
+        )
+    }
+
+    private var subtotal: Double { pricing.subtotal }
+    private var tax:      Double { pricing.taxBreakdown.totalTax }
+    private var shipping: Double {
+        selectedFulfillment == .bopis ? 0 : (subtotal >= policy.freeShippingThreshold ? 0 : policy.standardShippingFee)
+    }
     private var total:    Double { subtotal + tax + shipping }
 
     var body: some View {
@@ -184,7 +224,12 @@ struct CheckoutView: View {
             // Fulfillment type
             sectionHeader("FULFILLMENT")
             VStack(spacing: AppSpacing.sm) {
-                fulfillmentOption(.standard, title: "Standard Delivery",   subtitle: subtotal > 500 ? "Free · 5–7 days" : "$25 · 5–7 days", icon: "shippingbox.fill")
+                fulfillmentOption(
+                    .standard,
+                    title: "Standard Delivery",
+                    subtitle: subtotal >= policy.freeShippingThreshold ? "Free · 5–7 days" : "\(formatCurrency(policy.standardShippingFee)) · 5–7 days",
+                    icon: "shippingbox.fill"
+                )
                 fulfillmentOption(.bopis,    title: "Pick Up In Store",     subtitle: "Free · Ready in 2 hours", icon: "building.2.fill")
             }
 
@@ -201,7 +246,7 @@ struct CheckoutView: View {
                             LuxuryTextField(placeholder: "City*", text: $city)
                             LuxuryTextField(placeholder: "State*", text: $addrState).frame(maxWidth: 90)
                         }
-                        LuxuryTextField(placeholder: "ZIP*", text: $zip).keyboardType(.numberPad)
+                        LuxuryTextField(placeholder: "PIN*", text: $zip).keyboardType(.numberPad)
 
                         Button("Save this address") { showAddNewAddress = true }
                             .font(AppTypography.caption)
@@ -417,7 +462,7 @@ struct CheckoutView: View {
                                 .foregroundColor(AppColors.textSecondaryDark)
                         }
                         Spacer()
-                        Text(item.formattedLineTotal)
+                        Text(formatCurrency(lineTotal(for: item)))
                             .font(AppTypography.priceSmall)
                             .foregroundColor(AppColors.textPrimaryDark)
                     }
@@ -469,9 +514,19 @@ struct CheckoutView: View {
 
             // Price breakdown
             VStack(spacing: AppSpacing.sm) {
-                summaryRow("Subtotal",   value: formatCurrency(subtotal))
-                summaryRow("Tax (8%)",   value: formatCurrency(tax))
-                summaryRow("Shipping",   value: shipping == 0 ? "Free" : formatCurrency(shipping))
+                summaryRow("Subtotal", value: formatCurrency(subtotal))
+                summaryRow("CGST", value: formatCurrency(pricing.taxBreakdown.cgst))
+                summaryRow("SGST", value: formatCurrency(pricing.taxBreakdown.sgst))
+                if pricing.taxBreakdown.igst > 0 {
+                    summaryRow("IGST", value: formatCurrency(pricing.taxBreakdown.igst))
+                }
+                if pricing.taxBreakdown.cess > 0 {
+                    summaryRow("Cess", value: formatCurrency(pricing.taxBreakdown.cess))
+                }
+                if pricing.taxBreakdown.additionalLevy > 0 {
+                    summaryRow("Other Tax", value: formatCurrency(pricing.taxBreakdown.additionalLevy))
+                }
+                summaryRow("Shipping", value: shipping == 0 ? "Free" : formatCurrency(shipping))
                 GoldDivider()
                 HStack {
                     Text("Total")
@@ -551,11 +606,15 @@ struct CheckoutView: View {
         }
     }
 
+    private func lineTotal(for item: CartItem) -> Double {
+        pricing.lineItems.first(where: { $0.productId == item.productId })?.taxableValue ?? item.lineTotal
+    }
+
     private func formatCurrency(_ v: Double) -> String {
         let f = NumberFormatter()
         f.numberStyle  = .currency
-        f.currencyCode = "USD"
-        return f.string(from: NSNumber(value: v)) ?? "$\(v)"
+        f.currencyCode = policy.currencyCode
+        return f.string(from: NSNumber(value: v)) ?? "\(policy.currencyCode) \(v)"
     }
 
     // MARK: - Place Order
@@ -570,9 +629,12 @@ struct CheckoutView: View {
     private func placeOrderAsync() async {
         // Snapshot cart items AND prices BEFORE deleting from context.
         // The computed properties subtotal/tax/shipping/total all read from `cartItems`,
-        // so they return 0 once the items are deleted — causing $25 total in Supabase.
+        // so they return 0 once the items are deleted — causing incorrect totals in Supabase.
         let snapshot: [(productId: UUID, productName: String, quantity: Int, unitPrice: Double)] =
-            cartItems.map { ($0.productId, $0.productName, $0.quantity, $0.unitPrice) }
+            cartItems.map { item in
+                let effectiveUnitPrice = pricing.lineItems.first(where: { $0.productId == item.productId })?.unitPrice ?? item.unitPrice
+                return (item.productId, item.productName, item.quantity, effectiveUnitPrice)
+            }
         let snapshotSubtotal = subtotal
         let snapshotTax      = tax
         let snapshotTotal    = total
@@ -592,7 +654,7 @@ struct CheckoutView: View {
             if selectedFulfillment == .standard && !addressLine1.isEmpty {
                 let d: [String: String] = [
                     "line1": addressLine1, "line2": addressLine2,
-                    "city": city, "state": addrState, "zip": zip, "country": "US"
+                    "city": city, "state": addrState, "zip": zip, "country": "IN"
                 ]
                 guard let data = try? JSONSerialization.data(withJSONObject: d),
                       let s = String(data: data, encoding: .utf8) else { return "{}" }
@@ -602,8 +664,9 @@ struct CheckoutView: View {
         }()
 
         let itemsArr: [[String: Any]] = cartItems.map { item in
-            ["name": item.productName, "brand": item.productBrand,
-             "qty": item.quantity, "price": item.unitPrice, "image": item.productImageName]
+            let effectiveUnitPrice = pricing.lineItems.first(where: { $0.productId == item.productId })?.unitPrice ?? item.unitPrice
+            return ["name": item.productName, "brand": item.productBrand,
+                    "qty": item.quantity, "price": effectiveUnitPrice, "image": item.productImageName]
         }
         let itemsJSON: String = {
             guard let data = try? JSONSerialization.data(withJSONObject: itemsArr),

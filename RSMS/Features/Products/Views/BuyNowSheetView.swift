@@ -18,6 +18,9 @@ struct BuyNowSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @Query private var allAddresses: [SavedAddress]
+    @Query private var pricingPolicies: [PricingPolicySettings]
+    @Query private var taxRules: [IndianTaxRule]
+    @Query private var regionalPriceRules: [RegionalPriceRule]
 
     @State private var currentStep = 0            // 0 = address, 1 = payment, 2 = review
     @State private var selectedAddress: SavedAddress? = nil
@@ -50,8 +53,36 @@ struct BuyNowSheetView: View {
             .sorted { $0.isDefault && !$1.isDefault }
     }
 
-    private var subtotal: Double { product.price }
-    private var tax: Double      { subtotal * 0.08 }
+    private var policy: PricingPolicySettings {
+        pricingPolicies.first ?? PricingPolicySettings()
+    }
+    private var buyerStateForTax: String {
+        if let selectedAddress {
+            return selectedAddress.state
+        }
+        if !inlineAddrState.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return inlineAddrState
+        }
+        return policy.businessState
+    }
+    private var pricing: PricingComputation {
+        IndianPricingEngine.calculate(
+            items: [
+                TaxableLineItem(
+                    productId: product.id,
+                    goodsCategory: product.categoryName,
+                    baseUnitPrice: product.price,
+                    quantity: 1
+                )
+            ],
+            buyerState: buyerStateForTax,
+            policy: policy,
+            regionalPrices: regionalPriceRules,
+            taxRules: taxRules
+        )
+    }
+    private var subtotal: Double { pricing.subtotal }
+    private var tax: Double      { pricing.taxBreakdown.totalTax }
     private var total: Double    { subtotal + tax }
 
     var body: some View {
@@ -201,7 +232,7 @@ struct BuyNowSheetView: View {
 
             Spacer()
 
-            Text(product.formattedPrice)
+            Text(formatCurrency(pricing.lineItems.first?.unitPrice ?? product.price))
                 .font(AppTypography.priceSmall)
                 .foregroundColor(AppColors.textPrimaryDark)
         }
@@ -240,7 +271,7 @@ struct BuyNowSheetView: View {
                         LuxuryTextField(placeholder: "State*", text: $inlineAddrState)
                             .frame(maxWidth: 90)
                     }
-                    LuxuryTextField(placeholder: "ZIP*", text: $inlineZip)
+                    LuxuryTextField(placeholder: "PIN*", text: $inlineZip)
                         .keyboardType(.numberPad)
 
                     Button("Save this address for next time") { showAddNewAddress = true }
@@ -412,7 +443,17 @@ struct BuyNowSheetView: View {
             LuxuryCardView {
                 VStack(spacing: AppSpacing.sm) {
                     priceRow("Subtotal", value: formatCurrency(subtotal))
-                    priceRow("Tax (8%)",  value: formatCurrency(tax))
+                    priceRow("CGST", value: formatCurrency(pricing.taxBreakdown.cgst))
+                    priceRow("SGST", value: formatCurrency(pricing.taxBreakdown.sgst))
+                    if pricing.taxBreakdown.igst > 0 {
+                        priceRow("IGST", value: formatCurrency(pricing.taxBreakdown.igst))
+                    }
+                    if pricing.taxBreakdown.cess > 0 {
+                        priceRow("Cess", value: formatCurrency(pricing.taxBreakdown.cess))
+                    }
+                    if pricing.taxBreakdown.additionalLevy > 0 {
+                        priceRow("Other Tax", value: formatCurrency(pricing.taxBreakdown.additionalLevy))
+                    }
                     priceRow("Shipping",  value: "Free")
                     GoldDivider()
                     HStack {
@@ -548,8 +589,8 @@ struct BuyNowSheetView: View {
     private func formatCurrency(_ v: Double) -> String {
         let f = NumberFormatter()
         f.numberStyle   = .currency
-        f.currencyCode  = "USD"
-        return f.string(from: NSNumber(value: v)) ?? "$\(v)"
+        f.currencyCode  = policy.currencyCode
+        return f.string(from: NSNumber(value: v)) ?? "\(policy.currencyCode) \(v)"
     }
 
     // MARK: - Place Order
@@ -581,7 +622,7 @@ struct BuyNowSheetView: View {
                 let d: [String: String] = [
                     "line1": inlineAddressLine1, "line2": inlineAddressLine2,
                     "city": inlineCity, "state": inlineAddrState,
-                    "zip": inlineZip, "country": "US"
+                    "zip": inlineZip, "country": "IN"
                 ]
                 guard let data = try? JSONSerialization.data(withJSONObject: d),
                       let s = String(data: data, encoding: .utf8) else { return "{}" }
@@ -590,9 +631,10 @@ struct BuyNowSheetView: View {
             return "{}"
         }()
 
+        let effectiveUnitPrice = pricing.lineItems.first?.unitPrice ?? product.price
         let itemArr: [[String: Any]] = [[
             "name": product.name, "brand": product.brand,
-            "qty": 1, "price": product.price,
+            "qty": 1, "price": effectiveUnitPrice,
             "color": selectedColor,
             "size": selectedSize ?? "",
             "image": product.imageName
@@ -633,7 +675,7 @@ struct BuyNowSheetView: View {
                         productId: product.id,
                         productName: product.name,
                         quantity: 1,
-                        unitPrice: product.price
+                        unitPrice: effectiveUnitPrice
                     )],
                     orderNumber: orderNum,
                     subtotal: subtotal,
