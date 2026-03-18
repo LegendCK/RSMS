@@ -205,6 +205,7 @@ final class StaffSyncService {
         let (firstName, lastName) = splitName(user.name)
         let payload = UserUpdateDTO(
             role: snakeRole(for: user.role),
+            storeId: user.storeId,
             firstName: firstName,
             lastName: lastName,
             phone: user.phone.isEmpty ? nil : user.phone,
