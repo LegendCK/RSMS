@@ -43,6 +43,7 @@ final class AppointmentService {
             .from("appointments")
             .select()
             .eq("status", value: "requested")
+            .is("associate_id", value: nil)
             .order("scheduled_at", ascending: true)
             .execute()
             .value
@@ -55,6 +56,7 @@ final class AppointmentService {
             .select()
             .eq("store_id", value: storeId.uuidString.lowercased())
             .eq("status", value: "requested")
+            .is("associate_id", value: nil)
             .order("scheduled_at", ascending: true)
             .execute()
             .value

@@ -136,11 +136,13 @@ final class CatalogService {
                 print("[CatalogService] ⚠️ Image \(index + 1) upload skipped — \(error.localizedDescription)")
             }
         }
+        
+        let barcodeValue = CatalogService.generateBarcode()
 
         // 2. Build insert payload
         let payload = ProductInsertDTO(
             sku: sku,
-            barcode: nil,
+            barcode: barcodeValue,
             name: name,
             brand: brand.flatMap { $0.isEmpty ? nil : $0 },
             categoryId: categoryId,
@@ -152,6 +154,8 @@ final class CatalogService {
             isActive: isActive,
             createdBy: createdBy
         )
+        
+        print("Generated Barcode:", barcodeValue)
 
         // 3. Insert product record — retried on transient network errors
         return try await withRetry(label: "createProduct") {
@@ -228,4 +232,20 @@ final class CatalogService {
         let randPart = String(Int.random(in: 1000...9999))
         return "\(prefix.uppercased())-\(datePart)-\(randPart)"
     }
+    
+    
+    // MARK: - Barcode Generator
+
+    /// Generates a printable Code128-compatible barcode string.
+    /// Format: BR-YYYYMMDD-RAND6
+    static func generateBarcode(prefix: String = "BR") -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        let datePart = formatter.string(from: Date())
+
+        let randomPart = String(Int.random(in: 100000...999999))
+
+        return "\(prefix.uppercased())-\(datePart)-\(randomPart)"
+    }
+    
 }
