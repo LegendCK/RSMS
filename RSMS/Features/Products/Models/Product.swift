@@ -27,7 +27,6 @@ final class Product {
     // MARK: - Identity & Tracking (Phase 1 — SRS compliance)
     var sku: String
     var serialNumber: String
-    var barcode: String
     var rfidTagID: String
     var certificateRef: String
 
@@ -58,7 +57,6 @@ final class Product {
         stockCount: Int = 10,
         sku: String = "",
         serialNumber: String = "",
-        barcode: String = "",
         rfidTagID: String = "",
         certificateRef: String = "",
         productTypeName: String = "",
@@ -84,7 +82,6 @@ final class Product {
         self.createdAt = Date()
         self.sku = sku
         self.serialNumber = serialNumber
-        self.barcode = barcode
         self.rfidTagID = rfidTagID
         self.certificateRef = certificateRef
         self.productTypeName = productTypeName

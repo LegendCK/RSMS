@@ -122,7 +122,6 @@ final class CustomerCatalogSyncService {
                 local.imageName = resolvedImageSource
                 local.imageNames = serializedImageNames
                 local.sku = dto.sku
-                local.barcode = dto.barcode ?? ""
                 local.stockCount = max(local.stockCount, 1)
                 local.createdAt = dto.createdAt
             } else {
@@ -139,7 +138,6 @@ final class CustomerCatalogSyncService {
                     stockCount: 10,
                     sku: dto.sku,
                     serialNumber: "",
-                    barcode: dto.barcode ?? "",
                     rfidTagID: "",
                     certificateRef: "",
                     productTypeName: "",

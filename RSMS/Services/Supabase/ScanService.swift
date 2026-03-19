@@ -94,8 +94,25 @@ final class ScanService: ScanServiceProtocol, @unchecked Sendable {
 
             return ScanResultDTO(from: item)
         } catch {
-            // Supabase returns a PostgrestError with code PGRST116 for no rows
-            throw ScanError.barcodeNotFound(barcode)
+            // Fallback: Check if the barcode belongs to a legacy product definition with no physical stock
+            do {
+                struct ProductID: Decodable { let id: UUID }
+                let _: ProductID = try await client
+                    .from("products")
+                    .select("id")
+                    .eq("barcode", value: barcode)
+                    .single()
+                    .execute()
+                    .value
+                
+                // Found in products, but not in product_items
+                throw ScanError.operationFailed("No stock available for this product")
+            } catch let fallbackError as ScanError {
+                throw fallbackError
+            } catch {
+                // Not found in products either, or network error
+                throw ScanError.barcodeNotFound(barcode)
+            }
         }
     }
 

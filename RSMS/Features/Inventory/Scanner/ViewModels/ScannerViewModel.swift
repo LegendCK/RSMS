@@ -32,6 +32,7 @@ final class ScannerViewModel {
     var highlightedScanId: UUID? = nil
     var currentScanType: ScanType = .in
     var isStartingSession: Bool = false
+    var totalSessionScans: Int = 0
 
     // MARK: - Dependencies
 
@@ -53,6 +54,7 @@ final class ScannerViewModel {
             sessionActive = true
             scanState     = .idle
             recentScans   = []
+            totalSessionScans = 0
         } catch {
             scanState = .error("Failed to start session: \(error.localizedDescription)")
         }
@@ -123,6 +125,7 @@ final class ScannerViewModel {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                     scanState = .found(result)
                     recentScans.insert(result, at: 0)
+                    totalSessionScans += 1
                     
                     if recentScans.count > 50 {
                         recentScans = Array(recentScans.prefix(50))
@@ -135,6 +138,12 @@ final class ScannerViewModel {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                     // ScanError.barcodeNotFound already contains "Unknown barcode: <value>"
                     scanState = .error(scanErr.errorDescription ?? "Unknown error.")
+                }
+                scheduleClearState(after: 4)
+            } catch let error as URLError {
+                triggerFeedback(.error)
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                    scanState = .error("Network unavailable. Please check your connection.")
                 }
                 scheduleClearState(after: 4)
             } catch {

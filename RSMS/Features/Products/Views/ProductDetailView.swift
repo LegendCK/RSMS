@@ -8,6 +8,7 @@
 
 import SwiftUI
 import SwiftData
+import Supabase
 
 struct ProductDetailView: View {
     @Bindable var product: Product
@@ -34,6 +35,10 @@ struct ProductDetailView: View {
 
     // Add-to-bag animation
     @State private var bagIconScale: CGFloat = 1.0
+
+    // Inventory Items
+    @State private var remoteItems: [ProductItemDTO] = []
+    @State private var isFetchingItems = false
 
     // MARK: - Variant data
 
@@ -129,12 +134,18 @@ struct ProductDetailView: View {
                             specificationsSection
                         }
 
+                        Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
+                        inventorySection
+
                         Spacer().frame(height: 28)
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
                     .padding(.top, AppSpacing.xl)
                 }
             }
+        }
+        .task {
+            await fetchInventoryItems()
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -498,6 +509,47 @@ struct ProductDetailView: View {
         }
     }
 
+    // MARK: - Inventory Items
+
+    private var inventorySection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("INVENTORY ITEMS")
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.accent)
+
+            if isFetchingItems {
+                ProgressView().tint(AppColors.accent)
+            } else if remoteItems.isEmpty {
+                Text("No items in stock.")
+                    .font(AppTypography.bodySmall)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            } else {
+                ForEach(remoteItems) { item in
+                    HStack {
+                        Image(systemName: "barcode")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppColors.textSecondaryDark)
+                        Text(item.barcode)
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        Spacer()
+                        Text(item.itemStatus.displayName)
+                            .font(AppTypography.nano)
+                            .foregroundColor(item.itemStatus == .inStock ? AppColors.success : AppColors.textSecondaryDark)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                (item.itemStatus == .inStock ? AppColors.success : AppColors.textSecondaryDark).opacity(0.12)
+                            )
+                            .cornerRadius(4)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+    }
+
     // MARK: - Bottom Action Bar
 
     private var bottomActionBar: some View {
@@ -677,6 +729,24 @@ struct ProductDetailView: View {
             Text(value)
                 .font(AppTypography.bodyMedium)
                 .foregroundColor(AppColors.textPrimaryDark)
+        }
+    }
+
+    private func fetchInventoryItems() async {
+        isFetchingItems = true
+        defer { isFetchingItems = false }
+        do {
+            let items: [ProductItemDTO] = try await SupabaseManager.shared.client
+                .from("product_items")
+                .select("id, product_id, barcode, serial_number, status, store_id, created_at, products(*)")
+                .eq("product_id", value: product.id.uuidString)
+                .order("created_at", ascending: false)
+                .limit(20)
+                .execute()
+                .value
+            remoteItems = items
+        } catch {
+            print("[ProductDetailView] Failed to fetch items:", error)
         }
     }
 }

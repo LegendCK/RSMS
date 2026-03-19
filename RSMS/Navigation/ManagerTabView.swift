@@ -39,6 +39,13 @@ struct ManagerTabView: View {
                     }
                     .tag(operationsTabTag)
 
+                NavigationStack { ScannerView() }
+                    .tabItem {
+                        Image(systemName: "barcode.viewfinder")
+                        Text("Scanner")
+                    }
+                    .tag(scannerTabTag)
+
                 NavigationStack { ManagerStaffView() }
                     .tabItem {
                         Image(systemName: selectedTab == staffTabTag ? "person.2.fill" : "person.2")
@@ -63,6 +70,9 @@ struct ManagerTabView: View {
                     selectedTab = operationsTabTag
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("switchToScannerTab"))) { _ in
+                selectedTab = scannerTabTag
+            }
         }
     }
 
@@ -70,12 +80,16 @@ struct ManagerTabView: View {
         showsDashboard ? 1 : 0
     }
 
+    private var scannerTabTag: Int {
+        operationsTabTag + 1
+    }
+
     private var staffTabTag: Int {
-        showsDashboard ? 2 : 1
+        scannerTabTag + 1
     }
 
     private var profileTabTag: Int {
-        showsDashboard ? 3 : 2
+        staffTabTag + 1
     }
 }
 

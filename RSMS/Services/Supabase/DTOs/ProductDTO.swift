@@ -13,7 +13,6 @@ import Foundation
 struct ProductDTO: Codable, Identifiable {
     let id: UUID
     let sku: String
-    let barcode: String?
     let name: String
     let brand: String?
     let categoryId: UUID?
@@ -30,7 +29,6 @@ struct ProductDTO: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id
         case sku
-        case barcode
         case name
         case brand
         case categoryId    = "category_id"
@@ -111,7 +109,6 @@ struct ProductDTO: Codable, Identifiable {
 
 struct ProductInsertDTO: Codable {
     let sku: String
-    let barcode: String?
     let name: String
     let brand: String?
     let categoryId: UUID?
@@ -124,7 +121,7 @@ struct ProductInsertDTO: Codable {
     let createdBy: UUID?
 
     enum CodingKeys: String, CodingKey {
-        case sku, barcode, name, brand, description, price
+        case sku, name, brand, description, price
         case categoryId    = "category_id"
         case taxCategoryId = "tax_category_id"
         case costPrice     = "cost_price"
@@ -138,7 +135,6 @@ struct ProductInsertDTO: Codable {
 
 struct ProductUpdateDTO: Codable {
     let sku: String
-    let barcode: String?
     let name: String
     let brand: String?
     let categoryId: UUID?
@@ -148,7 +144,7 @@ struct ProductUpdateDTO: Codable {
     let isActive: Bool
 
     enum CodingKeys: String, CodingKey {
-        case sku, barcode, name, brand, description, price
+        case sku, name, brand, description, price
         case categoryId = "category_id"
         case costPrice = "cost_price"
         case isActive = "is_active"
