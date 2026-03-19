@@ -777,7 +777,17 @@ struct AdminDashboardView: View {
                 snapshot: freshSnapshot,
                 generatedBy: generatedBy
             )
-            exportFile = ShareFile(url: fileURL)
+            guard FileManager.default.fileExists(atPath: fileURL.path) else {
+                exportErrorMessage = "Export file could not be prepared."
+                showExportError = true
+                return
+            }
+
+            // Avoid sheet collision (export picker + share sheet).
+            showExportSheet = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                exportFile = ShareFile(url: fileURL)
+            }
         } catch {
             exportErrorMessage = "Export failed: \(error.localizedDescription)"
             showExportError = true

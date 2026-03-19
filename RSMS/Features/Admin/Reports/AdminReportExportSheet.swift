@@ -10,42 +10,67 @@ struct AdminReportExportSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("Report") {
-                    Picker("Type", selection: $selectedScope) {
-                        ForEach(AdminReportScope.allCases, id: \.self) { scope in
-                            Text(scope.rawValue).tag(scope)
+            ZStack {
+                AppColors.backgroundPrimary.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: AppSpacing.lg) {
+                        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                            Text("MANAGEMENT EXPORT")
+                                .font(AppTypography.overline)
+                                .tracking(2)
+                                .foregroundColor(AppColors.accent)
+                            Text("Choose report scope and format")
+                                .font(AppTypography.bodySmall)
+                                .foregroundColor(AppColors.textSecondaryDark)
                         }
-                    }
-                    .pickerStyle(.segmented)
-                }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, AppSpacing.md)
 
-                Section("Format") {
-                    Picker("Format", selection: $selectedFormat) {
-                        ForEach(AdminReportFormat.allCases, id: \.self) { format in
-                            Text(format.rawValue).tag(format)
-                        }
-                    }
-                    .pickerStyle(.inline)
-                }
-
-                Section {
-                    Button(action: onExport) {
-                        HStack {
-                            if isExporting {
-                                ProgressView()
-                                    .tint(AppColors.accent)
+                        LuxuryCardView(useGlass: false, cornerRadius: AppSpacing.radiusMedium) {
+                            VStack(alignment: .leading, spacing: AppSpacing.md) {
+                                Text("Report Scope")
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Picker("Type", selection: $selectedScope) {
+                                    ForEach(AdminReportScope.allCases, id: \.self) { scope in
+                                        Text(scope.rawValue).tag(scope)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
                             }
-                            Text(isExporting ? "Preparing…" : "Export Report")
-                                .font(.body.weight(.semibold))
+                            .padding(AppSpacing.cardPadding)
                         }
+
+                        LuxuryCardView(useGlass: false, cornerRadius: AppSpacing.radiusMedium) {
+                            VStack(alignment: .leading, spacing: AppSpacing.md) {
+                                Text("Format")
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Picker("Format", selection: $selectedFormat) {
+                                    ForEach(AdminReportFormat.allCases, id: \.self) { format in
+                                        Text(format.rawValue).tag(format)
+                                    }
+                                }
+                                .pickerStyle(.inline)
+                            }
+                            .padding(AppSpacing.cardPadding)
+                        }
+
+                        PrimaryButton(title: isExporting ? "Preparing…" : "Export Report", isLoading: isExporting) {
+                            onExport()
+                        }
+                        .disabled(isExporting)
+
+                        Text("Exports use a live Supabase snapshot so files match system records.")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Spacer(minLength: AppSpacing.xl)
                     }
-                    .disabled(isExporting)
-                } footer: {
-                    Text("Exports use live Supabase snapshot so files match system records.")
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
                 }
             }
-            .listStyle(.insetGrouped)
             .navigationTitle("Export")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

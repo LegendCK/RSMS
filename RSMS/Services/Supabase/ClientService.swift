@@ -61,9 +61,21 @@ final class ClientService {
 
     /// Generates a temporary password that satisfies Supabase's requirements.
     private static func generateTempPassword() -> String {
-        let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        let random = String((0..<8).compactMap { _ in chars.randomElement() })
-        return "Welcome@\(random)"
+        let lowers = Array("abcdefghijklmnopqrstuvwxyz")
+        let uppers = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        let digits = Array("0123456789")
+        let symbols = Array("@#$%")
+        let all = lowers + uppers + digits + symbols
+
+        var chars: [Character] = []
+        chars.append(lowers.randomElement() ?? "a")
+        chars.append(uppers.randomElement() ?? "A")
+        chars.append(digits.randomElement() ?? "1")
+        chars.append(symbols.randomElement() ?? "@")
+        for _ in 0..<8 {
+            chars.append(all.randomElement() ?? "x")
+        }
+        return String(chars.shuffled())
     }
 
     /// Fetches all active clients.

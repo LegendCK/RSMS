@@ -12,6 +12,7 @@ struct ManagerOperationsView: View {
     @Environment(AppState.self) private var appState
     @State private var selectedSection = 0
     @State private var showAddStock = false
+    @State private var showInventoryWorkspace = false
 
     var body: some View {
         NavigationStack {
@@ -70,6 +71,19 @@ struct ManagerOperationsView: View {
                 ToolbarItem(placement: .principal) {
                     Text("Operations").font(AppTypography.navTitle).foregroundColor(AppColors.textPrimaryDark)
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showInventoryWorkspace = true
+                    } label: {
+                        Image(systemName: "shippingbox")
+                            .font(AppTypography.iconMedium)
+                            .foregroundColor(AppColors.accent)
+                    }
+                    .accessibilityLabel("Open Inventory Workspace")
+                }
+            }
+            .navigationDestination(isPresented: $showInventoryWorkspace) {
+                ManagerInventoryView()
             }
         }
         .sheet(isPresented: $showAddStock) {

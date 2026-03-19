@@ -225,6 +225,7 @@ struct AddCategoryView: View {
                     description: description.trimmingCharacters(in: .whitespaces),
                     displayOrder: 0
                 )
+                localCategory.id = dto.id
                 modelContext.insert(localCategory)
                 try? modelContext.save()
 

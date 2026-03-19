@@ -15,9 +15,11 @@ struct CheckoutView: View {
     @Query private var allCartItems: [CartItem]
     @Query private var allAddresses: [SavedAddress]
     @Query private var allProducts: [Product]
+    @Query private var allCategories: [Category]
     @Query private var pricingPolicies: [PricingPolicySettings]
     @Query private var taxRules: [IndianTaxRule]
     @Query private var regionalPriceRules: [RegionalPriceRule]
+    @Query private var promotionRules: [PromotionRule]
 
     @State private var currentStep = 0
 
@@ -33,6 +35,7 @@ struct CheckoutView: View {
     @State private var city         = ""
     @State private var addrState    = ""
     @State private var zip          = ""
+    @State private var saveInlineAddressForFuture = true
 
     // Payment
     @State private var selectedPayment: CheckoutPayment = .applePay
@@ -74,8 +77,10 @@ struct CheckoutView: View {
     private var pricing: PricingComputation {
         let lineItems: [TaxableLineItem] = cartItems.map { item in
             let goodsCategory = allProducts.first(where: { $0.id == item.productId })?.categoryName ?? "Default"
+            let categoryId = allCategories.first(where: { $0.name == goodsCategory })?.id
             return TaxableLineItem(
                 productId: item.productId,
+                categoryId: categoryId,
                 goodsCategory: goodsCategory,
                 baseUnitPrice: item.unitPrice,
                 quantity: item.quantity
@@ -86,11 +91,14 @@ struct CheckoutView: View {
             buyerState: buyerStateForTax,
             policy: policy,
             regionalPrices: regionalPriceRules,
-            taxRules: taxRules
+            taxRules: taxRules,
+            promotions: promotionRules
         )
     }
 
+    private var merchandiseSubtotal: Double { pricing.merchandiseSubtotal }
     private var subtotal: Double { pricing.subtotal }
+    private var discountTotal: Double { pricing.discountTotal }
     private var tax:      Double { pricing.taxBreakdown.totalTax }
     private var shipping: Double {
         selectedFulfillment == .bopis ? 0 : (subtotal >= policy.freeShippingThreshold ? 0 : policy.standardShippingFee)
@@ -153,6 +161,7 @@ struct CheckoutView: View {
             print("[CheckoutView] shouldNavigateHome detected, resetting showConfirmation")
             showConfirmation = false
         }
+        .task { await refreshPromotions() }
     }
 
     // MARK: - Placing Order Overlay
@@ -239,19 +248,19 @@ struct CheckoutView: View {
 
                 if savedAddresses.isEmpty {
                     // Inline form
-                    VStack(spacing: AppSpacing.sm) {
-                        LuxuryTextField(placeholder: "Address Line 1*", text: $addressLine1)
-                        LuxuryTextField(placeholder: "Address Line 2 (optional)", text: $addressLine2)
-                        HStack(spacing: AppSpacing.sm) {
-                            LuxuryTextField(placeholder: "City*", text: $city)
-                            LuxuryTextField(placeholder: "State*", text: $addrState).frame(maxWidth: 90)
-                        }
-                        LuxuryTextField(placeholder: "PIN*", text: $zip).keyboardType(.numberPad)
+                    LuxuryCardView(useGlass: false, cornerRadius: AppSpacing.radiusMedium) {
+                        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                            LuxuryTextField(placeholder: "Address Line 1*", text: $addressLine1)
+                            LuxuryTextField(placeholder: "Address Line 2 (optional)", text: $addressLine2)
+                            HStack(spacing: AppSpacing.sm) {
+                                LuxuryTextField(placeholder: "City*", text: $city)
+                                LuxuryTextField(placeholder: "State*", text: $addrState).frame(maxWidth: 96)
+                            }
+                            LuxuryTextField(placeholder: "PIN*", text: $zip).keyboardType(.numberPad)
 
-                        Button("Save this address") { showAddNewAddress = true }
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.accent)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            saveAddressCheckboxRow
+                        }
+                        .padding(AppSpacing.cardPadding)
                     }
                 } else {
                     // Saved addresses
@@ -294,6 +303,34 @@ struct CheckoutView: View {
                 }
             }
         }
+    }
+
+    private var saveAddressCheckboxRow: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                saveInlineAddressForFuture.toggle()
+            }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: saveInlineAddressForFuture ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(saveInlineAddressForFuture ? AppColors.accent : AppColors.neutral600)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Save this address for future orders")
+                        .font(AppTypography.bodySmall)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("You can edit or remove it anytime")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+
+                Spacer()
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.top, AppSpacing.xs)
     }
 
     private func fulfillmentOption(_ type: FulfillmentType, title: String, subtitle: String, icon: String) -> some View {
@@ -514,6 +551,10 @@ struct CheckoutView: View {
 
             // Price breakdown
             VStack(spacing: AppSpacing.sm) {
+                summaryRow("Items", value: formatCurrency(merchandiseSubtotal))
+                if discountTotal > 0 {
+                    summaryRow("Offer", value: "-\(formatCurrency(discountTotal))")
+                }
                 summaryRow("Subtotal", value: formatCurrency(subtotal))
                 summaryRow("CGST", value: formatCurrency(pricing.taxBreakdown.cgst))
                 summaryRow("SGST", value: formatCurrency(pricing.taxBreakdown.sgst))
@@ -554,9 +595,13 @@ struct CheckoutView: View {
 
             if currentStep < steps.count - 1 {
                 PrimaryButton(title: "Continue") {
+                    guard canContinue else { return }
+                    if currentStep == 0 { persistInlineAddressIfNeeded() }
                     withAnimation(.spring(response: 0.3)) { currentStep += 1 }
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 }
+                .disabled(!canContinue)
+                .opacity(canContinue ? 1 : 0.55)
             } else {
                 Button(action: placeOrder) {
                     HStack(spacing: 8) {
@@ -610,6 +655,68 @@ struct CheckoutView: View {
         pricing.lineItems.first(where: { $0.productId == item.productId })?.taxableValue ?? item.lineTotal
     }
 
+    private var canContinue: Bool {
+        switch currentStep {
+        case 0:
+            if selectedFulfillment == .bopis { return true }
+            if selectedAddress != nil { return true }
+            if !savedAddresses.isEmpty { return false }
+            return isInlineAddressComplete
+        case 1:
+            if selectedPayment == .creditCard {
+                return !cardNumber.isEmpty && !cardExpiry.isEmpty && !cardCVV.isEmpty
+            }
+            return true
+        default:
+            return true
+        }
+    }
+
+    private var isInlineAddressComplete: Bool {
+        !addressLine1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !addrState.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !zip.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func persistInlineAddressIfNeeded() {
+        guard selectedFulfillment == .standard, selectedAddress == nil, saveInlineAddressForFuture, isInlineAddressComplete else { return }
+
+        let trimmedLine1 = addressLine1.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCity = city.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedState = addrState.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedZip = zip.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let existing = savedAddresses.first(where: {
+            $0.line1.caseInsensitiveCompare(trimmedLine1) == .orderedSame &&
+            $0.city.caseInsensitiveCompare(trimmedCity) == .orderedSame &&
+            $0.state.caseInsensitiveCompare(trimmedState) == .orderedSame &&
+            $0.zip.caseInsensitiveCompare(trimmedZip) == .orderedSame
+        }) {
+            selectedAddress = existing
+            return
+        }
+
+        let newAddress = SavedAddress(
+            customerEmail: appState.currentUserEmail,
+            label: savedAddresses.isEmpty ? "Home" : "Other",
+            line1: trimmedLine1,
+            line2: addressLine2.trimmingCharacters(in: .whitespacesAndNewlines),
+            city: trimmedCity,
+            state: trimmedState,
+            zip: trimmedZip,
+            country: "IN",
+            isDefault: savedAddresses.isEmpty
+        )
+        modelContext.insert(newAddress)
+        try? modelContext.save()
+        selectedAddress = newAddress
+    }
+
+    private func refreshPromotions() async {
+        try? await PromotionSyncService.shared.refreshLocalPromotions(modelContext: modelContext)
+    }
+
     private func formatCurrency(_ v: Double) -> String {
         let f = NumberFormatter()
         f.numberStyle  = .currency
@@ -627,6 +734,8 @@ struct CheckoutView: View {
 
     @MainActor
     private func placeOrderAsync() async {
+        persistInlineAddressIfNeeded()
+
         // Snapshot cart items AND prices BEFORE deleting from context.
         // The computed properties subtotal/tax/shipping/total all read from `cartItems`,
         // so they return 0 once the items are deleted — causing incorrect totals in Supabase.
@@ -636,6 +745,7 @@ struct CheckoutView: View {
                 return (item.productId, item.productName, item.quantity, effectiveUnitPrice)
             }
         let snapshotSubtotal = subtotal
+        let snapshotDiscount = discountTotal
         let snapshotTax      = tax
         let snapshotTotal    = total
 
@@ -685,6 +795,7 @@ struct CheckoutView: View {
             orderItems: itemsJSON,
             subtotal: snapshotSubtotal,
             tax: snapshotTax,
+            discount: snapshotDiscount,
             total: snapshotTotal,
             shippingAddress: addrJSON,
             fulfillmentType: selectedFulfillment,
@@ -714,6 +825,7 @@ struct CheckoutView: View {
                     cartItems: snapshot,
                     orderNumber: num,
                     subtotal: snapshotSubtotal,
+                    discountTotal: snapshotDiscount,
                     taxTotal: snapshotTax,
                     grandTotal: snapshotTotal,
                     channel: channel

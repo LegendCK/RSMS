@@ -9,8 +9,16 @@ import SwiftUI
 import SwiftData
 
 struct AdminReportsView: View {
+    @Environment(AppState.self) private var appState
     @Query private var allProducts: [Product]
     @State private var selectedPeriod = "This Month"
+    @State private var showExportSheet = false
+    @State private var selectedReportScope: AdminReportScope = .all
+    @State private var selectedReportFormat: AdminReportFormat = .pdf
+    @State private var isExportingReport = false
+    @State private var exportFile: ShareFile?
+    @State private var exportErrorMessage = ""
+    @State private var showExportError = false
 
     private let periods = ["Today", "This Week", "This Month", "This Quarter", "This Year"]
 
@@ -49,12 +57,28 @@ struct AdminReportsView: View {
                         .foregroundColor(AppColors.textPrimaryDark)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {}) {
+                    Button(action: { handleExportTap() }) {
                         Image(systemName: "square.and.arrow.up")
                             .font(AppTypography.iconMedium)
                             .foregroundColor(AppColors.accent)
                     }
                 }
+            }
+            .sheet(isPresented: $showExportSheet) {
+                AdminReportExportSheet(
+                    selectedScope: $selectedReportScope,
+                    selectedFormat: $selectedReportFormat,
+                    isExporting: isExportingReport,
+                    onExport: { Task { await exportReports() } }
+                )
+            }
+            .sheet(item: $exportFile) { file in
+                ShareSheet(activityItems: [file.url])
+            }
+            .alert("Export Error", isPresented: $showExportError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(exportErrorMessage)
             }
         }
     }
@@ -286,6 +310,54 @@ struct AdminReportsView: View {
         .padding(AppSpacing.sm)
         .background(AppColors.backgroundSecondary)
         .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    @MainActor
+    private func exportReports() async {
+        guard appState.currentUserRole == .corporateAdmin else {
+            exportErrorMessage = "Only Corporate Admin users can download reports."
+            showExportError = true
+            return
+        }
+
+        guard !isExportingReport else { return }
+        isExportingReport = true
+        defer { isExportingReport = false }
+
+        do {
+            let snapshot = try await AdminInsightsService.shared.fetchLatestSnapshot()
+            let generatedBy = appState.currentUserName.isEmpty ? "Corporate Admin" : appState.currentUserName
+            let fileURL = try AdminReportExportService.export(
+                scope: selectedReportScope,
+                format: selectedReportFormat,
+                snapshot: snapshot,
+                generatedBy: generatedBy
+            )
+
+            guard FileManager.default.fileExists(atPath: fileURL.path) else {
+                exportErrorMessage = "Export file could not be prepared."
+                showExportError = true
+                return
+            }
+
+            // Avoid presenting two sheets simultaneously: close export sheet first.
+            showExportSheet = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                exportFile = ShareFile(url: fileURL)
+            }
+        } catch {
+            exportErrorMessage = "Export failed: \(error.localizedDescription)"
+            showExportError = true
+        }
+    }
+
+    private func handleExportTap() {
+        guard appState.currentUserRole == .corporateAdmin else {
+            exportErrorMessage = "Only Corporate Admin users can download reports."
+            showExportError = true
+            return
+        }
+        showExportSheet = true
     }
 }
 
