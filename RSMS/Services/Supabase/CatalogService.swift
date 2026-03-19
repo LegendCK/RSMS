@@ -136,13 +136,10 @@ final class CatalogService {
                 print("[CatalogService] ⚠️ Image \(index + 1) upload skipped — \(error.localizedDescription)")
             }
         }
-        
-        let barcodeValue = CatalogService.generateBarcode()
 
         // 2. Build insert payload
         let payload = ProductInsertDTO(
             sku: sku,
-            barcode: barcodeValue,
             name: name,
             brand: brand.flatMap { $0.isEmpty ? nil : $0 },
             categoryId: categoryId,
@@ -154,8 +151,6 @@ final class CatalogService {
             isActive: isActive,
             createdBy: createdBy
         )
-        
-        print("Generated Barcode:", barcodeValue)
 
         // 3. Insert product record — retried on transient network errors
         return try await withRetry(label: "createProduct") {
@@ -166,6 +161,17 @@ final class CatalogService {
                 .single()
                 .execute()
                 .value
+        }
+    }
+
+    /// Performs a strict bulk insert of product catalog definitions.
+    /// Will fail explicitly if any SKU violates the database UNIQUE constraint.
+    func createProductsBulk(products: [ProductInsertDTO]) async throws {
+        try await withRetry(label: "createProductsBulk") {
+            try await client
+                .from("products")
+                .insert(products)
+                .execute()
         }
     }
 
@@ -183,7 +189,6 @@ final class CatalogService {
     ) async throws -> ProductDTO {
         let payload = ProductUpdateDTO(
             sku: sku,
-            barcode: barcode.flatMap { $0.isEmpty ? nil : $0 },
             name: name,
             brand: brand.flatMap { $0.isEmpty ? nil : $0 },
             categoryId: categoryId,
@@ -224,7 +229,6 @@ final class CatalogService {
 
     // MARK: - Helpers
 
-    /// Generates a formatted SKU string: PREFIX-YYYYMMDD-RAND
     static func generateSKU(prefix: String = "SKU") -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd"
@@ -232,20 +236,4 @@ final class CatalogService {
         let randPart = String(Int.random(in: 1000...9999))
         return "\(prefix.uppercased())-\(datePart)-\(randPart)"
     }
-    
-    
-    // MARK: - Barcode Generator
-
-    /// Generates a printable Code128-compatible barcode string.
-    /// Format: BR-YYYYMMDD-RAND6
-    static func generateBarcode(prefix: String = "BR") -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd"
-        let datePart = formatter.string(from: Date())
-
-        let randomPart = String(Int.random(in: 100000...999999))
-
-        return "\(prefix.uppercased())-\(datePart)-\(randomPart)"
-    }
-    
 }

@@ -15,6 +15,15 @@ struct CatalogView: View {
     @State private var showAddDialog   = false
     @State private var showAddCategory = false
     @State private var showAddProduct  = false
+    
+    // CSV Upload State
+    @State private var showFileImporter = false
+    @State private var showCSVPreview = false
+    @State private var parsedCSVRows: [CSVProductRow] = []
+    
+    // CSV Template State
+    @State private var showTemplateExporter = false
+    @State private var templateDocument: CSVTemplateDocument?
 
     var body: some View {
         NavigationStack {
@@ -62,6 +71,11 @@ struct CatalogView: View {
             .confirmationDialog("What would you like to add?", isPresented: $showAddDialog, titleVisibility: .visible) {
                 Button("New Product") { showAddProduct = true }
                 Button("New Category") { showAddCategory = true }
+                Button("Upload CSV") { showFileImporter = true }
+                Button("Download CSV Template") {
+                    templateDocument = CSVTemplateDocument(initialText: CSVParserService.generateTemplate())
+                    showTemplateExporter = true
+                }
                 Button("Cancel", role: .cancel) {}
             }
             // Add Category sheet
@@ -72,7 +86,54 @@ struct CatalogView: View {
             .sheet(isPresented: $showAddProduct) {
                 AddProductView(availableCategories: allCategories)
             }
+            // CSV File Importer
+            .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.commaSeparatedText]) { result in
+                switch result {
+                case .success(let url):
+                    do {
+                        parsedCSVRows = try CSVParserService.parseCSV(url: url)
+                        showCSVPreview = true
+                    } catch {
+                        print("Failed to parse CSV: \\(error)")
+                    }
+                case .failure(let err):
+                    print("Failed to import file: \\(err)")
+                }
+            }
+            // CSV Preview Sheet
+            .sheet(isPresented: $showCSVPreview) {
+                if !parsedCSVRows.isEmpty {
+                    CSVPreviewView(rows: parsedCSVRows)
+                }
+            }
+            // CSV Template Exporter
+            .fileExporter(isPresented: $showTemplateExporter, document: templateDocument, contentType: .commaSeparatedText, defaultFilename: "Products_Template.csv") { _ in }
         }
+    }
+}
+
+// MARK: - CSV Template Document wrapper
+import UniformTypeIdentifiers
+
+struct CSVTemplateDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.commaSeparatedText] }
+    var text: String
+    
+    init(initialText: String) {
+        text = initialText
+    }
+    
+    init(configuration: ReadConfiguration) throws {
+        if let data = configuration.file.regularFileContents {
+            text = String(decoding: data, as: UTF8.self)
+        } else {
+            text = ""
+        }
+    }
+    
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        let data = Data(text.utf8)
+        return FileWrapper(regularFileWithContents: data)
     }
 }
 

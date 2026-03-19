@@ -21,15 +21,24 @@ BEGIN
         RAISE EXCEPTION 'Invalid product_id';
     END IF;
 
-    -- 3. Bulk insert — single statement, no loops
-    RETURN QUERY
-    INSERT INTO product_items (product_id, barcode, status)
-    SELECT
-        p_product_id,
-        generate_rsms_barcode(),
-        'IN_STOCK'
-    FROM generate_series(1, p_quantity)
-    RETURNING *;
+    -- 3. Bulk insert with retry logic for unique barcodes
+    FOR i IN 1..p_quantity LOOP
+        FOR attempt IN 1..5 LOOP
+            BEGIN
+                RETURN QUERY
+                INSERT INTO product_items (product_id, barcode, status)
+                VALUES (p_product_id, generate_rsms_barcode(), 'IN_STOCK')
+                RETURNING *;
+                
+                EXIT; -- Success, break out of attempt loop and move to next item
+            EXCEPTION WHEN unique_violation THEN
+                IF attempt = 5 THEN
+                    RAISE EXCEPTION 'Barcode collision: failed to generate unique barcode after 5 attempts';
+                END IF;
+                -- Otherwise, loop naturally retries
+            END;
+        END LOOP;
+    END LOOP;
 END;
 $$;
 

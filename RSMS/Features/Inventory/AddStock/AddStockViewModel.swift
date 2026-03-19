@@ -29,7 +29,7 @@ final class AddStockViewModel {
     // MARK: - Input
 
     var selectedProduct: ProductDTO? = nil
-    var quantityText: String = ""
+    var quantity: Int = 1
 
     // MARK: - Output
 
@@ -37,20 +37,10 @@ final class AddStockViewModel {
 
     // MARK: - Derived
 
-    var quantity: Int? { Int(quantityText).flatMap { $0 > 0 ? $0 : nil } }
-
     var canSubmit: Bool {
-        guard selectedProduct != nil, quantity != nil else { return false }
+        guard selectedProduct != nil else { return false }
         if case .loading = state { return false }
-        return true
-    }
-
-    var validationMessage: String? {
-        if quantityText.isEmpty { return nil }
-        guard let q = Int(quantityText) else { return "Enter a whole number." }
-        if q <= 0   { return "Quantity must be at least 1." }
-        if q > 500  { return "Maximum 500 items per operation." }
-        return nil
+        return quantity >= 1 && quantity <= 500
     }
 
     // MARK: - Dependencies
@@ -66,11 +56,11 @@ final class AddStockViewModel {
     // MARK: - Actions
 
     func createStock() async {
-        guard let product = selectedProduct, let qty = quantity else { return }
+        guard let product = selectedProduct else { return }
         state = .loading
 
         do {
-            let items = try await service.createStock(productId: product.id, quantity: qty)
+            let items = try await service.createStock(productId: product.id, quantity: quantity)
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 state = .success(count: items.count, items: items)
             }
@@ -83,7 +73,7 @@ final class AddStockViewModel {
 
     func reset() {
         selectedProduct = nil
-        quantityText    = ""
+        quantity        = 1
         state           = .idle
     }
 }

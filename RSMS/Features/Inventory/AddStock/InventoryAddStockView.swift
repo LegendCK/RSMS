@@ -11,14 +11,18 @@
 //
 
 import SwiftUI
+import SwiftData
 import Supabase
 
 // MARK: - Main View
 
 struct InventoryAddStockView: View {
+    @Query private var localProducts: [Product]
+
+    @Environment(\.dismiss) private var dismiss
     @State private var viewModel = AddStockViewModel()
     @State private var showProductPicker = false
-    @State private var stateVersion = 0  // incremented on state change to drive animation
+    @State private var stateVersion = 0
     @FocusState private var quantityFocused: Bool
 
     var body: some View {
@@ -27,10 +31,8 @@ struct InventoryAddStockView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: AppSpacing.lg) {
-                    // MARK: - Form Card
                     formCard
 
-                    // MARK: - Result Panel
                     if case .success(let count, let items) = viewModel.state {
                         successPanel(count: count, items: items)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -57,7 +59,6 @@ struct InventoryAddStockView: View {
                 }
             }
         }
-        // Drive spring animation from an Int counter — avoids Equatable on AddStockState
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: stateVersion)
         .onChange(of: viewModel.canSubmit) { stateVersion += 1 }
         .sheet(isPresented: $showProductPicker) {
@@ -70,27 +71,13 @@ struct InventoryAddStockView: View {
 
     private var formCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
-
-            // Section: Product
             sectionLabel("PRODUCT")
-
             productSelector
                 .padding(.bottom, AppSpacing.xs)
 
-            // Section: Quantity
             sectionLabel("QUANTITY")
-
             quantityField
 
-            // Validation hint
-            if let msg = viewModel.validationMessage {
-                Text(msg)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.error)
-                    .padding(.top, -AppSpacing.xs)
-            }
-
-            // Submit Button
             submitButton
                 .padding(.top, AppSpacing.sm)
         }
@@ -102,77 +89,179 @@ struct InventoryAddStockView: View {
 
     private var productSelector: some View {
         Button { showProductPicker = true } label: {
-            HStack {
+            HStack(spacing: AppSpacing.md) {
                 if let product = viewModel.selectedProduct {
-                    VStack(alignment: .leading, spacing: 2) {
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
+                        .fill(Color.white.opacity(0.1))
+                        .frame(width: 50, height: 50)
+                        .overlay(
+                            Image(systemName: "bag.fill")
+                                .foregroundColor(AppColors.textSecondaryDark)
+                        )
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(product.name)
                             .font(AppTypography.label)
                             .foregroundStyle(AppColors.textPrimaryDark)
                             .lineLimit(1)
-                        Text("SKU: \(product.sku)")
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundStyle(AppColors.textSecondaryDark)
+                        HStack(spacing: 6) {
+                            if let brand = product.brand {
+                                Text(brand)
+                                    .font(AppTypography.caption)
+                                    .foregroundStyle(AppColors.textSecondaryDark)
+                                Text("•")
+                                    .foregroundStyle(AppColors.neutral600)
+                            }
+                            Text(product.formattedPrice)
+                                .font(AppTypography.caption)
+                                .foregroundStyle(AppColors.accent)
+                        }
                     }
                 } else {
-                    Text("Select a product…")
-                        .font(AppTypography.bodyMedium)
-                        .foregroundStyle(AppColors.textSecondaryDark)
+                    HStack(spacing: AppSpacing.sm) {
+                        Image(systemName: "magnifyingglass.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(AppColors.accent.opacity(0.8))
+                        Text("Search catalog...")
+                            .font(AppTypography.bodyMedium)
+                            .foregroundStyle(AppColors.textSecondaryDark)
+                    }
+                    .padding(.vertical, AppSpacing.xs)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppColors.accent)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.neutral500)
             }
-            .padding(AppSpacing.sm)
+            .padding(AppSpacing.md)
             .background(
                 RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(Color.white.opacity(0.04))
                     .overlay(
                         RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
                             .stroke(
                                 viewModel.selectedProduct != nil
-                                    ? AppColors.accent.opacity(0.4)
-                                    : Color.white.opacity(0.1),
+                                    ? AppColors.accent.opacity(0.3)
+                                    : Color.white.opacity(0.08),
                                 lineWidth: 1
                             )
                     )
             )
+            .shadow(color: .black.opacity(0.1), radius: 6, y: 3)
         }
     }
 
-    // MARK: - Quantity Field
+    // MARK: - Quantity Field (improved)
+
+    private let presets = [1, 5, 10, 25, 50]
 
     private var quantityField: some View {
-        HStack(spacing: AppSpacing.sm) {
-            Image(systemName: "number")
-                .font(AppTypography.iconSmall)
-                .foregroundStyle(
-                    quantityFocused ? AppColors.accent : AppColors.textSecondaryDark
-                )
+        VStack(spacing: AppSpacing.md) {
 
-            TextField("e.g. 10", text: $viewModel.quantityText)
-                .keyboardType(.numberPad)
-                .focused($quantityFocused)
-                .font(AppTypography.bodyMedium)
-                .foregroundStyle(AppColors.textPrimaryDark)
+            // ── Preset chips ────────────────────────────────────────────
+            HStack(spacing: AppSpacing.xs) {
+                ForEach(presets, id: \.self) { preset in
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            viewModel.quantity = preset
+                        }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        Text(String(preset))
+                            .font(AppTypography.label)
+                            .foregroundStyle(viewModel.quantity == preset ? .white : AppColors.textSecondaryDark)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                                    .fill(viewModel.quantity == preset
+                                          ? AppColors.accent
+                                          : Color.white.opacity(0.06))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: viewModel.quantity)
+                }
+            }
+
+            // ── Stepper row ─────────────────────────────────────────────
+            HStack(spacing: 0) {
+                // Minus
+                Button(action: decrementQuantity) {
+                    Image(systemName: "minus")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(viewModel.quantity > 1 ? AppColors.accent : AppColors.neutral600)
+                        .frame(width: 52, height: 52)
+                        .background(Color.white.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+                }
+                .disabled(viewModel.quantity <= 1)
+
+                Spacer()
+
+                // ✅ Fixed: use String(viewModel.quantity) — avoids literal-interpolation bug
+                VStack(spacing: 2) {
+                    Text(String(viewModel.quantity))
+                        .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppColors.textPrimaryDark)
+                        .contentTransition(.numericText(value: Double(viewModel.quantity)))
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.quantity)
+
+                    Text("units")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textSecondaryDark)
+                }
+
+                Spacer()
+
+                // Plus
+                Button(action: incrementQuantity) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(viewModel.quantity < 500 ? AppColors.accent : AppColors.neutral600)
+                        .frame(width: 52, height: 52)
+                        .background(Color.white.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+                }
+                .disabled(viewModel.quantity >= 500)
+            }
+            .padding(.horizontal, AppSpacing.sm)
+            .padding(.vertical, AppSpacing.xs)
+            .background(
+                RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                    .fill(Color.white.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                            .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                    )
+            )
+
+            // ✅ Fixed: hint text uses String() instead of broken \() interpolation
+            let itemWord = viewModel.quantity == 1 ? "item" : "items"
+            Text("Creating " + String(viewModel.quantity) + " serialized " + itemWord + " with unique barcodes")
+                .font(AppTypography.caption)
+                .foregroundStyle(AppColors.textSecondaryDark)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
         }
-        .padding(AppSpacing.sm)
-        .background(
-            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                .fill(Color.white.opacity(0.05))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                        .stroke(
-                            quantityFocused ? AppColors.accent.opacity(0.5) : Color.white.opacity(0.1),
-                            lineWidth: 1
-                        )
-                )
-        )
-        .animation(.easeInOut(duration: 0.2), value: quantityFocused)
+    }
+
+    private func incrementQuantity() {
+        if viewModel.quantity < 500 {
+            viewModel.quantity += 1
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+    }
+
+    private func decrementQuantity() {
+        if viewModel.quantity > 1 {
+            viewModel.quantity -= 1
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
     }
 
     // MARK: - Submit Button
 
+    @ViewBuilder
     private var submitButton: some View {
         Button {
             quantityFocused = false
@@ -185,8 +274,10 @@ struct InventoryAddStockView: View {
                         Text("Generating…")
                     }
                 } else {
+                    // ✅ Fixed: String() avoids broken \() interpolation in Label titles
+                    let itemWord = viewModel.quantity == 1 ? "Item" : "Items"
                     Label(
-                        "Generate Items",
+                        "Generate " + String(viewModel.quantity) + " " + itemWord,
                         systemImage: "barcode.viewfinder"
                     )
                 }
@@ -197,22 +288,29 @@ struct InventoryAddStockView: View {
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
         .tint(AppColors.accent)
-        .disabled(!viewModel.canSubmit)
-        .opacity(viewModel.canSubmit ? 1 : 0.5)
+        .disabled(!viewModel.canSubmit || localProducts.isEmpty)
+        .opacity((viewModel.canSubmit && !localProducts.isEmpty) ? 1 : 0.5)
         .animation(.easeInOut(duration: 0.2), value: viewModel.canSubmit)
+
+        if localProducts.isEmpty {
+            Text("No products available. Please add products first.")
+                .font(AppTypography.caption)
+                .foregroundStyle(AppColors.error)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, AppSpacing.xs)
+        }
     }
 
     // MARK: - Success Panel
 
     private func successPanel(count: Int, items: [ProductItemDTO]) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
-            // Header
             HStack(spacing: AppSpacing.sm) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 22))
                     .foregroundStyle(.green)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(count) item\(count == 1 ? "" : "s") added successfully")
+                    Text(String(count) + " items created successfully")
                         .font(AppTypography.heading3)
                         .foregroundStyle(AppColors.textPrimaryDark)
                     if let product = viewModel.selectedProduct {
@@ -226,18 +324,29 @@ struct InventoryAddStockView: View {
 
             Divider().background(Color.white.opacity(0.08))
 
-            // Barcode list header
             Text("GENERATED BARCODES")
                 .font(AppTypography.overline)
                 .tracking(2)
                 .foregroundStyle(AppColors.accent)
 
-            // Scrollable barcode list
             LazyVStack(spacing: AppSpacing.xxs) {
                 ForEach(items.indices, id: \.self) { index in
                     barcodeRow(index: index + 1, barcode: items[index].barcode, status: items[index].status)
                 }
             }
+
+            Button {
+                NotificationCenter.default.post(name: Notification.Name("switchToScannerTab"), object: nil)
+                dismiss()
+            } label: {
+                Label("Scan Now", systemImage: "barcode.viewfinder")
+                    .font(AppTypography.label)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(AppColors.accent)
+            .padding(.top, AppSpacing.sm)
         }
         .padding(AppSpacing.cardPadding)
         .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
@@ -245,36 +354,42 @@ struct InventoryAddStockView: View {
 
     private func barcodeRow(index: Int, barcode: String, status: String) -> some View {
         HStack(spacing: AppSpacing.sm) {
-            Text("\(index)")
-                .font(.system(size: 11, weight: .medium))
+            Text(String(index))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(AppColors.textSecondaryDark)
-                .frame(width: 22, alignment: .trailing)
+                .frame(width: 24, alignment: .leading)
 
-            Image(systemName: "barcode")
-                .font(.system(size: 12))
-                .foregroundStyle(AppColors.accent.opacity(0.7))
-
-            Text(barcode)
-                .font(.system(size: 13, weight: .regular, design: .monospaced))
-                .foregroundStyle(AppColors.textPrimaryDark)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Image(systemName: "barcode")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppColors.accent.opacity(0.7))
+                    Text(barcode)
+                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .foregroundStyle(AppColors.textPrimaryDark)
+                }
+            }
 
             Spacer()
 
-            Text(status)
-                .font(AppTypography.nano)
-                .foregroundStyle(.green)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(Color.green.opacity(0.12))
-                .cornerRadius(4)
+            Button {
+                UIPasteboard.general.string = barcode
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppColors.accent)
+                    .padding(8)
+                    .background(AppColors.accent.opacity(0.1))
+                    .clipShape(Circle())
+            }
         }
-        .padding(.vertical, AppSpacing.xxs)
-        .padding(.horizontal, AppSpacing.xs)
+        .padding(AppSpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.white.opacity(0.03))
+            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                .fill(Color.white.opacity(0.05))
         )
+        .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
     }
 
     // MARK: - Error Banner
@@ -394,7 +509,6 @@ struct ProductPickerSheet: View {
                     Text(product.name)
                         .font(AppTypography.label)
                         .foregroundStyle(AppColors.textPrimaryDark)
-
                     HStack(spacing: AppSpacing.xs) {
                         Text(product.sku)
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -406,13 +520,10 @@ struct ProductPickerSheet: View {
                         }
                     }
                 }
-
                 Spacer()
-
                 Text(product.formattedPrice)
                     .font(AppTypography.statSmall)
                     .foregroundStyle(AppColors.textSecondaryDark)
-
                 if selectedProduct?.id == product.id {
                     Image(systemName: "checkmark")
                         .font(.system(size: 12, weight: .semibold))

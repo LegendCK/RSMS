@@ -9,7 +9,9 @@ import SwiftUI
 import SwiftData
 
 struct ManagerOperationsView: View {
+    @Environment(AppState.self) private var appState
     @State private var selectedSection = 0
+    @State private var showAddStock = false
 
     var body: some View {
         NavigationStack {
@@ -35,6 +37,33 @@ struct ManagerOperationsView: View {
                     default: salesSection
                     }
                 }
+
+                // ✅ FAB is now inside ZStack so it overlays content correctly
+                // instead of stacking vertically and eating half the screen.
+                if appState.currentUserRole == .inventoryController {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Button {
+                                showAddStock = true
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 24, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 60, height: 60)
+                                    .background(AppColors.accent)
+                                    .clipShape(Circle())
+                                    .shadow(color: AppColors.accent.opacity(0.4), radius: 8, x: 0, y: 4)
+                            }
+                            .accessibilityLabel("Add Stock")
+                            .padding(.trailing, AppSpacing.screenHorizontal)
+                            .padding(.bottom, AppSpacing.md)
+                        }
+                    }
+                    // No ignoresSafeArea here — lets SwiftUI respect the tab bar inset
+                    // so the FAB sits above the tab bar, not on top of it.
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -42,6 +71,9 @@ struct ManagerOperationsView: View {
                     Text("Operations").font(AppTypography.navTitle).foregroundColor(AppColors.textPrimaryDark)
                 }
             }
+        }
+        .sheet(isPresented: $showAddStock) {
+            InventoryAddStockView()
         }
     }
 
@@ -129,15 +161,15 @@ struct ManagerOperationsView: View {
             HStack(spacing: AppSpacing.xl) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("System").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                    Text("\(system)").font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
+                    Text(String(system)).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Counted").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                    Text("\(counted)").font(AppTypography.label).foregroundColor(system != counted ? AppColors.error : AppColors.success)
+                    Text(String(counted)).font(AppTypography.label).foregroundColor(system != counted ? AppColors.error : AppColors.success)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Variance").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                    Text("\(counted - system)").font(AppTypography.label).foregroundColor(AppColors.error)
+                    Text(String(counted - system)).font(AppTypography.label).foregroundColor(AppColors.error)
                 }
             }
             HStack {

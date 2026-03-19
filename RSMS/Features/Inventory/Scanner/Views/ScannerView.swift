@@ -114,8 +114,8 @@ struct ScannerView: View {
                 sessionPill
 
                 // Scan count
-                if viewModel.sessionActive && !viewModel.recentScans.isEmpty {
-                    Text("\(viewModel.recentScans.count)")
+                if viewModel.sessionActive {
+                    Text("\(viewModel.totalSessionScans)")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)

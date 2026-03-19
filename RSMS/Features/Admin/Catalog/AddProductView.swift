@@ -37,11 +37,9 @@ struct AddProductView: View {
     @State private var selectedCategory: Category? = nil
     @State private var priceText: String = ""
 
-    // Optional fields
     @State private var brand: String = ""
     @State private var costPriceText: String = ""
     @State private var descriptionText: String = ""
-    @State private var barcode: String = ""
 
     // Toggles
     @State private var isActive: Bool = true
@@ -173,15 +171,6 @@ struct AddProductView: View {
                                         .foregroundColor(AppColors.textPrimaryDark)
                                         .keyboardType(.decimalPad)
                                 }
-                            }
-
-                            divider
-
-                            // Barcode
-                            fieldRow(label: "Barcode") {
-                                TextField("UPC / EAN", text: $barcode)
-                                    .font(AppTypography.bodyMedium)
-                                    .foregroundColor(AppColors.textPrimaryDark)
                             }
                         }
 
@@ -557,8 +546,7 @@ struct AddProductView: View {
             isFeatured: false,
             rating: 0,
             stockCount: 0,
-            sku: sku.trimmingCharacters(in: .whitespaces),
-            barcode: barcode.trimmingCharacters(in: .whitespaces)
+            sku: sku.trimmingCharacters(in: .whitespaces)
         )
         modelContext.insert(product)
         try? modelContext.save()
