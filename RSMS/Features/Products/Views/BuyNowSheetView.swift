@@ -18,9 +18,11 @@ struct BuyNowSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @Query private var allAddresses: [SavedAddress]
+    @Query private var allCategories: [Category]
     @Query private var pricingPolicies: [PricingPolicySettings]
     @Query private var taxRules: [IndianTaxRule]
     @Query private var regionalPriceRules: [RegionalPriceRule]
+    @Query private var promotionRules: [PromotionRule]
 
     @State private var currentStep = 0            // 0 = address, 1 = payment, 2 = review
     @State private var selectedAddress: SavedAddress? = nil
@@ -33,6 +35,7 @@ struct BuyNowSheetView: View {
     @State private var inlineCity         = ""
     @State private var inlineAddrState    = ""
     @State private var inlineZip          = ""
+    @State private var saveInlineAddressForFuture = true
 
     // Payment
     @State private var selectedPayment: BuyNowPayment = .applePay
@@ -70,6 +73,7 @@ struct BuyNowSheetView: View {
             items: [
                 TaxableLineItem(
                     productId: product.id,
+                    categoryId: allCategories.first(where: { $0.name == product.categoryName })?.id,
                     goodsCategory: product.categoryName,
                     baseUnitPrice: product.price,
                     quantity: 1
@@ -78,10 +82,13 @@ struct BuyNowSheetView: View {
             buyerState: buyerStateForTax,
             policy: policy,
             regionalPrices: regionalPriceRules,
-            taxRules: taxRules
+            taxRules: taxRules,
+            promotions: promotionRules
         )
     }
+    private var merchandiseSubtotal: Double { pricing.merchandiseSubtotal }
     private var subtotal: Double { pricing.subtotal }
+    private var discountTotal: Double { pricing.discountTotal }
     private var tax: Double      { pricing.taxBreakdown.totalTax }
     private var total: Double    { subtotal + tax }
 
@@ -163,6 +170,7 @@ struct BuyNowSheetView: View {
                 appState.shouldNavigateHome = false
                 dismiss()
             }
+            .task { await refreshPromotions() }
         }
     }
 
@@ -170,38 +178,48 @@ struct BuyNowSheetView: View {
 
     private var stepBar: some View {
         let steps = ["Address", "Payment", "Review"]
-        return HStack(spacing: 0) {
+        return HStack(spacing: AppSpacing.xs) {
             ForEach(steps.indices, id: \.self) { idx in
-                HStack(spacing: 6) {
-                    ZStack {
-                        Circle()
-                            .fill(idx <= currentStep ? AppColors.accent : AppColors.backgroundSecondary)
-                            .frame(width: 26, height: 26)
-                        if idx < currentStep {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(AppColors.textPrimaryLight)
-                        } else {
-                            Text("\(idx + 1)")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(idx <= currentStep ? AppColors.textPrimaryLight : AppColors.neutral600)
-                        }
-                    }
-                    Text(steps[idx])
-                        .font(AppTypography.caption)
-                        .foregroundColor(idx <= currentStep ? AppColors.accent : AppColors.neutral600)
-                }
-                if idx < steps.count - 1 {
-                    Rectangle()
-                        .fill(idx < currentStep ? AppColors.accent : AppColors.neutral700.opacity(0.4))
-                        .frame(height: 1)
-                        .padding(.horizontal, 6)
-                }
+                stepPill(index: idx, title: steps[idx])
             }
         }
         .padding(.horizontal, AppSpacing.screenHorizontal)
         .padding(.vertical, AppSpacing.md)
         .background(AppColors.backgroundPrimary)
+    }
+
+    private func stepPill(index: Int, title: String) -> some View {
+        HStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .fill(index <= currentStep ? AppColors.accent : AppColors.backgroundSecondary)
+                    .frame(width: 24, height: 24)
+                if index < currentStep {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(AppColors.textPrimaryLight)
+                } else {
+                    Text("\(index + 1)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(index <= currentStep ? AppColors.textPrimaryLight : AppColors.neutral600)
+                }
+            }
+
+            Text(title)
+                .font(AppTypography.caption)
+                .foregroundColor(index <= currentStep ? AppColors.textPrimaryDark : AppColors.textSecondaryDark)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                .fill(index == currentStep ? AppColors.accent.opacity(0.08) : AppColors.backgroundSecondary.opacity(0.7))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                .stroke(index == currentStep ? AppColors.accent.opacity(0.3) : AppColors.border.opacity(0.25), lineWidth: 0.8)
+        )
     }
 
     // MARK: - Product Summary Card
@@ -263,21 +281,21 @@ struct BuyNowSheetView: View {
 
             if savedAddresses.isEmpty {
                 // No saved addresses — show inline entry form so user can proceed immediately
-                VStack(spacing: AppSpacing.sm) {
-                    LuxuryTextField(placeholder: "Address Line 1*", text: $inlineAddressLine1)
-                    LuxuryTextField(placeholder: "Address Line 2 (optional)", text: $inlineAddressLine2)
-                    HStack(spacing: AppSpacing.sm) {
-                        LuxuryTextField(placeholder: "City*", text: $inlineCity)
-                        LuxuryTextField(placeholder: "State*", text: $inlineAddrState)
-                            .frame(maxWidth: 90)
-                    }
-                    LuxuryTextField(placeholder: "PIN*", text: $inlineZip)
-                        .keyboardType(.numberPad)
+                LuxuryCardView(useGlass: false, cornerRadius: AppSpacing.radiusMedium) {
+                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        LuxuryTextField(placeholder: "Address Line 1*", text: $inlineAddressLine1)
+                        LuxuryTextField(placeholder: "Address Line 2 (optional)", text: $inlineAddressLine2)
+                        HStack(spacing: AppSpacing.sm) {
+                            LuxuryTextField(placeholder: "City*", text: $inlineCity)
+                            LuxuryTextField(placeholder: "State*", text: $inlineAddrState)
+                                .frame(maxWidth: 96)
+                        }
+                        LuxuryTextField(placeholder: "PIN*", text: $inlineZip)
+                            .keyboardType(.numberPad)
 
-                    Button("Save this address for next time") { showAddNewAddress = true }
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.accent)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        saveAddressCheckboxRow
+                    }
+                    .padding(AppSpacing.cardPadding)
                 }
             } else {
                 // Show saved addresses as a selectable list (max 3 shown)
@@ -296,6 +314,34 @@ struct BuyNowSheetView: View {
                 .padding(.top, 4)
             }
         }
+    }
+
+    private var saveAddressCheckboxRow: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                saveInlineAddressForFuture.toggle()
+            }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: saveInlineAddressForFuture ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(saveInlineAddressForFuture ? AppColors.accent : AppColors.neutral600)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Save this address for future orders")
+                        .font(AppTypography.bodySmall)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("Securely stored in your profile")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+
+                Spacer()
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.top, AppSpacing.xs)
     }
 
     private func savedAddressRow(_ addr: SavedAddress) -> some View {
@@ -442,6 +488,10 @@ struct BuyNowSheetView: View {
             // Price breakdown
             LuxuryCardView {
                 VStack(spacing: AppSpacing.sm) {
+                    priceRow("Items", value: formatCurrency(merchandiseSubtotal))
+                    if discountTotal > 0 {
+                        priceRow("Offer", value: "-\(formatCurrency(discountTotal))")
+                    }
                     priceRow("Subtotal", value: formatCurrency(subtotal))
                     priceRow("CGST", value: formatCurrency(pricing.taxBreakdown.cgst))
                     priceRow("SGST", value: formatCurrency(pricing.taxBreakdown.sgst))
@@ -523,9 +573,12 @@ struct BuyNowSheetView: View {
                 if currentStep < 2 {
                     PrimaryButton(title: "Continue") {
                         guard canContinue else { return }
+                        if currentStep == 0 { persistInlineAddressIfNeeded() }
                         withAnimation(.spring(response: 0.3)) { currentStep += 1 }
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
+                    .disabled(!canContinue)
+                    .opacity(canContinue ? 1 : 0.55)
                 } else {
                     Button(action: placeOrder) {
                         HStack(spacing: 8) {
@@ -577,6 +630,47 @@ struct BuyNowSheetView: View {
         }
     }
 
+    private var isInlineAddressComplete: Bool {
+        !inlineAddressLine1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !inlineCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !inlineAddrState.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !inlineZip.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func persistInlineAddressIfNeeded() {
+        guard selectedAddress == nil, saveInlineAddressForFuture, isInlineAddressComplete else { return }
+
+        let trimmedLine1 = inlineAddressLine1.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCity = inlineCity.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedState = inlineAddrState.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedZip = inlineZip.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let existing = savedAddresses.first(where: {
+            $0.line1.caseInsensitiveCompare(trimmedLine1) == .orderedSame &&
+            $0.city.caseInsensitiveCompare(trimmedCity) == .orderedSame &&
+            $0.state.caseInsensitiveCompare(trimmedState) == .orderedSame &&
+            $0.zip.caseInsensitiveCompare(trimmedZip) == .orderedSame
+        }) {
+            selectedAddress = existing
+            return
+        }
+
+        let newAddress = SavedAddress(
+            customerEmail: appState.currentUserEmail,
+            label: savedAddresses.isEmpty ? "Home" : "Other",
+            line1: trimmedLine1,
+            line2: inlineAddressLine2.trimmingCharacters(in: .whitespacesAndNewlines),
+            city: trimmedCity,
+            state: trimmedState,
+            zip: trimmedZip,
+            country: "IN",
+            isDefault: savedAddresses.isEmpty
+        )
+        modelContext.insert(newAddress)
+        try? modelContext.save()
+        selectedAddress = newAddress
+    }
+
     // MARK: - Helpers
 
     private func sectionHeader(_ text: String) -> some View {
@@ -604,6 +698,7 @@ struct BuyNowSheetView: View {
     @MainActor
     private func placeOrderAsync() async {
         defer { isPlacing = false }
+        persistInlineAddressIfNeeded()
 
         // Build address JSON
         let addrJSON: String = {
@@ -656,6 +751,7 @@ struct BuyNowSheetView: View {
             orderItems: itemsJSON,
             subtotal: subtotal,
             tax: tax,
+            discount: discountTotal,
             total: total,
             shippingAddress: addrJSON,
             fulfillmentType: .standard,
@@ -679,6 +775,7 @@ struct BuyNowSheetView: View {
                     )],
                     orderNumber: orderNum,
                     subtotal: subtotal,
+                    discountTotal: discountTotal,
                     taxTotal: tax,
                     grandTotal: total,
                     channel: "online"
@@ -696,6 +793,10 @@ struct BuyNowSheetView: View {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         placedOrder = order
         showConfirmation = true
+    }
+
+    private func refreshPromotions() async {
+        try? await PromotionSyncService.shared.refreshLocalPromotions(modelContext: modelContext)
     }
 }
 

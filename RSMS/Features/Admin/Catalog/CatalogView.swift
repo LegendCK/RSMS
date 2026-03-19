@@ -224,7 +224,7 @@ struct CatalogProductsSubview: View {
                     LazyVStack(spacing: AppSpacing.xs) {
                         ForEach(filtered) { dto in
                             if let localProduct = localProducts.first(where: { $0.id == dto.id }) {
-                                NavigationLink(destination: ProductDetailView(product: localProduct)) {
+                                NavigationLink(destination: ProductDetailView(product: localProduct, mode: .adminCatalog)) {
                                     productRow(dto)
                                 }
                                 .buttonStyle(.plain)
@@ -358,51 +358,651 @@ struct CatalogProductsSubview: View {
         do {
             async let cats  = CatalogService.shared.fetchCategories()
             async let prods = CatalogService.shared.fetchProducts()
-            let (c, p) = try await (cats, prods)
+            async let cols  = CatalogService.shared.fetchCollections()
+            let (c, p, co) = try await (cats, prods, cols)
             remoteCategories = c
             remoteProducts   = p
+            try syncLocalMirror(remoteProducts: p, remoteCategories: c, remoteCollections: co)
         } catch {
             print("[CatalogProductsSubview] Load failed: \(error)")
         }
+    }
+
+    private func syncLocalMirror(
+        remoteProducts: [ProductDTO],
+        remoteCategories: [CategoryDTO],
+        remoteCollections: [BrandCollectionDTO]
+    ) throws {
+        let locals = try modelContext.fetch(FetchDescriptor<Product>())
+        var localById = Dictionary(uniqueKeysWithValues: locals.map { ($0.id, $0) })
+        let categoryNamesById = Dictionary(uniqueKeysWithValues: remoteCategories.map { ($0.id, $0.name) })
+        let collectionNamesById = Dictionary(uniqueKeysWithValues: remoteCollections.map { ($0.id, $0.name) })
+
+        for dto in remoteProducts {
+            let categoryName = dto.categoryId.flatMap { categoryNamesById[$0] } ?? "Uncategorized"
+            let collectionName = dto.collectionId.flatMap { collectionNamesById[$0] } ?? ""
+            let fallbackImage = fallbackIcon(forCategory: categoryName)
+            let resolvedImages = {
+                let urls = dto.resolvedImageURLs.map(\.absoluteString)
+                if !urls.isEmpty { return urls }
+                return (dto.imageUrls ?? [])
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            }()
+            let primaryImage = resolvedImages.first ?? fallbackImage
+            let imageNames = resolvedImages.joined(separator: ",")
+
+            if let local = localById[dto.id] {
+                local.name = dto.name
+                local.brand = dto.brand ?? "Maison Luxe"
+                local.productDescription = dto.description ?? "Details coming soon."
+                local.price = dto.price
+                local.categoryName = categoryName
+                local.imageName = primaryImage
+                local.imageNames = imageNames
+                local.sku = dto.sku
+                local.productTypeName = collectionName
+                local.createdAt = dto.createdAt
+            } else {
+                let product = Product(
+                    name: dto.name,
+                    brand: dto.brand ?? "Maison Luxe",
+                    description: dto.description ?? "Details coming soon.",
+                    price: dto.price,
+                    categoryName: categoryName,
+                    imageName: primaryImage,
+                    isLimitedEdition: false,
+                    isFeatured: false,
+                    rating: 4.8,
+                    stockCount: 10,
+                    sku: dto.sku,
+                    serialNumber: "",
+                    rfidTagID: "",
+                    certificateRef: "",
+                    productTypeName: collectionName,
+                    attributes: "{}",
+                    imageNames: imageNames,
+                    material: "",
+                    countryOfOrigin: "",
+                    weight: 0,
+                    dimensions: ""
+                )
+                product.id = dto.id
+                product.createdAt = dto.createdAt
+                modelContext.insert(product)
+                localById[dto.id] = product
+            }
+        }
+
+        try modelContext.save()
+    }
+
+    private func fallbackIcon(forCategory name: String) -> String {
+        let value = name.lowercased()
+        if value.contains("watch") { return "clock.fill" }
+        if value.contains("jewel") { return "sparkles" }
+        if value.contains("couture") || value.contains("apparel") || value.contains("wear") {
+            return "tshirt.fill"
+        }
+        return "bag.fill"
     }
 }
  
 // MARK: - Categories Sub-view
 
 struct CatalogCategoriesSubview: View {
-    @Query(sort: \Category.displayOrder) private var categories: [Category]
-    @Query private var allProducts: [Product]
+    @Environment(\.modelContext) private var modelContext
+    @State private var remoteCategories: [CategoryDTO] = []
+    @State private var remoteCollections: [BrandCollectionDTO] = []
+    @State private var remoteProducts: [ProductDTO] = []
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var editingCategory: CategoryDTO?
+    @State private var editingCollection: BrandCollectionDTO?
+    @State private var showCreateCategory = false
+    @State private var showCreateCollection = false
+
+    private var activeCategories: [CategoryDTO] {
+        remoteCategories.filter(\.isActive)
+    }
+
+    private var activeCollections: [BrandCollectionDTO] {
+        remoteCollections.filter(\.isActive)
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
-                ForEach(categories) { cat in
-                    let count = allProducts.filter { $0.categoryName == cat.name }.count
-                    HStack(spacing: AppSpacing.md) {
-                        ZStack {
-                            Circle().fill(AppColors.accent.opacity(0.12)).frame(width: 44, height: 44)
-                            Image(systemName: cat.icon).font(AppTypography.catalogIcon).foregroundColor(AppColors.accent)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(cat.name).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                            Text(cat.categoryDescription).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark).lineLimit(1)
-                        }
-                        Spacer()
-                        Text("\(count) SKUs").font(AppTypography.caption).foregroundColor(AppColors.accent)
-                        Image(systemName: "chevron.right").font(AppTypography.chevron).foregroundColor(AppColors.neutral600)
+                headerCard
+
+                if let errorMessage {
+                    HStack(spacing: AppSpacing.xs) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(AppColors.error)
+                        Text(errorMessage)
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.error)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(AppSpacing.sm)
-                    .background(AppColors.backgroundSecondary)
+                    .background(AppColors.error.opacity(0.08))
                     .cornerRadius(AppSpacing.radiusMedium)
+                }
+
+                if isLoading && remoteCategories.isEmpty && remoteCollections.isEmpty {
+                    ProgressView().tint(AppColors.accent)
+                        .padding(.top, AppSpacing.xl)
+                } else {
+                    sectionHeader("Categories")
+                    ForEach(activeCategories) { category in
+                        categoryRow(category)
+                    }
+
+                    sectionHeader("Brand Collections")
+                    ForEach(activeCollections) { collection in
+                        collectionRow(collection)
+                    }
+
+                    if activeCollections.isEmpty {
+                        Text("No active collections yet.")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, AppSpacing.xs)
+                    }
                 }
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.sm)
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .task { await loadAll() }
+        .refreshable { await loadAll() }
+        .sheet(item: $editingCategory) { category in
+            CategoryEditorSheet(
+                mode: .edit(category),
+                onSaved: {
+                    Task { await loadAll() }
+                }
+            )
+        }
+        .sheet(item: $editingCollection) { collection in
+            CollectionEditorSheet(
+                mode: .edit(collection),
+                onSaved: {
+                    Task { await loadAll() }
+                }
+            )
+        }
+        .sheet(isPresented: $showCreateCategory) {
+            CategoryEditorSheet(
+                mode: .create,
+                onSaved: {
+                    Task { await loadAll() }
+                }
+            )
+        }
+        .sheet(isPresented: $showCreateCollection) {
+            CollectionEditorSheet(
+                mode: .create,
+                onSaved: {
+                    Task { await loadAll() }
+                }
+            )
+        }
+    }
+
+    private var headerCard: some View {
+        HStack(spacing: AppSpacing.md) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("ORGANIZATION STUDIO")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+                Text("Control categories and brand collections used across catalog, product forms, and listings.")
+                    .font(AppTypography.bodySmall)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+            Spacer()
+            VStack(spacing: AppSpacing.xs) {
+                Button("New Category") { showCreateCategory = true }
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textPrimaryLight)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(AppColors.accent)
+                    .cornerRadius(AppSpacing.radiusSmall)
+                Button("New Collection") { showCreateCollection = true }
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.accent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(AppColors.accent.opacity(0.12))
+                    .cornerRadius(AppSpacing.radiusSmall)
+            }
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusLarge)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                .stroke(AppColors.border, lineWidth: 0.5)
+        )
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(AppTypography.overline)
+            .tracking(2)
+            .foregroundColor(AppColors.textSecondaryDark)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, AppSpacing.sm)
+    }
+
+    private func categoryRow(_ category: CategoryDTO) -> some View {
+        let count = remoteProducts.filter { product in
+            product.categoryId == category.id && product.isActive
+        }.count
+
+        return HStack(spacing: AppSpacing.md) {
+            ZStack {
+                Circle().fill(AppColors.accent.opacity(0.12)).frame(width: 44, height: 44)
+                Image(systemName: fallbackIcon(forCategory: category.name))
+                    .font(AppTypography.catalogIcon)
+                    .foregroundColor(AppColors.accent)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(category.name)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                Text(category.description ?? "No description")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Text("\(count) SKUs")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.accent)
+
+            Menu {
+                Button("Edit") { editingCategory = category }
+                Button(role: .destructive) {
+                    Task { await deactivateCategory(category) }
+                } label: {
+                    Text("Delete")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(AppTypography.iconSmall)
+                    .foregroundColor(AppColors.neutral500)
+                    .frame(width: 28, height: AppSpacing.touchTarget)
+            }
+        }
+        .padding(AppSpacing.sm)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func collectionRow(_ collection: BrandCollectionDTO) -> some View {
+        let count = remoteProducts.filter { product in
+            product.collectionId == collection.id && product.isActive
+        }.count
+
+        return HStack(spacing: AppSpacing.md) {
+            ZStack {
+                Circle().fill(AppColors.accent.opacity(0.12)).frame(width: 44, height: 44)
+                Image(systemName: "sparkles")
+                    .font(AppTypography.catalogIcon)
+                    .foregroundColor(AppColors.accent)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(collection.name)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                Text(collection.brand ?? "Maison Luxe")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Text("\(count) SKUs")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.accent)
+
+            Menu {
+                Button("Edit") { editingCollection = collection }
+                Button(role: .destructive) {
+                    Task { await deactivateCollection(collection) }
+                } label: {
+                    Text("Delete")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(AppTypography.iconSmall)
+                    .foregroundColor(AppColors.neutral500)
+                    .frame(width: 28, height: AppSpacing.touchTarget)
+            }
+        }
+        .padding(AppSpacing.sm)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func fallbackIcon(forCategory name: String) -> String {
+        let value = name.lowercased()
+        if value.contains("watch") { return "clock.fill" }
+        if value.contains("jewel") { return "sparkles" }
+        if value.contains("shoe") { return "shoe.fill" }
+        if value.contains("cloth") || value.contains("couture") { return "tshirt.fill" }
+        return "bag.fill"
+    }
+
+    @MainActor
+    private func loadAll() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            async let categories = CatalogService.shared.fetchCategories()
+            async let collections = CatalogService.shared.fetchCollections()
+            async let products = CatalogService.shared.fetchProducts()
+            let (loadedCategories, loadedCollections, loadedProducts) = try await (categories, collections, products)
+            remoteCategories = loadedCategories
+            remoteCollections = loadedCollections
+            remoteProducts = loadedProducts
+            errorMessage = nil
+            try? await CustomerCatalogSyncService.shared.refreshLocalCatalog(modelContext: modelContext)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func deactivateCategory(_ category: CategoryDTO) async {
+        do {
+            _ = try await CatalogService.shared.deleteCategory(id: category.id)
+            await loadAll()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func deactivateCollection(_ collection: BrandCollectionDTO) async {
+        do {
+            _ = try await CatalogService.shared.deleteCollection(id: collection.id)
+            await loadAll()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
+private enum CategoryEditorMode {
+    case create
+    case edit(CategoryDTO)
+
+    var initialName: String {
+        switch self {
+        case .create: return ""
+        case .edit(let category): return category.name
+        }
+    }
+
+    var initialDescription: String {
+        switch self {
+        case .create: return ""
+        case .edit(let category): return category.description ?? ""
+        }
+    }
+
+    var initialIsActive: Bool {
+        switch self {
+        case .create: return true
+        case .edit(let category): return category.isActive
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .create: return "New Category"
+        case .edit: return "Edit Category"
+        }
+    }
+}
+
+private struct CategoryEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let mode: CategoryEditorMode
+    let onSaved: () -> Void
+
+    @State private var name = ""
+    @State private var description = ""
+    @State private var isActive = true
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: AppSpacing.lg) {
+                LuxuryTextField(placeholder: "Category Name", text: $name)
+                LuxuryTextField(placeholder: "Description", text: $description)
+                Toggle("Active", isOn: $isActive)
+                    .tint(AppColors.accent)
+
+                Button(action: save) {
+                    Text(isSaving ? "Saving..." : "Save")
+                        .font(AppTypography.buttonPrimary)
+                        .foregroundColor(AppColors.textPrimaryLight)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppSpacing.md)
+                        .background(AppColors.accent)
+                        .cornerRadius(AppSpacing.radiusMedium)
+                }
+                .disabled(isSaving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(AppTypography.bodySmall)
+                        .foregroundColor(AppColors.error)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                Spacer()
+            }
+            .padding(AppSpacing.screenHorizontal)
+            .padding(.top, AppSpacing.md)
+            .background(AppColors.backgroundPrimary.ignoresSafeArea())
+            .navigationTitle(mode.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+            .onAppear {
+                name = mode.initialName
+                description = mode.initialDescription
+                isActive = mode.initialIsActive
+            }
+        }
+    }
+
+    private func save() {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        isSaving = true
+        errorMessage = nil
+
+        Task {
+            do {
+                switch mode {
+                case .create:
+                    _ = try await CatalogService.shared.createCategory(
+                        name: trimmedName,
+                        description: description,
+                        isActive: isActive
+                    )
+                case .edit(let category):
+                    _ = try await CatalogService.shared.updateCategory(
+                        id: category.id,
+                        name: trimmedName,
+                        description: description,
+                        isActive: isActive
+                    )
+                }
+                await MainActor.run {
+                    onSaved()
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    isSaving = false
+                }
+            }
+        }
+    }
+}
+
+private enum CollectionEditorMode {
+    case create
+    case edit(BrandCollectionDTO)
+
+    var initialName: String {
+        switch self {
+        case .create: return ""
+        case .edit(let collection): return collection.name
+        }
+    }
+
+    var initialDescription: String {
+        switch self {
+        case .create: return ""
+        case .edit(let collection): return collection.description ?? ""
+        }
+    }
+
+    var initialBrand: String {
+        switch self {
+        case .create: return "Maison Luxe"
+        case .edit(let collection): return collection.brand ?? "Maison Luxe"
+        }
+    }
+
+    var initialIsActive: Bool {
+        switch self {
+        case .create: return true
+        case .edit(let collection): return collection.isActive
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .create: return "New Collection"
+        case .edit: return "Edit Collection"
+        }
+    }
+}
+
+private struct CollectionEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let mode: CollectionEditorMode
+    let onSaved: () -> Void
+
+    @State private var name = ""
+    @State private var description = ""
+    @State private var brand = ""
+    @State private var isActive = true
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: AppSpacing.lg) {
+                LuxuryTextField(placeholder: "Collection Name", text: $name)
+                LuxuryTextField(placeholder: "Brand", text: $brand)
+                LuxuryTextField(placeholder: "Description", text: $description)
+                Toggle("Active", isOn: $isActive)
+                    .tint(AppColors.accent)
+
+                Button(action: save) {
+                    Text(isSaving ? "Saving..." : "Save")
+                        .font(AppTypography.buttonPrimary)
+                        .foregroundColor(AppColors.textPrimaryLight)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppSpacing.md)
+                        .background(AppColors.accent)
+                        .cornerRadius(AppSpacing.radiusMedium)
+                }
+                .disabled(isSaving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(AppTypography.bodySmall)
+                        .foregroundColor(AppColors.error)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                Spacer()
+            }
+            .padding(AppSpacing.screenHorizontal)
+            .padding(.top, AppSpacing.md)
+            .background(AppColors.backgroundPrimary.ignoresSafeArea())
+            .navigationTitle(mode.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+            .onAppear {
+                name = mode.initialName
+                description = mode.initialDescription
+                brand = mode.initialBrand
+                isActive = mode.initialIsActive
+            }
+        }
+    }
+
+    private func save() {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        isSaving = true
+        errorMessage = nil
+
+        Task {
+            do {
+                switch mode {
+                case .create:
+                    _ = try await CatalogService.shared.createCollection(
+                        name: trimmedName,
+                        description: description,
+                        brand: brand,
+                        isActive: isActive
+                    )
+                case .edit(let collection):
+                    _ = try await CatalogService.shared.updateCollection(
+                        id: collection.id,
+                        name: trimmedName,
+                        description: description,
+                        brand: brand,
+                        isActive: isActive
+                    )
+                }
+                await MainActor.run {
+                    onSaved()
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    isSaving = false
+                }
+            }
+        }
+    }
+}
 // MARK: - Pricing Sub-view
 
 struct CatalogPricingSubview: View {
@@ -745,41 +1345,586 @@ struct CatalogPricingSubview: View {
 // MARK: - Promotions Sub-view
 
 struct CatalogPromotionsSubview: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
+
+    @State private var promotions: [PromotionDTO] = []
+    @State private var remoteProducts: [ProductDTO] = []
+    @State private var remoteCategories: [CategoryDTO] = []
+    @State private var isLoading = false
+    @State private var showCreateSheet = false
+    @State private var errorMessage: String?
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
-                promoCard(name: "Spring 2026 Collection", status: "Active", discount: "10% off select handbags",
-                          start: "Mar 1", end: "Apr 15", color: AppColors.success)
-                promoCard(name: "VIP Private Sale", status: "Scheduled", discount: "15% off all categories",
-                          start: "Apr 1", end: "Apr 7", color: AppColors.info)
-                promoCard(name: "Holiday 2025 Clearance", status: "Ended", discount: "20% off accessories",
-                          start: "Dec 26", end: "Jan 15", color: AppColors.neutral500)
+                promotionsHeroCard
+
+                if let errorMessage {
+                    errorBanner(message: errorMessage)
+                }
+
+                if isLoading && promotions.isEmpty {
+                    ProgressView()
+                        .tint(AppColors.accent)
+                        .padding(.top, AppSpacing.xl)
+                } else if promotions.isEmpty {
+                    emptyState
+                } else {
+                    ForEach(promotions) { promotion in
+                        promotionCard(promotion)
+                    }
+                }
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.sm)
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .task { await loadAll() }
+        .refreshable { await loadAll() }
+        .sheet(isPresented: $showCreateSheet) {
+            PromotionComposerSheet(
+                products: remoteProducts,
+                categories: remoteCategories,
+                createdBy: appState.currentUserProfile?.id,
+                onSaved: {
+                    Task {
+                        await loadAll()
+                        try? await PromotionSyncService.shared.refreshLocalPromotions(modelContext: modelContext)
+                    }
+                }
+            )
+        }
     }
 
-    private func promoCard(name: String, status: String, discount: String, start: String, end: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack {
-                Text(name).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                Spacer()
-                Text(status.uppercased()).font(AppTypography.nano).foregroundColor(color)
-                    .padding(.horizontal, 8).padding(.vertical, 3).background(color.opacity(0.12)).cornerRadius(4)
+    private var promotionsHeroCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("OFFERS STUDIO")
+                        .font(AppTypography.overline)
+                        .tracking(2)
+                        .foregroundColor(AppColors.accent)
+                    Text("Luxury promotions that update every checkout instantly.")
+                        .font(AppTypography.heading3)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("Corporate admin can target a specific SKU or an entire category with a scheduled native iOS workflow.")
+                        .font(AppTypography.bodySmall)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: AppSpacing.md)
+                Button(action: { showCreateSheet = true }) {
+                    Label("New Offer", systemImage: "plus")
+                        .font(AppTypography.buttonSecondary)
+                        .foregroundColor(AppColors.textPrimaryLight)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(AppColors.accent)
+                        .clipShape(Capsule())
+                }
             }
-            Text(discount).font(AppTypography.bodySmall).foregroundColor(AppColors.textSecondaryDark)
+
+            HStack(spacing: AppSpacing.sm) {
+                metricChip(value: activeCount, label: "Live")
+                metricChip(value: scheduledCount, label: "Scheduled")
+                metricChip(value: expiredCount, label: "Archive")
+            }
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(
+            LinearGradient(
+                colors: [
+                    AppColors.backgroundSecondary,
+                    AppColors.backgroundSecondary.opacity(0.92)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .cornerRadius(AppSpacing.radiusLarge)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                .stroke(AppColors.border, lineWidth: 0.5)
+        )
+    }
+
+    private var activeCount: Int {
+        promotions.filter { displayStatus(for: $0) == .active }.count
+    }
+
+    private var scheduledCount: Int {
+        promotions.filter { displayStatus(for: $0) == .scheduled }.count
+    }
+
+    private var expiredCount: Int {
+        promotions.filter { displayStatus(for: $0) == .expired || displayStatus(for: $0) == .inactive }.count
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Image(systemName: "tag.slash")
+                .font(AppTypography.iconAction)
+                .foregroundColor(AppColors.neutral500)
+            Text("No offers yet")
+                .font(AppTypography.heading3)
+                .foregroundColor(AppColors.textPrimaryDark)
+            Text("Create a promotion for a hero product or category and it will flow into cart, buy now, and checkout pricing.")
+                .font(AppTypography.bodySmall)
+                .foregroundColor(AppColors.textSecondaryDark)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.xl)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusLarge)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                .stroke(AppColors.border, lineWidth: 0.5)
+        )
+    }
+
+    private func promotionCard(_ promotion: PromotionDTO) -> some View {
+        let status = displayStatus(for: promotion)
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(alignment: .top, spacing: AppSpacing.sm) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(promotion.name)
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(targetDescription(for: promotion))
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                Spacer()
+                statusPill(status)
+            }
+
+            Text(discountDescription(for: promotion))
+                .font(AppTypography.heading3)
+                .foregroundColor(AppColors.accent)
+
+            if let details = promotion.details, !details.isEmpty {
+                Text(details)
+                    .font(AppTypography.bodySmall)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             HStack(spacing: AppSpacing.md) {
-                Label(start, systemImage: "calendar").font(AppTypography.caption).foregroundColor(AppColors.neutral500)
-                Image(systemName: "arrow.right").font(AppTypography.arrowInline).foregroundColor(AppColors.neutral600)
-                Label(end, systemImage: "calendar").font(AppTypography.caption).foregroundColor(AppColors.neutral500)
+                Label(shortDate(promotion.startsAt), systemImage: "calendar")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.neutral500)
+                Image(systemName: "arrow.right")
+                    .font(AppTypography.arrowInline)
+                    .foregroundColor(AppColors.neutral600)
+                Label(shortDate(promotion.endsAt), systemImage: "calendar")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.neutral500)
+            }
+
+            Button(action: { togglePromotionState(promotion) }) {
+                Text(promotion.isActive ? "Pause Offer" : "Resume Offer")
+                    .font(AppTypography.buttonSecondary)
+                    .foregroundColor(AppColors.accent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(AppColors.accent.opacity(0.08))
+                    .cornerRadius(AppSpacing.radiusMedium)
             }
         }
         .padding(AppSpacing.cardPadding)
         .background(AppColors.backgroundSecondary)
         .cornerRadius(AppSpacing.radiusLarge)
-        .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge).stroke(AppColors.border, lineWidth: 0.5))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                .stroke(AppColors.border, lineWidth: 0.5)
+        )
+    }
+
+    private func metricChip(value: Int, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(value)")
+                .font(AppTypography.heading3)
+                .foregroundColor(AppColors.textPrimaryDark)
+            Text(label.uppercased())
+                .font(AppTypography.pico)
+                .tracking(1)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.sm)
+        .background(AppColors.backgroundPrimary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func errorBanner(message: String) -> some View {
+        HStack(spacing: AppSpacing.xs) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(AppColors.error)
+            Text(message)
+                .font(AppTypography.bodySmall)
+                .foregroundColor(AppColors.error)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.sm)
+        .background(AppColors.error.opacity(0.08))
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func discountDescription(for promotion: PromotionDTO) -> String {
+        switch promotion.promotionDiscountType {
+        case .percentage:
+            return "\(promotion.discountValue.formatted(.number.precision(.fractionLength(0...1))))% off"
+        case .fixedAmount:
+            return formatCurrency(promotion.discountValue) + " off"
+        }
+    }
+
+    private func targetDescription(for promotion: PromotionDTO) -> String {
+        switch promotion.promotionScope {
+        case .product:
+            let productName = remoteProducts.first(where: { $0.id == promotion.targetProductId })?.name ?? "Selected Product"
+            return "Product · \(productName)"
+        case .category:
+            let categoryName = remoteCategories.first(where: { $0.id == promotion.targetCategoryId })?.name ?? "Selected Category"
+            return "Category · \(categoryName)"
+        }
+    }
+
+    private func shortDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
+    }
+
+    private func formatCurrency(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "INR"
+        return formatter.string(from: NSNumber(value: value)) ?? "INR \(value)"
+    }
+
+    private func statusPill(_ status: PromotionCardStatus) -> some View {
+        Text(status.label)
+            .font(AppTypography.nano)
+            .foregroundColor(status.color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(status.color.opacity(0.12))
+            .cornerRadius(6)
+    }
+
+    private func displayStatus(for promotion: PromotionDTO) -> PromotionCardStatus {
+        guard promotion.isActive else { return .inactive }
+        let now = Date()
+        if now < promotion.startsAt { return .scheduled }
+        if now > promotion.endsAt { return .expired }
+        return .active
+    }
+
+    private func togglePromotionState(_ promotion: PromotionDTO) {
+        Task {
+            do {
+                _ = try await PromotionService.shared.setPromotionActiveState(
+                    id: promotion.id,
+                    isActive: !promotion.isActive
+                )
+                try? await PromotionSyncService.shared.refreshLocalPromotions(modelContext: modelContext)
+                await loadAll()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    @MainActor
+    private func loadAll() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            async let promos = PromotionService.shared.fetchPromotions()
+            async let products = CatalogService.shared.fetchProducts()
+            async let categories = CatalogService.shared.fetchCategories()
+            let (loadedPromotions, loadedProducts, loadedCategories) = try await (promos, products, categories)
+            promotions = loadedPromotions
+            remoteProducts = loadedProducts
+            remoteCategories = loadedCategories
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private enum PromotionCardStatus {
+    case active
+    case scheduled
+    case expired
+    case inactive
+
+    var label: String {
+        switch self {
+        case .active: return "ACTIVE"
+        case .scheduled: return "SCHEDULED"
+        case .expired: return "ENDED"
+        case .inactive: return "PAUSED"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .active: return AppColors.success
+        case .scheduled: return AppColors.info
+        case .expired: return AppColors.neutral500
+        case .inactive: return AppColors.warning
+        }
+    }
+}
+
+private struct PromotionComposerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let products: [ProductDTO]
+    let categories: [CategoryDTO]
+    let createdBy: UUID?
+    let onSaved: () -> Void
+
+    @State private var name = ""
+    @State private var details = ""
+    @State private var scope: PromotionScope = .product
+    @State private var discountType: PromotionDiscountType = .percentage
+    @State private var selectedProductId: UUID?
+    @State private var selectedCategoryId: UUID?
+    @State private var discountValue = ""
+    @State private var startsAt = Date()
+    @State private var endsAt = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+    @State private var isActive = true
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    private var saveDisabled: Bool {
+        isSaving ||
+        name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        Double(discountValue) == nil ||
+        startsAt > endsAt ||
+        (scope == .product && selectedProductId == nil) ||
+        (scope == .category && selectedCategoryId == nil)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppSpacing.lg) {
+                    introCard
+
+                    formCard(title: "Offer Identity") {
+                        LuxuryTextField(placeholder: "Offer name", text: $name)
+                        LuxuryTextField(placeholder: "Private note or campaign message", text: $details)
+                    }
+
+                    formCard(title: "Target") {
+                        Picker("Scope", selection: $scope) {
+                            ForEach(PromotionScope.allCases) { scope in
+                                Text(scope.title).tag(scope)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        if scope == .product {
+                            targetMenu(
+                                title: selectedProductName,
+                                options: products.map { ($0.id, $0.name) },
+                                selection: $selectedProductId
+                            )
+                        } else {
+                            targetMenu(
+                                title: selectedCategoryName,
+                                options: categories.map { ($0.id, $0.name) },
+                                selection: $selectedCategoryId
+                            )
+                        }
+                    }
+
+                    formCard(title: "Discount") {
+                        Picker("Discount Type", selection: $discountType) {
+                            ForEach(PromotionDiscountType.allCases) { type in
+                                Text(type.title).tag(type)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        LuxuryTextField(
+                            placeholder: discountType == .percentage ? "Discount % (e.g. 12)" : "Discount amount (INR)",
+                            text: $discountValue
+                        )
+                        .keyboardType(.decimalPad)
+                    }
+
+                    formCard(title: "Schedule") {
+                        DatePicker("Starts", selection: $startsAt, displayedComponents: [.date, .hourAndMinute])
+                            .tint(AppColors.accent)
+                        DatePicker("Ends", selection: $endsAt, displayedComponents: [.date, .hourAndMinute])
+                            .tint(AppColors.accent)
+                        Toggle("Offer is active", isOn: $isActive)
+                            .tint(AppColors.accent)
+                    }
+
+                    if let errorMessage {
+                        HStack(spacing: AppSpacing.xs) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(AppColors.error)
+                            Text(errorMessage)
+                                .font(AppTypography.bodySmall)
+                                .foregroundColor(AppColors.error)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(AppSpacing.sm)
+                        .background(AppColors.error.opacity(0.08))
+                        .cornerRadius(AppSpacing.radiusMedium)
+                    }
+
+                    Button(action: savePromotion) {
+                        HStack(spacing: AppSpacing.xs) {
+                            if isSaving {
+                                ProgressView()
+                                    .tint(AppColors.textPrimaryLight)
+                            } else {
+                                Image(systemName: "sparkles")
+                                Text("Create Offer")
+                            }
+                        }
+                        .font(AppTypography.buttonPrimary)
+                        .foregroundColor(AppColors.textPrimaryLight)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppSpacing.md)
+                        .background(saveDisabled ? AppColors.accent.opacity(0.4) : AppColors.accent)
+                        .cornerRadius(AppSpacing.radiusMedium)
+                    }
+                    .disabled(saveDisabled)
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.md)
+                .padding(.bottom, AppSpacing.xxxl)
+            }
+            .background(AppColors.backgroundPrimary.ignoresSafeArea())
+            .navigationTitle("New Offer")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+            .onChange(of: scope) { _, newValue in
+                if newValue == .product {
+                    selectedCategoryId = nil
+                } else {
+                    selectedProductId = nil
+                }
+            }
+        }
+    }
+
+    private var introCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text("CLIENTELING READY")
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.accent)
+            Text("Every eligible checkout picks up the rule automatically.")
+                .font(AppTypography.heading3)
+                .foregroundColor(AppColors.textPrimaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.cardPadding)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusLarge)
+    }
+
+    private func formCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text(title)
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.textSecondaryDark)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.cardPadding)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusLarge)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                .stroke(AppColors.border, lineWidth: 0.5)
+        )
+    }
+
+    private func targetMenu(
+        title: String,
+        options: [(UUID, String)],
+        selection: Binding<UUID?>
+    ) -> some View {
+        Menu {
+            ForEach(options, id: \.0) { option in
+                Button(option.1) { selection.wrappedValue = option.0 }
+            }
+        } label: {
+            HStack {
+                Text(title)
+                    .font(AppTypography.bodyMedium)
+                    .foregroundColor(selection.wrappedValue == nil ? AppColors.neutral500 : AppColors.textPrimaryDark)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .foregroundColor(AppColors.neutral500)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(AppColors.backgroundPrimary)
+            .cornerRadius(AppSpacing.radiusMedium)
+        }
+    }
+
+    private var selectedProductName: String {
+        products.first(where: { $0.id == selectedProductId })?.name ?? "Select Product"
+    }
+
+    private var selectedCategoryName: String {
+        categories.first(where: { $0.id == selectedCategoryId })?.name ?? "Select Category"
+    }
+
+    private func savePromotion() {
+        guard let discountValue = Double(discountValue) else { return }
+
+        isSaving = true
+        errorMessage = nil
+
+        Task {
+            do {
+                _ = try await PromotionService.shared.createPromotion(
+                    name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                    details: details.trimmingCharacters(in: .whitespacesAndNewlines),
+                    scope: scope,
+                    targetProductId: scope == .product ? selectedProductId : nil,
+                    targetCategoryId: scope == .category ? selectedCategoryId : nil,
+                    discountType: discountType,
+                    discountValue: discountValue,
+                    startsAt: startsAt,
+                    endsAt: endsAt,
+                    isActive: isActive,
+                    createdBy: createdBy
+                )
+                await MainActor.run {
+                    onSaved()
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    isSaving = false
+                }
+            }
+        }
     }
 }
 
@@ -791,7 +1936,8 @@ struct CatalogPromotionsSubview: View {
                 Category.self,
                 PricingPolicySettings.self,
                 IndianTaxRule.self,
-                RegionalPriceRule.self
+                RegionalPriceRule.self,
+                PromotionRule.self
             ],
             inMemory: true
         )

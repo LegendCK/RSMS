@@ -756,6 +756,8 @@ private struct TransferRequestSheet: View {
     @State private var selectedProduct: Product?
     @State private var selectedDestinationStore: StoreLocation?
     @State private var quantityText = ""
+    @State private var scanInput = ""
+    @State private var scannedItems: [String] = []
     @State private var notes = ""
     @State private var isSubmitting = false
     @State private var isLoadingStores = false
@@ -775,11 +777,20 @@ private struct TransferRequestSheet: View {
         Int(quantityText.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    private var requiredScans: Int {
+        max(quantity ?? 0, 0)
+    }
+
+    private var isScanRequirementMet: Bool {
+        requiredScans > 0 && scannedItems.count == requiredScans
+    }
+
     private var isValid: Bool {
         selectedProduct != nil &&
         selectedDestinationStore != nil &&
         quantity ?? 0 > 0 &&
-        (selectedProduct?.stockCount ?? 0) >= (quantity ?? 0)
+        (selectedProduct?.stockCount ?? 0) >= (quantity ?? 0) &&
+        isScanRequirementMet
     }
 
     var body: some View {
@@ -876,6 +887,80 @@ private struct TransferRequestSheet: View {
                             Text("Cannot transfer more than available (\(product.stockCount) units)")
                                 .font(AppTypography.micro)
                                 .foregroundColor(AppColors.error)
+                        }
+                    }
+                    .padding(AppSpacing.md)
+                    .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
+
+                    // Scan confirmation (required before submit)
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                        Text("SCAN ITEMS (REQUIRED)")
+                            .font(AppTypography.overline)
+                            .tracking(2)
+                            .foregroundColor(AppColors.accent)
+
+                        HStack(spacing: AppSpacing.sm) {
+                            TextField("Scan serial / barcode", text: $scanInput)
+                                .textInputAutocapitalization(.characters)
+                                .autocorrectionDisabled()
+                                .font(AppTypography.bodyMedium)
+                                .padding(AppSpacing.sm)
+                                .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
+
+                            Button {
+                                addScannedItem()
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(scanInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppColors.neutral500 : AppColors.accent)
+                            }
+                            .disabled(scanInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+
+                        HStack {
+                            Text("Scanned \(scannedItems.count) of \(requiredScans)")
+                                .font(AppTypography.caption)
+                                .foregroundColor(isScanRequirementMet ? AppColors.success : AppColors.textSecondaryDark)
+                            Spacer()
+                            if !scannedItems.isEmpty {
+                                Button("Clear") {
+                                    scannedItems.removeAll()
+                                }
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.accent)
+                            }
+                        }
+
+                        if !scannedItems.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: AppSpacing.xs) {
+                                    ForEach(scannedItems, id: \.self) { code in
+                                        HStack(spacing: 4) {
+                                            Text(code)
+                                                .font(AppTypography.micro)
+                                                .foregroundColor(AppColors.textPrimaryDark)
+                                            Button {
+                                                scannedItems.removeAll { $0 == code }
+                                            } label: {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .font(.system(size: 10, weight: .semibold))
+                                                    .foregroundColor(AppColors.neutral600)
+                                            }
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 5)
+                                        .background(AppColors.backgroundSecondary)
+                                        .cornerRadius(6)
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                            }
+                        }
+
+                        if requiredScans > 0 && !isScanRequirementMet {
+                            Text("All units must be scanned before transfer submission.")
+                                .font(AppTypography.micro)
+                                .foregroundColor(AppColors.warning)
                         }
                     }
                     .padding(AppSpacing.md)
@@ -999,11 +1084,23 @@ private struct TransferRequestSheet: View {
             return
         }
 
+        guard scannedItems.count == qty else {
+            errorMessage = "Scan validation failed. Expected \(qty) scanned item(s), found \(scannedItems.count)."
+            showError = true
+            return
+        }
+
         isSubmitting = true
         Task { @MainActor in
             defer { isSubmitting = false }
 
-            let transferNumber = "TRF-\(UUID().uuidString.prefix(8).uppercased())"
+            let sourceCode = currentStore?.code ?? "UNKNOWN"
+            let transferNumber = makeTransferNumber(fromStoreCode: sourceCode)
+            let serializedScanPayload = scannedItems.joined(separator: ",")
+
+            var transferNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            let scanAudit = "Scanned Units (\(scannedItems.count)): \(serializedScanPayload)"
+            transferNotes = transferNotes.isEmpty ? scanAudit : "\(transferNotes)\n\(scanAudit)"
 
             let transfer = Transfer(
                 transferNumber: transferNumber,
@@ -1011,19 +1108,28 @@ private struct TransferRequestSheet: View {
                 asnIssuedAt: Date(),
                 productId: product.id,
                 productName: product.name,
+                serialNumber: serializedScanPayload,
                 quantity: qty,
                 fromBoutiqueId: currentStore?.code ?? appState.currentStoreId?.uuidString ?? "UNKNOWN",
                 toBoutiqueId: destination.code,
                 status: .requested,
                 requestedByEmail: appState.currentUserEmail.isEmpty ? "manager@local" : appState.currentUserEmail,
-                notes: notes
+                notes: transferNotes
             )
 
             modelContext.insert(transfer)
 
             do {
                 try modelContext.save()
-                errorMessage = "Transfer request created successfully!"
+
+                var syncWarning = ""
+                do {
+                    try await TransferSyncService.shared.syncReceipt(for: transfer)
+                } catch {
+                    syncWarning = "\nWarning: Saved locally, but remote sync failed (\(error.localizedDescription))."
+                }
+
+                errorMessage = "Transfer request created successfully.\nTransfer ID: \(transferNumber)\(syncWarning)"
                 showError = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     dismiss()
@@ -1033,6 +1139,31 @@ private struct TransferRequestSheet: View {
                 showError = true
             }
         }
+    }
+
+    private func addScannedItem() {
+        let normalized = scanInput.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !normalized.isEmpty else { return }
+        guard !scannedItems.contains(normalized) else {
+            errorMessage = "This item is already scanned."
+            showError = true
+            return
+        }
+        scannedItems.append(normalized)
+        scanInput = ""
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    private func makeTransferNumber(fromStoreCode: String) -> String {
+        let storeToken = fromStoreCode
+            .uppercased()
+            .replacingOccurrences(of: "[^A-Z0-9]", with: "", options: .regularExpression)
+            .prefix(4)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let ts = formatter.string(from: Date())
+        let random = Int.random(in: 100...999)
+        return "TRF-\(storeToken)-\(ts)-\(random)"
     }
 }
 

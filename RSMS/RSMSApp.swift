@@ -34,6 +34,7 @@ struct RSMSApp: App {
             PricingPolicySettings.self,
             IndianTaxRule.self,
             RegionalPriceRule.self,
+            PromotionRule.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

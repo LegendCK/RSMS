@@ -70,7 +70,9 @@ struct ProfileView: View {
                     NavigationLink(destination: CustomerBookAppointmentView()) {
                         Label("Book an Appointment", systemImage: "calendar")
                     }
-                    Label("Wishlist", systemImage: "heart")
+                    NavigationLink(destination: WishlistView()) {
+                        Label("Wishlist", systemImage: "heart")
+                    }
                 }
 
                 // Preferences
