@@ -1,8 +1,10 @@
 //
 //  ManagerOperationsView.swift
-//  infosys2
+//  RSMS
 //
 //  Boutique Manager store operations — sales transactions, discrepancies, VIP events, activity log.
+//  The Discrepancies tab shows live data from Supabase. Any staff/manager can report a new
+//  discrepancy via the "+" button; only managers can approve/reject (in Inventory → Requests).
 //
 
 import SwiftUI
@@ -10,9 +12,16 @@ import SwiftData
 
 struct ManagerOperationsView: View {
     @Environment(AppState.self) private var appState
+    @Query(sort: \Product.name) private var allProducts: [Product]
     @State private var selectedSection = 0
     @State private var showAddStock = false
     @State private var showInventoryWorkspace = false
+    @State private var showReportDiscrepancy = false
+
+    // Live discrepancy data
+    @State private var liveDiscrepancies: [InventoryDiscrepancyDTO] = []
+    @State private var isLoadingDiscrepancies = false
+    @State private var discrepancyLoadError: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -73,19 +82,42 @@ struct ManagerOperationsView: View {
                 ToolbarItem(placement: .principal) {
                     Text("Operations").font(AppTypography.navTitle).foregroundColor(AppColors.textPrimaryDark)
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showInventoryWorkspace = true
-                    } label: {
-                        Image(systemName: "shippingbox")
-                            .font(AppTypography.iconMedium)
-                            .foregroundColor(AppColors.accent)
+                // Report Discrepancy button — visible only on the Discrepancies tab
+                if selectedSection == 2 {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            showReportDiscrepancy = true
+                        } label: {
+                            Image(systemName: "plus.circle")
+                                .font(AppTypography.iconMedium)
+                                .foregroundColor(AppColors.accent)
+                        }
+                        .accessibilityLabel("Report Discrepancy")
                     }
-                    .accessibilityLabel("Open Inventory Workspace")
+                } else {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            showInventoryWorkspace = true
+                        } label: {
+                            Image(systemName: "shippingbox")
+                                .font(AppTypography.iconMedium)
+                                .foregroundColor(AppColors.accent)
+                        }
+                        .accessibilityLabel("Open Inventory Workspace")
+                    }
                 }
             }
             .navigationDestination(isPresented: $showInventoryWorkspace) {
                 ManagerInventoryView()
+            }
+            .sheet(isPresented: $showReportDiscrepancy) {
+                ReportDiscrepancySheet(products: allProducts) {
+                    // Refresh list after submission
+                    Task { await loadLiveDiscrepancies() }
+                }
+            }
+            .task {
+                await loadLiveDiscrepancies()
             }
         }
         .sheet(isPresented: $showAddStock) {
@@ -147,71 +179,133 @@ struct ManagerOperationsView: View {
             .environment(appState)
     }
 
-    // MARK: - Discrepancies
+    // MARK: - Discrepancies (Live)
 
     private var discrepanciesSection: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
+                // Summary Stats
+                let pending  = liveDiscrepancies.filter { $0.status == "pending" }
+                let resolved = liveDiscrepancies.filter { $0.status != "pending" }
+
                 HStack(spacing: AppSpacing.sm) {
-                    miniStat(value: "2", label: "Pending", color: AppColors.warning)
-                    miniStat(value: "5", label: "Resolved", color: AppColors.success)
-                    miniStat(value: "0", label: "Escalated", color: AppColors.error)
+                    miniStat(value: "\(pending.count)",  label: "Pending",  color: AppColors.warning)
+                    miniStat(value: "\(resolved.count)", label: "Resolved", color: AppColors.success)
+                    miniStat(value: "\(liveDiscrepancies.count)", label: "Total", color: AppColors.accent)
                 }
-                .padding(.horizontal, AppSpacing.screenHorizontal).padding(.top, AppSpacing.sm)
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.sm)
 
-                sLabel("PENDING REVIEW")
-
-                discrepancyCard(sku: "Pearl Earrings", system: 6, counted: 5, flaggedBy: "Daniel Park", time: "2h ago", status: "Pending")
-                discrepancyCard(sku: "Leather Belt", system: 20, counted: 18, flaggedBy: "Daniel Park", time: "5h ago", status: "Pending")
-
-                sLabel("RECENTLY RESOLVED")
-
-                discrepancyCard(sku: "Silk Scarf", system: 14, counted: 15, flaggedBy: "Daniel Park", time: "1d ago", status: "Resolved")
+                if isLoadingDiscrepancies {
+                    ProgressView("Loading...")
+                        .padding(.top, AppSpacing.xl)
+                } else if let errMsg = discrepancyLoadError {
+                    VStack(spacing: AppSpacing.xs) {
+                        Image(systemName: "wifi.slash").foregroundColor(AppColors.warning)
+                        Text(errMsg)
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.top, AppSpacing.lg)
+                } else if liveDiscrepancies.isEmpty {
+                    VStack(spacing: AppSpacing.xs) {
+                        Image(systemName: "checkmark.seal")
+                            .font(.system(size: 28, weight: .light))
+                            .foregroundColor(AppColors.success)
+                        Text("No discrepancies reported")
+                            .font(AppTypography.label)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        Text("Tap \(Image(systemName: "plus.circle")) in the top-right to file a report.")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.top, AppSpacing.xxl)
+                } else {
+                    if !pending.isEmpty {
+                        sLabel("PENDING REVIEW")
+                        ForEach(pending) { item in
+                            liveDiscrepancyCard(item)
+                        }
+                    }
+                    if !resolved.isEmpty {
+                        sLabel("RESOLVED")
+                        ForEach(resolved.prefix(10)) { item in
+                            liveDiscrepancyCard(item)
+                        }
+                    }
+                }
             }
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .refreshable { await loadLiveDiscrepancies() }
     }
 
-    private func discrepancyCard(sku: String, system: Int, counted: Int, flaggedBy: String, time: String, status: String) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+    private func liveDiscrepancyCard(_ item: InventoryDiscrepancyDTO) -> some View {
+        let statusColor: Color = item.status == "pending" ? AppColors.warning :
+                                 item.status == "approved" ? AppColors.success : AppColors.error
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack {
-                Text(sku).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
+                Text(item.productName.isEmpty ? "Unknown Product" : item.productName)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryDark)
                 Spacer()
-                let statusColor = status == "Pending" ? AppColors.warning : AppColors.success
-                Text(status.uppercased()).font(AppTypography.nano).foregroundColor(statusColor)
-                    .padding(.horizontal, 8).padding(.vertical, 3).background(statusColor.opacity(0.12)).cornerRadius(4)
+                Text(item.status.uppercased())
+                    .font(AppTypography.nano)
+                    .foregroundColor(statusColor)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(statusColor.opacity(0.12)).cornerRadius(4)
             }
             HStack(spacing: AppSpacing.xl) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("System").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                    Text(String(system)).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
+                    Text("\(item.systemQuantity)").font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Counted").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                    Text(String(counted)).font(AppTypography.label).foregroundColor(system != counted ? AppColors.error : AppColors.success)
+                    Text("Reported").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+                    Text("\(item.reportedQuantity)").font(AppTypography.label)
+                        .foregroundColor(item.systemQuantity != item.reportedQuantity ? AppColors.error : AppColors.success)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Variance").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                    Text(String(counted - system)).font(AppTypography.label).foregroundColor(AppColors.error)
+                    Text("Delta").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+                    Text("\(item.reportedQuantity - item.systemQuantity)").font(AppTypography.label)
+                        .foregroundColor(AppColors.error)
                 }
             }
             HStack {
-                Text("Flagged by \(flaggedBy)").font(AppTypography.caption).foregroundColor(AppColors.secondary)
-                Text("•").foregroundColor(AppColors.neutral600)
-                Text(time).font(AppTypography.caption).foregroundColor(AppColors.neutral500)
+                Label(item.reportedByName.isEmpty ? "Staff" : item.reportedByName, systemImage: "person")
+                    .font(AppTypography.caption).foregroundColor(AppColors.secondary)
+                Text("·").foregroundColor(AppColors.neutral600)
+                Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(AppTypography.caption).foregroundColor(AppColors.neutral500)
                 Spacer()
-                if status == "Pending" {
-                    Button(action: {}) {
-                        Text("Approve").font(AppTypography.actionSmall).foregroundColor(AppColors.accent)
-                            .padding(.horizontal, 12).padding(.vertical, 5)
-                            .background(AppColors.accent.opacity(0.12)).cornerRadius(6)
-                    }
+                if item.status == "pending" && appState.currentUserRole == .boutiqueManager {
+                    Text("Review in Inventory → Requests")
+                        .font(AppTypography.nano)
+                        .foregroundColor(AppColors.accent)
+                        .italic()
                 }
             }
         }
         .padding(AppSpacing.cardPadding)
         .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
         .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    private func loadLiveDiscrepancies() async {
+        guard let storeId = appState.currentStoreId else { return }
+        isLoadingDiscrepancies = true
+        discrepancyLoadError = nil
+        defer { isLoadingDiscrepancies = false }
+        do {
+            liveDiscrepancies = try await DiscrepancyService.shared.fetchDiscrepancies(storeId: storeId)
+        } catch {
+            discrepancyLoadError = error.localizedDescription
+        }
     }
 
     // MARK: - VIP Events
@@ -318,5 +412,204 @@ struct ManagerOperationsView: View {
 
 #Preview {
     ManagerOperationsView()
+        .environment(AppState())
         .modelContainer(for: [Product.self, Category.self, User.self], inMemory: true)
+}
+
+// MARK: - Report Discrepancy Sheet
+
+struct ReportDiscrepancySheet: View {
+    let products: [Product]
+    let onSubmitted: () -> Void
+
+    @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var selectedProduct: Product? = nil
+    @State private var countedQtyText: String = ""
+    @State private var reason: String = ""
+    @State private var isSubmitting = false
+    @State private var errorMessage = ""
+    @State private var showError = false
+
+    private var countedQty: Int? { Int(countedQtyText.trimmingCharacters(in: .whitespacesAndNewlines)) }
+
+    private var isValid: Bool {
+        selectedProduct != nil &&
+        countedQty != nil &&
+        !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppSpacing.md) {
+
+                    // Info Banner
+                    HStack(spacing: AppSpacing.sm) {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(AppColors.info)
+                        Text("Report a count discrepancy for manager review. They will approve or reject the correction.")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    .padding(AppSpacing.sm)
+                    .background(AppColors.info.opacity(0.08))
+                    .cornerRadius(AppSpacing.radiusSmall)
+
+                    // Product Selection
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                        Text("PRODUCT")
+                            .font(AppTypography.overline).tracking(2)
+                            .foregroundColor(AppColors.accent)
+
+                        if products.isEmpty {
+                            Text("No products found. Sync inventory first.")
+                                .font(AppTypography.bodySmall)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                                .padding(AppSpacing.sm)
+                                .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
+                        } else {
+                            Picker("Select Product", selection: $selectedProduct) {
+                                Text("Choose product...").tag(Product?.none)
+                                ForEach(products) { product in
+                                    Text("\(product.name) (System: \(product.stockCount))").tag(product as Product?)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(AppSpacing.sm)
+                            .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
+                        }
+
+                        if let product = selectedProduct {
+                            HStack(spacing: 4) {
+                                Image(systemName: "server.rack").font(.system(size: 11))
+                                    .foregroundColor(AppColors.secondary)
+                                Text("System shows \(product.stockCount) units in records")
+                                    .font(AppTypography.micro)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            }
+                        }
+                    }
+                    .padding(AppSpacing.md)
+                    .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
+
+                    // Counted Quantity
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                        Text("PHYSICAL COUNT")
+                            .font(AppTypography.overline).tracking(2)
+                            .foregroundColor(AppColors.accent)
+                        TextField("Enter quantity you physically counted", text: $countedQtyText)
+                            .keyboardType(.numberPad)
+                            .font(AppTypography.bodyMedium)
+                            .padding(AppSpacing.sm)
+                            .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
+
+                        if let product = selectedProduct, let counted = countedQty {
+                            let delta = counted - product.stockCount
+                            HStack(spacing: 4) {
+                                Image(systemName: delta == 0 ? "checkmark.circle" : (delta < 0 ? "arrow.down.circle.fill" : "arrow.up.circle.fill"))
+                                    .foregroundColor(delta == 0 ? AppColors.success : AppColors.warning)
+                                Text(delta == 0 ? "Matches system record" :
+                                     "\(abs(delta)) unit\(abs(delta) == 1 ? "" : "s") \(delta < 0 ? "fewer" : "more") than system (\(product.stockCount))")
+                                    .font(AppTypography.micro)
+                                    .foregroundColor(delta == 0 ? AppColors.success : AppColors.warning)
+                            }
+                        }
+                    }
+                    .padding(AppSpacing.md)
+                    .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
+
+                    // Reason
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                        Text("REASON / NOTES")
+                            .font(AppTypography.overline).tracking(2)
+                            .foregroundColor(AppColors.accent)
+                        Text("Explain what you found, when you counted, and any relevant context.")
+                            .font(AppTypography.micro)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                        TextEditor(text: $reason)
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                            .frame(height: 100)
+                            .padding(AppSpacing.xs)
+                            .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
+                    }
+                    .padding(AppSpacing.md)
+                    .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
+
+                    // Submit Button
+                    Button {
+                        Task { await submit() }
+                    } label: {
+                        if isSubmitting {
+                            ProgressView().tint(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, AppSpacing.sm)
+                        } else {
+                            Label("Submit Discrepancy Report", systemImage: "flag.fill")
+                                .font(AppTypography.label)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, AppSpacing.sm)
+                        }
+                    }
+                    .background(isValid ? AppColors.accent : AppColors.neutral500)
+                    .cornerRadius(AppSpacing.radiusMedium)
+                    .disabled(!isValid || isSubmitting)
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.md)
+                .padding(.bottom, AppSpacing.xxxl)
+            }
+            .navigationTitle("Report Discrepancy")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .alert("Submission Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
+        }
+    }
+
+    private func submit() async {
+        guard let product = selectedProduct,
+              let counted = countedQty,
+              let storeId = appState.currentStoreId,
+              let userId = appState.currentUserProfile?.id else {
+            errorMessage = "Missing required information. Ensure you are assigned to a store and logged in fully."
+            showError = true
+            return
+        }
+
+        isSubmitting = true
+        defer { isSubmitting = false }
+
+        let dto = DiscrepancyInsertDTO(
+            storeId:          storeId,
+            productId:        product.id,
+            productName:      product.name,
+            reportedQuantity: counted,
+            systemQuantity:   product.stockCount,
+            reason:           reason.trimmingCharacters(in: .whitespacesAndNewlines),
+            reportedBy:       userId,
+            reportedByName:   appState.currentUserName.isEmpty ? "Staff" : appState.currentUserName
+        )
+
+        do {
+            _ = try await DiscrepancyService.shared.submitDiscrepancy(dto: dto)
+            onSubmitted()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
 }

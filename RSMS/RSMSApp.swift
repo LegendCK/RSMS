@@ -29,6 +29,7 @@ struct RSMSApp: App {
             Event.self,
             AppNotification.self,
             InventoryByLocation.self,
+            InventoryDiscrepancy.self,
             StoreLocation.self,
             StaffShift.self,
             PricingPolicySettings.self,
