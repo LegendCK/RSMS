@@ -70,80 +70,129 @@ struct ManagerInventoryView: View {
 // MARK: - Stock Levels
 
 struct InvStockSubview: View {
-    @Query(sort: \Product.stockCount, order: .forward) private var allProducts: [Product]
-    @State private var searchText = ""
+    @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \InventoryByLocation.productName) private var allInventory: [InventoryByLocation]
 
-    private var filtered: [Product] {
-        searchText.isEmpty ? allProducts : allProducts.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    @State private var searchText = ""
+    @State private var isSyncing = false
+
+    // Filter to the current store only
+    private var storeInventory: [InventoryByLocation] {
+        guard let storeId = appState.currentStoreId else { return [] }
+        return allInventory.filter { $0.locationId == storeId }
     }
 
-    private var totalUnits: Int { allProducts.reduce(0) { $0 + $1.stockCount } }
-    private var lowCount: Int { allProducts.filter { $0.stockCount > 0 && $0.stockCount <= 3 }.count }
-    private var outCount: Int { allProducts.filter { $0.stockCount == 0 }.count }
+    private var filtered: [InventoryByLocation] {
+        guard !searchText.isEmpty else { return storeInventory }
+        return storeInventory.filter {
+            $0.productName.localizedCaseInsensitiveContains(searchText) ||
+            $0.categoryName.localizedCaseInsensitiveContains(searchText) ||
+            $0.sku.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private var totalUnits: Int { storeInventory.reduce(0) { $0 + $1.quantity } }
+    private var lowCount: Int  { storeInventory.filter { $0.quantity > 0 && $0.quantity <= $0.reorderPoint }.count }
+    private var outCount: Int  { storeInventory.filter { $0.quantity == 0 }.count }
 
     var body: some View {
         VStack(spacing: 0) {
+            // Stats bar
             HStack(spacing: AppSpacing.sm) {
-                invStat(value: "\(totalUnits)", label: "Units", color: AppColors.accent)
-                invStat(value: "\(allProducts.count)", label: "SKUs", color: AppColors.secondary)
-                invStat(value: "\(lowCount)", label: "Low", color: AppColors.warning)
-                invStat(value: "\(outCount)", label: "Out", color: AppColors.error)
+                invStat(value: isSyncing ? "…" : "\(totalUnits)", label: "Units",  color: AppColors.accent)
+                invStat(value: "\(storeInventory.count)",          label: "SKUs",   color: AppColors.secondary)
+                invStat(value: "\(lowCount)",                      label: "Low",    color: AppColors.warning)
+                invStat(value: "\(outCount)",                      label: "Out",    color: AppColors.error)
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.bottom, AppSpacing.sm)
 
+            // Search bar
             HStack(spacing: AppSpacing.sm) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(AppColors.neutral500)
+                Image(systemName: "magnifyingglass").foregroundColor(AppColors.neutral500)
                 TextField("Search inventory...", text: $searchText)
                     .font(AppTypography.bodyMedium)
                     .foregroundColor(AppColors.textPrimaryDark)
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(AppColors.neutral500)
+                    }
+                }
             }
             .padding(AppSpacing.sm)
             .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.bottom, AppSpacing.xs)
 
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: AppSpacing.xs) {
-                    ForEach(filtered) { product in
-                        invRow(product)
-                    }
+            // Content
+            if isSyncing && storeInventory.isEmpty {
+                Spacer()
+                ProgressView("Syncing inventory…").tint(AppColors.accent).padding(.top, 60)
+                Spacer()
+            } else if storeInventory.isEmpty {
+                Spacer()
+                VStack(spacing: AppSpacing.sm) {
+                    Image(systemName: "cube.box")
+                        .font(.system(size: 32, weight: .light))
+                        .foregroundColor(AppColors.neutral500)
+                    Text("No inventory records")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("Pull down to refresh or check your store assignment.")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, AppSpacing.xxxl)
                 }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
-                .padding(.bottom, AppSpacing.xxxl)
+                Spacer()
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: AppSpacing.xs) {
+                        ForEach(filtered) { item in
+                            invRow(item)
+                        }
+                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.bottom, AppSpacing.xxxl)
+                }
+                .refreshable { await syncInventory() }
             }
         }
+        .task { await syncInventory() }
     }
 
-    private func invRow(_ product: Product) -> some View {
+    private func invRow(_ item: InventoryByLocation) -> some View {
         HStack(spacing: AppSpacing.sm) {
-            ProductArtworkView(
-                imageSource: product.imageName,
-                fallbackSymbol: "bag.fill",
-                cornerRadius: 6
-            )
-            .frame(width: 40, height: 40)
-
+            ZStack {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(AppColors.backgroundTertiary)
+                    .frame(width: 40, height: 40)
+                Image(systemName: "cube.box.fill")
+                    .font(.system(size: 16, weight: .light))
+                    .foregroundColor(AppColors.neutral500)
+            }
             VStack(alignment: .leading, spacing: 1) {
-                Text(product.name)
+                Text(item.productName)
                     .font(AppTypography.label)
                     .foregroundColor(AppColors.textPrimaryDark)
                     .lineLimit(1)
-                Text(product.categoryName)
+                Text(item.categoryName)
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
             }
             Spacer()
-            stockBadge(product.stockCount)
+            stockBadge(item.quantity, reorderPoint: item.reorderPoint)
         }
         .padding(.vertical, AppSpacing.xxs)
     }
 
-    private func stockBadge(_ count: Int) -> some View {
-        let color = count > 5 ? AppColors.success : count > 0 ? AppColors.warning : AppColors.error
+    private func stockBadge(_ count: Int, reorderPoint: Int) -> some View {
+        let color: Color = count == 0 ? AppColors.error
+                         : count <= reorderPoint ? AppColors.warning
+                         : AppColors.success
         let label = count == 0 ? "OUT" : "\(count)"
-
         return Text(label)
             .font(AppTypography.editLink)
             .foregroundColor(color)
@@ -155,30 +204,61 @@ struct InvStockSubview: View {
 
     private func invStat(value: String, label: String, color: Color) -> some View {
         VStack(spacing: 4) {
-            Text(value)
-                .font(AppTypography.heading3)
-                .foregroundColor(color)
-            Text(label)
-                .font(AppTypography.micro)
-                .foregroundColor(AppColors.textSecondaryDark)
+            Text(value).font(AppTypography.heading3).foregroundColor(color)
+            Text(label).font(AppTypography.micro).foregroundColor(AppColors.textSecondaryDark)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, AppSpacing.sm)
         .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
+    }
+
+    @MainActor
+    private func syncInventory() async {
+        guard let storeId = appState.currentStoreId else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        try? await StoreAndInventorySyncService.shared.syncInventoryToLocal(
+            storeId: storeId,
+            modelContext: modelContext
+        )
     }
 }
 
 // MARK: - Alerts
 
 struct InvAlertsSubview: View {
-    @Query(sort: \Product.stockCount) private var allProducts: [Product]
+    @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
+    @Query private var allInventory: [InventoryByLocation]
 
-    private var critical: [Product] { allProducts.filter { $0.stockCount <= 3 } }
+    @State private var showTransferRequest = false
+    @State private var isSyncing = false
+
+    // Only this store's inventory
+    private var storeInventory: [InventoryByLocation] {
+        guard let storeId = appState.currentStoreId else { return [] }
+        return allInventory.filter { $0.locationId == storeId }
+    }
+
+    // Low stock = at or below reorderPoint; sort by quantity asc (worst first)
+    private var lowStock: [InventoryByLocation] {
+        storeInventory
+            .filter { $0.quantity > 0 && $0.quantity <= $0.reorderPoint }
+            .sorted { $0.quantity < $1.quantity }
+    }
+
+    private var outOfStock: [InventoryByLocation] {
+        storeInventory.filter { $0.quantity == 0 }
+    }
+
+    private var critical: [InventoryByLocation] { outOfStock + lowStock }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
-                if critical.isEmpty {
+                if isSyncing && storeInventory.isEmpty {
+                    ProgressView("Syncing…").tint(AppColors.accent).padding(.top, 60)
+                } else if critical.isEmpty {
                     VStack(spacing: AppSpacing.lg) {
                         Spacer().frame(height: 60)
                         Image(systemName: "checkmark.circle")
@@ -187,54 +267,95 @@ struct InvAlertsSubview: View {
                         Text("All stock levels healthy")
                             .font(AppTypography.heading3)
                             .foregroundColor(AppColors.textPrimaryDark)
+                        Text("No items are below their reorder threshold.")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
                     }
                 } else {
-                    Text("ITEMS REQUIRING ACTION")
-                        .font(AppTypography.overline)
-                        .tracking(2)
-                        .foregroundColor(AppColors.accent)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                    // Out-of-stock section
+                    if !outOfStock.isEmpty {
+                        alertSectionHeader("OUT OF STOCK — \(outOfStock.count) ITEM\(outOfStock.count == 1 ? "" : "S")", color: AppColors.error)
+                        ForEach(outOfStock) { item in alertRow(item) }
+                    }
 
-                    ForEach(critical) { product in
-                        HStack(spacing: AppSpacing.sm) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(product.stockCount == 0 ? AppColors.error : AppColors.warning)
-                                .frame(width: 3, height: 44)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(product.name)
-                                    .font(AppTypography.label)
-                                    .foregroundColor(AppColors.textPrimaryDark)
-                                Text(product.categoryName)
-                                    .font(AppTypography.caption)
-                                    .foregroundColor(AppColors.textSecondaryDark)
-                            }
-                            Spacer()
-                            Text(product.stockCount == 0 ? "OUT" : "\(product.stockCount) left")
-                                .font(AppTypography.statSmall)
-                                .foregroundColor(product.stockCount == 0 ? AppColors.error : AppColors.warning)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background((product.stockCount == 0 ? AppColors.error : AppColors.warning).opacity(0.12))
-                                .cornerRadius(4)
-
-                            Button(action: {}) {
-                                Text("Request")
-                                    .font(AppTypography.actionLink)
-                                    .foregroundColor(AppColors.accent)
-                            }
-                        }
-                        .padding(.horizontal, AppSpacing.sm)
-                        .padding(.vertical, AppSpacing.xs)
-                        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                    // Low-stock section
+                    if !lowStock.isEmpty {
+                        alertSectionHeader("LOW STOCK — \(lowStock.count) ITEM\(lowStock.count == 1 ? "" : "S")", color: AppColors.warning)
+                        ForEach(lowStock) { item in alertRow(item) }
                     }
                 }
             }
             .padding(.top, AppSpacing.sm)
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .refreshable { await syncInventory() }
+        .task { await syncInventory() }
+        .sheet(isPresented: $showTransferRequest) {
+            TransferRequestSheet(isPresented: $showTransferRequest)
+        }
+    }
+
+    private func alertSectionHeader(_ title: String, color: Color) -> some View {
+        Text(title)
+            .font(AppTypography.overline)
+            .tracking(2)
+            .foregroundColor(color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    private func alertRow(_ item: InventoryByLocation) -> some View {
+        HStack(spacing: AppSpacing.sm) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(item.quantity == 0 ? AppColors.error : AppColors.warning)
+                .frame(width: 3, height: 44)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.productName)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(item.categoryName)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    if item.reorderPoint > 0 {
+                        Text("· reorder at \(item.reorderPoint)")
+                            .font(AppTypography.micro)
+                            .foregroundColor(AppColors.neutral500)
+                    }
+                }
+            }
+            Spacer()
+            Text(item.quantity == 0 ? "OUT" : "\(item.quantity) left")
+                .font(AppTypography.statSmall)
+                .foregroundColor(item.quantity == 0 ? AppColors.error : AppColors.warning)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background((item.quantity == 0 ? AppColors.error : AppColors.warning).opacity(0.12))
+                .cornerRadius(4)
+
+            Button(action: { showTransferRequest = true }) {
+                Text("Request")
+                    .font(AppTypography.actionLink)
+                    .foregroundColor(AppColors.accent)
+            }
+        }
+        .padding(.horizontal, AppSpacing.sm)
+        .padding(.vertical, AppSpacing.xs)
+        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
+        .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    @MainActor
+    private func syncInventory() async {
+        guard let storeId = appState.currentStoreId else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        try? await StoreAndInventorySyncService.shared.syncInventoryToLocal(
+            storeId: storeId,
+            modelContext: modelContext
+        )
     }
 }
 
@@ -678,35 +799,96 @@ private struct ShipmentMatchSheet: View {
 // MARK: - Flagged Items
 
 struct InvFlaggedSubview: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
+    @Query private var allInventory: [InventoryByLocation]
+
+    @State private var isSyncing = false
+    @State private var showTransferRequest = false
+
+    // Items completely out of stock for this store — these are the "flagged" critical items
+    private var flaggedItems: [InventoryByLocation] {
+        guard let storeId = appState.currentStoreId else { return [] }
+        return allInventory
+            .filter { $0.locationId == storeId && $0.quantity == 0 }
+            .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    // Items below reorder threshold but still in stock — secondary attention
+    private var watchItems: [InventoryByLocation] {
+        guard let storeId = appState.currentStoreId else { return [] }
+        return allInventory
+            .filter { $0.locationId == storeId && $0.quantity > 0 && $0.quantity <= $0.reorderPoint }
+            .sorted { $0.quantity < $1.quantity }
+    }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
-                Text("FLAGGED FOR REVIEW")
-                    .font(AppTypography.overline)
-                    .tracking(2)
-                    .foregroundColor(AppColors.accent)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                if isSyncing && flaggedItems.isEmpty && watchItems.isEmpty {
+                    ProgressView("Syncing…").tint(AppColors.accent).padding(.top, 60)
 
-                flagRow(item: "Classic Flap Bag #ML-0042", reason: "Minor scratch on hardware", flaggedBy: "Alexander Chase", time: "Today", severity: "Low")
-                flagRow(item: "Diamond Bezel Watch #ML-0118", reason: "Display case damaged", flaggedBy: "Daniel Park", time: "Yesterday", severity: "Medium")
-                flagRow(item: "Gold Bracelet #ML-0205", reason: "Clasp mechanism stiff", flaggedBy: "Marcus Webb", time: "2d ago", severity: "Low")
+                } else if flaggedItems.isEmpty && watchItems.isEmpty {
+                    VStack(spacing: AppSpacing.lg) {
+                        Spacer().frame(height: 60)
+                        Image(systemName: "flag.slash")
+                            .font(AppTypography.emptyStateIcon)
+                            .foregroundColor(AppColors.success)
+                        Text("Nothing flagged")
+                            .font(AppTypography.heading3)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        Text("All items are above their reorder threshold.")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .multilineTextAlignment(.center)
+                    }
+
+                } else {
+                    // Critical — out of stock
+                    if !flaggedItems.isEmpty {
+                        sectionLabel("CRITICAL — OUT OF STOCK (\(flaggedItems.count))", color: AppColors.error)
+                        ForEach(flaggedItems) { item in
+                            flagRow(item, severity: .critical)
+                        }
+                    }
+
+                    // Watch — below reorder point
+                    if !watchItems.isEmpty {
+                        sectionLabel("WATCH — BELOW REORDER POINT (\(watchItems.count))", color: AppColors.warning)
+                        ForEach(watchItems) { item in
+                            flagRow(item, severity: .watch)
+                        }
+                    }
+                }
             }
             .padding(.top, AppSpacing.sm)
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .refreshable { await syncInventory() }
+        .task { await syncInventory() }
+        .sheet(isPresented: $showTransferRequest) {
+            TransferRequestSheet(isPresented: $showTransferRequest)
+        }
     }
 
-    private func flagRow(item: String, reason: String, flaggedBy: String, time: String, severity: String) -> some View {
+    private enum FlagSeverity { case critical, watch }
+
+    private func flagRow(_ item: InventoryByLocation, severity: FlagSeverity) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
             HStack {
-                Text(item)
-                    .font(AppTypography.label)
-                    .foregroundColor(AppColors.textPrimaryDark)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.productName)
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                        .lineLimit(1)
+                    Text(item.categoryName)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
                 Spacer()
-                let sc = severity == "Low" ? AppColors.warning : AppColors.error
-                Text(severity.uppercased())
+                let sc: Color = severity == .critical ? AppColors.error : AppColors.warning
+                let label = severity == .critical ? "OUT OF STOCK" : "\(item.quantity) / \(item.reorderPoint) units"
+                Text(label)
                     .font(AppTypography.nano)
                     .foregroundColor(sc)
                     .padding(.horizontal, 8)
@@ -714,21 +896,17 @@ struct InvFlaggedSubview: View {
                     .background(sc.opacity(0.12))
                     .cornerRadius(4)
             }
-            Text(reason)
-                .font(AppTypography.bodySmall)
-                .foregroundColor(AppColors.textSecondaryDark)
+
             HStack {
-                Text(flaggedBy)
+                Label("SKU: \(item.sku)", systemImage: "barcode")
                     .font(AppTypography.micro)
-                    .foregroundColor(AppColors.secondary)
-                Text("•")
-                    .foregroundColor(AppColors.neutral600)
-                Text(time)
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.neutral500)
+                    .foregroundColor(AppColors.textSecondaryDark)
                 Spacer()
-                Button(action: {}) {
-                    Text("Review")
+                Text("Updated \(item.updatedAt.formatted(.relative(presentation: .named)))")
+                    .font(AppTypography.micro)
+                    .foregroundColor(AppColors.neutral500)
+                Button(action: { showTransferRequest = true }) {
+                    Text("Request")
                         .font(AppTypography.reviewButton)
                         .foregroundColor(AppColors.accent)
                         .padding(.horizontal, 12)
@@ -741,6 +919,26 @@ struct InvFlaggedSubview: View {
         .padding(AppSpacing.cardPadding)
         .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
         .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    private func sectionLabel(_ title: String, color: Color) -> some View {
+        Text(title)
+            .font(AppTypography.overline)
+            .tracking(2)
+            .foregroundColor(color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    @MainActor
+    private func syncInventory() async {
+        guard let storeId = appState.currentStoreId else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        try? await StoreAndInventorySyncService.shared.syncInventoryToLocal(
+            storeId: storeId,
+            modelContext: modelContext
+        )
     }
 }
 
@@ -758,8 +956,7 @@ private struct TransferRequestSheet: View {
     @State private var selectedProduct: Product?
     @State private var selectedDestinationStore: StoreLocation?
     @State private var quantityText = ""
-    @State private var scanInput = ""
-    @State private var scannedItems: [String] = []
+    @State private var batchReference = ""
     @State private var notes = ""
     @State private var isSubmitting = false
     @State private var isLoadingStores = false
@@ -779,20 +976,11 @@ private struct TransferRequestSheet: View {
         Int(quantityText.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    private var requiredScans: Int {
-        max(quantity ?? 0, 0)
-    }
-
-    private var isScanRequirementMet: Bool {
-        requiredScans > 0 && scannedItems.count == requiredScans
-    }
-
     private var isValid: Bool {
         selectedProduct != nil &&
         selectedDestinationStore != nil &&
-        quantity ?? 0 > 0 &&
-        (selectedProduct?.stockCount ?? 0) >= (quantity ?? 0) &&
-        isScanRequirementMet
+        (quantity ?? 0) > 0 &&
+        (selectedProduct?.stockCount ?? 0) >= (quantity ?? 0)
     }
 
     var body: some View {
@@ -894,76 +1082,21 @@ private struct TransferRequestSheet: View {
                     .padding(AppSpacing.md)
                     .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
 
-                    // Scan confirmation (required before submit)
+                    // Batch Reference (optional)
                     VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                        Text("SCAN ITEMS (REQUIRED)")
+                        Text("BATCH REFERENCE (OPTIONAL)")
                             .font(AppTypography.overline)
                             .tracking(2)
                             .foregroundColor(AppColors.accent)
-
-                        HStack(spacing: AppSpacing.sm) {
-                            TextField("Scan serial / barcode", text: $scanInput)
-                                .textInputAutocapitalization(.characters)
-                                .autocorrectionDisabled()
-                                .font(AppTypography.bodyMedium)
-                                .padding(AppSpacing.sm)
-                                .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
-
-                            Button {
-                                addScannedItem()
-                            } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundColor(scanInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppColors.neutral500 : AppColors.accent)
-                            }
-                            .disabled(scanInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        }
-
-                        HStack {
-                            Text("Scanned \(scannedItems.count) of \(requiredScans)")
-                                .font(AppTypography.caption)
-                                .foregroundColor(isScanRequirementMet ? AppColors.success : AppColors.textSecondaryDark)
-                            Spacer()
-                            if !scannedItems.isEmpty {
-                                Button("Clear") {
-                                    scannedItems.removeAll()
-                                }
-                                .font(AppTypography.caption)
-                                .foregroundColor(AppColors.accent)
-                            }
-                        }
-
-                        if !scannedItems.isEmpty {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: AppSpacing.xs) {
-                                    ForEach(scannedItems, id: \.self) { code in
-                                        HStack(spacing: 4) {
-                                            Text(code)
-                                                .font(AppTypography.micro)
-                                                .foregroundColor(AppColors.textPrimaryDark)
-                                            Button {
-                                                scannedItems.removeAll { $0 == code }
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .font(.system(size: 10, weight: .semibold))
-                                                    .foregroundColor(AppColors.neutral600)
-                                            }
-                                        }
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 5)
-                                        .background(AppColors.backgroundSecondary)
-                                        .cornerRadius(6)
-                                    }
-                                }
-                                .padding(.vertical, 2)
-                            }
-                        }
-
-                        if requiredScans > 0 && !isScanRequirementMet {
-                            Text("All units must be scanned before transfer submission.")
-                                .font(AppTypography.micro)
-                                .foregroundColor(AppColors.warning)
-                        }
+                        TextField("Batch / ASN / barcode reference", text: $batchReference)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                            .font(AppTypography.bodyMedium)
+                            .padding(AppSpacing.sm)
+                            .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
+                        Text("Item scanning is done at the receiving boutique during shipment confirmation.")
+                            .font(AppTypography.micro)
+                            .foregroundColor(AppColors.textSecondaryDark)
                     }
                     .padding(AppSpacing.md)
                     .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
@@ -1086,23 +1219,19 @@ private struct TransferRequestSheet: View {
             return
         }
 
-        guard scannedItems.count == qty else {
-            errorMessage = "Scan validation failed. Expected \(qty) scanned item(s), found \(scannedItems.count)."
-            showError = true
-            return
-        }
-
         isSubmitting = true
         Task { @MainActor in
             defer { isSubmitting = false }
 
             let sourceCode = currentStore?.code ?? "UNKNOWN"
             let transferNumber = makeTransferNumber(fromStoreCode: sourceCode)
-            let serializedScanPayload = scannedItems.joined(separator: ",")
+            let refValue = batchReference.trimmingCharacters(in: .whitespacesAndNewlines)
 
             var transferNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-            let scanAudit = "Scanned Units (\(scannedItems.count)): \(serializedScanPayload)"
-            transferNotes = transferNotes.isEmpty ? scanAudit : "\(transferNotes)\n\(scanAudit)"
+            if !refValue.isEmpty {
+                let refAudit = "Batch Ref: \(refValue)"
+                transferNotes = transferNotes.isEmpty ? refAudit : "\(transferNotes)\n\(refAudit)"
+            }
 
             let transfer = Transfer(
                 transferNumber: transferNumber,
@@ -1110,7 +1239,7 @@ private struct TransferRequestSheet: View {
                 asnIssuedAt: Date(),
                 productId: product.id,
                 productName: product.name,
-                serialNumber: serializedScanPayload,
+                serialNumber: refValue,
                 quantity: qty,
                 fromBoutiqueId: currentStore?.code ?? appState.currentStoreId?.uuidString ?? "UNKNOWN",
                 toBoutiqueId: destination.code,
@@ -1141,19 +1270,6 @@ private struct TransferRequestSheet: View {
                 showError = true
             }
         }
-    }
-
-    private func addScannedItem() {
-        let normalized = scanInput.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard !normalized.isEmpty else { return }
-        guard !scannedItems.contains(normalized) else {
-            errorMessage = "This item is already scanned."
-            showError = true
-            return
-        }
-        scannedItems.append(normalized)
-        scanInput = ""
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     private func makeTransferNumber(fromStoreCode: String) -> String {

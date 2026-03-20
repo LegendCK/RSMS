@@ -8,6 +8,7 @@
 
 import SwiftUI
 import SwiftData
+import Supabase
 
 // MARK: - Main Dashboard View
 
@@ -27,6 +28,7 @@ struct AdminDashboardView: View {
     @State private var showAddSKU = false
     @State private var showAddStaff = false
     @State private var showAddStore = false
+    @State private var showAddPromotion = false
     @State private var selectedInsight: DashboardInsightType?
     @State private var showExportSheet = false
     @State private var selectedReportScope: AdminReportScope = .all
@@ -161,6 +163,7 @@ struct AdminDashboardView: View {
             .sheet(isPresented: $showAddSKU) { CreateProductSheet(modelContext: modelContext, categories: allCategories) }
             .sheet(isPresented: $showAddStaff) { CreateUserSheet(modelContext: modelContext) }
             .sheet(isPresented: $showAddStore) { CreateStoreSheet() }
+            .sheet(isPresented: $showAddPromotion) { CreatePromotionSheet() }
             .sheet(isPresented: $showExportSheet) {
                 AdminReportExportSheet(
                     selectedScope: $selectedReportScope,
@@ -611,7 +614,7 @@ struct AdminDashboardView: View {
                     impact.impactOccurred()
                 }
                 actionTile(icon: "percent", label: "Promotion", color: AppColors.warning) {
-                    impact.impactOccurred()
+                    impact.impactOccurred(); showAddPromotion = true
                 }
                 actionTile(icon: "doc.text.fill", label: "Report", color: AppColors.secondaryLight) {
                     impact.impactOccurred()
@@ -1327,14 +1330,30 @@ struct CreateStoreSheet: View {
     @State private var storeCountry = ""
     @State private var storeManager = ""
     @State private var storeType: StoreType = .boutique
+    @State private var isCreating = false
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isCreated = false
 
     enum StoreType: String, CaseIterable {
-        case boutique = "Boutique"
+        case boutique     = "Boutique"
         case distribution = "Distribution Center"
-        case popup = "Pop-up"
+        case popup        = "Pop-up"
+
+        var supabaseType: String {
+            switch self {
+            case .boutique:     return "boutique"
+            case .distribution: return "distribution_center"
+            case .popup:        return "pop_up"
+            }
+        }
+
+        var localType: LocationType {
+            switch self {
+            case .boutique, .popup: return .boutique
+            case .distribution:     return .distributionCenter
+            }
+        }
     }
 
     var body: some View {
@@ -1398,9 +1417,12 @@ struct CreateStoreSheet: View {
                         }
                         .padding(.horizontal, 20)
 
-                        PrimaryButton(title: "Create Store") { createStore() }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 40)
+                        PrimaryButton(title: isCreating ? "Creating…" : "Create Store") {
+                            Task { await createStore() }
+                        }
+                        .disabled(isCreating)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 40)
                     }
                 }
             }
@@ -1412,6 +1434,7 @@ struct CreateStoreSheet: View {
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.primary)
                     }
+                    .disabled(isCreating)
                 }
             }
             .alert("Error", isPresented: $showError) {
@@ -1423,15 +1446,442 @@ struct CreateStoreSheet: View {
         }
     }
 
-    private func createStore() {
-        guard !storeName.trimmingCharacters(in: .whitespaces).isEmpty,
-              !storeCity.trimmingCharacters(in: .whitespaces).isEmpty,
-              !storeCountry.trimmingCharacters(in: .whitespaces).isEmpty else {
+    @MainActor
+    private func createStore() async {
+        let trimmedName    = storeName.trimmingCharacters(in: .whitespaces)
+        let trimmedCity    = storeCity.trimmingCharacters(in: .whitespaces)
+        let trimmedCountry = storeCountry.trimmingCharacters(in: .whitespaces)
+        let trimmedManager = storeManager.trimmingCharacters(in: .whitespaces)
+
+        guard !trimmedName.isEmpty, !trimmedCity.isEmpty, !trimmedCountry.isEmpty else {
             errorMessage = "Please fill in the store name, city, and country."
             showError = true
             return
         }
-        isCreated = true
+
+        isCreating = true
+        defer { isCreating = false }
+
+        let newId = UUID()
+        let code  = String(trimmedName.prefix(3)).uppercased() + String(format: "%03d", Int.random(in: 1...999))
+
+        // 1 — Insert into Supabase `stores` table
+        let payload = StoreInsertDTO(
+            id: newId,
+            code: code,
+            name: trimmedName,
+            type: storeType.supabaseType,
+            country: trimmedCountry,
+            city: trimmedCity,
+            address: "",
+            currency: "INR",
+            timezone: "Asia/Kolkata",
+            region: trimmedCity,
+            managerName: trimmedManager,
+            capacityUnits: 0,
+            monthlySalesTarget: nil,
+            isActive: true
+        )
+
+        do {
+            let _: StoreDTO = try await SupabaseManager.shared.client
+                .from("stores")
+                .insert(payload)
+                .select()
+                .single()
+                .execute()
+                .value
+
+            // 2 — Mirror into local SwiftData so StoreConfigView refreshes instantly
+            let local = StoreLocation(
+                code: code,
+                name: trimmedName,
+                type: storeType.localType,
+                addressLine1: "",
+                city: trimmedCity,
+                stateProvince: "",
+                postalCode: "",
+                country: trimmedCountry,
+                region: trimmedCity,
+                managerName: trimmedManager,
+                capacityUnits: 0,
+                isOperational: true
+            )
+            local.id = newId
+            modelContext.insert(local)
+            try? modelContext.save()
+
+            isCreated = true
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+}
+
+// MARK: - Create Promotion Sheet
+
+struct CreatePromotionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) var appState
+
+    @Query private var allProducts: [Product]
+    @Query private var allCategories: [Category]
+
+    @State private var name = ""
+    @State private var details = ""
+    @State private var scope: PromotionScope = .product
+    @State private var selectedProductId: UUID? = nil
+    @State private var selectedCategoryId: UUID? = nil
+    @State private var discountType: PromotionDiscountType = .percentage
+    @State private var discountValue = ""
+    @State private var startsAt = Date()
+    @State private var endsAt = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
+    @State private var isActive = true
+    @State private var isCreating = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+    @State private var isCreated = false
+
+    private var selectedProductName: String {
+        guard let id = selectedProductId else { return "All Products (store-wide)" }
+        return allProducts.first(where: { $0.id == id })?.name ?? "All Products (store-wide)"
+    }
+
+    private var selectedCategoryName: String {
+        guard let id = selectedCategoryId else { return "All Categories (store-wide)" }
+        return allCategories.first(where: { $0.id == id })?.name ?? "All Categories (store-wide)"
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(.systemGroupedBackground).ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 24) {
+
+                        // MARK: Header
+                        VStack(spacing: 6) {
+                            ZStack {
+                                Circle()
+                                    .fill(AppColors.warning.opacity(0.12))
+                                    .frame(width: 64, height: 64)
+                                Image(systemName: "percent")
+                                    .font(.system(size: 28, weight: .semibold))
+                                    .foregroundColor(AppColors.warning)
+                            }
+                            Text("Create Promotion")
+                                .font(.system(size: 24, weight: .black))
+                                .foregroundColor(.primary)
+                            Text("Add a discount rule to your catalog")
+                                .font(.system(size: 14, weight: .light))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.top, 24)
+
+                        // MARK: Scope picker
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("SCOPE")
+                                .font(.system(size: 9, weight: .semibold))
+                                .tracking(3)
+                                .foregroundColor(AppColors.accent)
+                                .padding(.horizontal, 20)
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(PromotionScope.allCases) { s in
+                                        Button(action: {
+                                            scope = s
+                                            selectedProductId = nil
+                                            selectedCategoryId = nil
+                                        }) {
+                                            Text(s.title)
+                                                .font(.system(size: 13, weight: scope == s ? .semibold : .regular))
+                                                .foregroundColor(scope == s ? .white : .primary)
+                                                .padding(.horizontal, 16)
+                                                .padding(.vertical, 9)
+                                                .background(scope == s ? AppColors.accent : Color(.secondarySystemGroupedBackground))
+                                                .clipShape(Capsule())
+                                                .overlay(Capsule().strokeBorder(scope == s ? Color.clear : Color(.systemGray4), lineWidth: 1))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                            }
+                        }
+
+                        // MARK: Target selection
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(scope == .product ? "TARGET PRODUCT" : "TARGET CATEGORY")
+                                .font(.system(size: 9, weight: .semibold))
+                                .tracking(3)
+                                .foregroundColor(AppColors.accent)
+
+                            if scope == .product {
+                                Menu {
+                                    Button("All Products (store-wide)") { selectedProductId = nil }
+                                    if !allProducts.isEmpty { Divider() }
+                                    ForEach(allProducts.sorted { $0.name < $1.name }) { product in
+                                        Button(product.name) { selectedProductId = product.id }
+                                    }
+                                } label: {
+                                    targetMenuLabel(
+                                        icon: "cube.box",
+                                        text: selectedProductName,
+                                        isPlaceholder: selectedProductId == nil
+                                    )
+                                }
+                            } else {
+                                Menu {
+                                    Button("All Categories (store-wide)") { selectedCategoryId = nil }
+                                    if !allCategories.isEmpty { Divider() }
+                                    ForEach(allCategories.sorted { $0.name < $1.name }) { category in
+                                        Button(category.name) { selectedCategoryId = category.id }
+                                    }
+                                } label: {
+                                    targetMenuLabel(
+                                        icon: "tag",
+                                        text: selectedCategoryName,
+                                        isPlaceholder: selectedCategoryId == nil
+                                    )
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+
+                        // MARK: Name & Details
+                        VStack(spacing: 16) {
+                            LuxuryTextField(placeholder: "Promotion Name", text: $name, icon: "tag.fill")
+                            LuxuryTextField(placeholder: "Details (optional)", text: $details, icon: "text.alignleft")
+                        }
+                        .padding(.horizontal, 20)
+
+                        // MARK: Discount Type
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("DISCOUNT TYPE")
+                                .font(.system(size: 9, weight: .semibold))
+                                .tracking(3)
+                                .foregroundColor(AppColors.accent)
+                                .padding(.horizontal, 20)
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(PromotionDiscountType.allCases) { dt in
+                                        Button(action: { discountType = dt }) {
+                                            Text(dt.title)
+                                                .font(.system(size: 13, weight: discountType == dt ? .semibold : .regular))
+                                                .foregroundColor(discountType == dt ? .white : .primary)
+                                                .padding(.horizontal, 16)
+                                                .padding(.vertical, 9)
+                                                .background(discountType == dt ? AppColors.accent : Color(.secondarySystemGroupedBackground))
+                                                .clipShape(Capsule())
+                                                .overlay(Capsule().strokeBorder(discountType == dt ? Color.clear : Color(.systemGray4), lineWidth: 1))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                            }
+                        }
+
+                        // MARK: Discount Value
+                        LuxuryTextField(
+                            placeholder: discountType == .percentage ? "Discount % (e.g. 10)" : "Amount off in ₹ (e.g. 500)",
+                            text: $discountValue,
+                            icon: discountType == .percentage ? "percent" : "indianrupeesign"
+                        )
+                        .keyboardType(.decimalPad)
+                        .padding(.horizontal, 20)
+
+                        // MARK: Duration
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("DURATION")
+                                .font(.system(size: 9, weight: .semibold))
+                                .tracking(3)
+                                .foregroundColor(AppColors.accent)
+                                .padding(.horizontal, 20)
+
+                            VStack(spacing: 0) {
+                                HStack {
+                                    Image(systemName: "calendar")
+                                        .foregroundColor(.secondary)
+                                        .frame(width: 22)
+                                    DatePicker("Starts", selection: $startsAt, displayedComponents: .date)
+                                        .font(.system(size: 14))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+
+                                Divider().padding(.horizontal, 16)
+
+                                HStack {
+                                    Image(systemName: "calendar.badge.clock")
+                                        .foregroundColor(.secondary)
+                                        .frame(width: 22)
+                                    DatePicker("Ends", selection: $endsAt, in: startsAt..., displayedComponents: .date)
+                                        .font(.system(size: 14))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                            }
+                            .background(Color(.secondarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+                            .padding(.horizontal, 20)
+                        }
+
+                        // MARK: Active toggle
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Active immediately")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.primary)
+                                Text("Promotion applies as soon as it's created")
+                                    .font(.system(size: 11, weight: .light))
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $isActive)
+                                .tint(AppColors.accent)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+                        .padding(.horizontal, 20)
+
+                        // MARK: Submit
+                        PrimaryButton(title: isCreating ? "Creating…" : "Create Promotion") {
+                            Task { await createPromotion() }
+                        }
+                        .disabled(isCreating)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 40)
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                    }
+                    .disabled(isCreating)
+                }
+            }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) { }
+            } message: { Text(errorMessage) }
+            .alert("Promotion Created!", isPresented: $isCreated) {
+                Button("Done") { dismiss() }
+            } message: {
+                Text("\"\(name)\" has been created and synced to Supabase.")
+            }
+        }
+    }
+
+    // MARK: - Helper Views
+
+    private func targetMenuLabel(icon: String, text: String, isPlaceholder: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .light))
+                .foregroundColor(.secondary)
+                .frame(width: 22)
+            Text(text)
+                .font(.system(size: 15))
+                .foregroundColor(isPlaceholder ? .secondary : .primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 11, weight: .light))
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(.systemGray4))
+                .frame(height: 1)
+        }
+    }
+
+    // MARK: - Create Logic
+
+    @MainActor
+    private func createPromotion() async {
+        let trimmedName    = name.trimmingCharacters(in: .whitespaces)
+        let trimmedDetails = details.trimmingCharacters(in: .whitespaces)
+
+        guard !trimmedName.isEmpty else {
+            errorMessage = "Please enter a promotion name."
+            showError = true
+            return
+        }
+        guard let value = Double(discountValue.trimmingCharacters(in: .whitespaces)), value > 0 else {
+            errorMessage = "Please enter a valid discount value greater than 0."
+            showError = true
+            return
+        }
+        if discountType == .percentage && value > 100 {
+            errorMessage = "Percentage discount cannot exceed 100%."
+            showError = true
+            return
+        }
+        guard endsAt > startsAt else {
+            errorMessage = "End date must be after the start date."
+            showError = true
+            return
+        }
+
+        isCreating = true
+        defer { isCreating = false }
+
+        do {
+            let dto = try await PromotionService.shared.createPromotion(
+                name: trimmedName,
+                details: trimmedDetails,
+                scope: scope,
+                targetProductId: scope == .product ? selectedProductId : nil,
+                targetCategoryId: scope == .category ? selectedCategoryId : nil,
+                discountType: discountType,
+                discountValue: value,
+                startsAt: startsAt,
+                endsAt: endsAt,
+                isActive: isActive,
+                createdBy: appState.currentUserProfile?.id
+            )
+
+            // Mirror into local SwiftData so PromotionSyncService picks it up
+            let local = PromotionRule(
+                id: dto.id,
+                name: dto.name,
+                details: dto.details ?? "",
+                scope: dto.promotionScope,
+                targetProductId: dto.targetProductId,
+                targetCategoryId: dto.targetCategoryId,
+                discountType: dto.promotionDiscountType,
+                discountValue: dto.discountValue,
+                startsAt: dto.startsAt,
+                endsAt: dto.endsAt,
+                isActive: dto.isActive,
+                createdBy: dto.createdBy,
+                createdAt: dto.createdAt,
+                updatedAt: dto.updatedAt
+            )
+            modelContext.insert(local)
+            try? modelContext.save()
+
+            isCreated = true
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
     }
 }
 

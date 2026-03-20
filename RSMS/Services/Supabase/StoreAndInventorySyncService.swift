@@ -25,8 +25,8 @@ final class StoreAndInventorySyncService {
 
         let stores = try JSONDecoder().decode([SupabaseStore].self, from: response.data)
         return stores.map { supabaseStore in
-            StoreLocation(
-                code: supabaseStore.code ?? supabaseStore.id.prefix(4).uppercased(),
+            let location = StoreLocation(
+                code: supabaseStore.code ?? String(supabaseStore.id.prefix(4)).uppercased(),
                 name: supabaseStore.name,
                 type: .boutique,
                 addressLine1: supabaseStore.address ?? "",
@@ -39,6 +39,11 @@ final class StoreAndInventorySyncService {
                 capacityUnits: 0,
                 isOperational: supabaseStore.is_active ?? true
             )
+            // Preserve the Supabase UUID so ID-based lookups (e.g. currentStoreId match) work correctly
+            if let uuid = UUID(uuidString: supabaseStore.id) {
+                location.id = uuid
+            }
+            return location
         }
     }
 

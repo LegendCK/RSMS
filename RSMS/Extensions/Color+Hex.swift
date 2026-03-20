@@ -1,12 +1,15 @@
 //
 //  Color+Hex.swift
-//  infosys2
+//  RSMS
 //
 
 import SwiftUI
 
+// MARK: - Color(hex:)
+
 extension Color {
-    /// Initialize a Color from a hex string (e.g. "#C9A84C" or "C9A84C")
+    /// Initialize a Color from a hex string (e.g. "#C9A84C" or "C9A84C").
+    /// Creates a fixed, non-adaptive color — use AppColors for adaptive variants.
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
@@ -24,10 +27,38 @@ extension Color {
 
         self.init(
             .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
+            red:     Double(r) / 255,
+            green:   Double(g) / 255,
+            blue:    Double(b) / 255,
             opacity: Double(a) / 255
+        )
+    }
+}
+
+// MARK: - UIColor(hex:)
+
+extension UIColor {
+    /// Initialize a UIColor from a hex string — used for adaptive trait-collection colors.
+    convenience init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 6:
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8:
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+
+        self.init(
+            red:   CGFloat(r) / 255,
+            green: CGFloat(g) / 255,
+            blue:  CGFloat(b) / 255,
+            alpha: CGFloat(a) / 255
         )
     }
 }

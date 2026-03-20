@@ -55,7 +55,7 @@ struct StoreInsertDTO: Codable {
     let region: String
     let managerName: String
     let capacityUnits: Int
-    let monthlySalesTarget: Double
+    let monthlySalesTarget: Double?
     let isActive: Bool
 
     enum CodingKeys: String, CodingKey {
