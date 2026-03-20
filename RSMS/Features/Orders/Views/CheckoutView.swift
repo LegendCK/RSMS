@@ -16,6 +16,7 @@ struct CheckoutView: View {
     @Query private var allAddresses: [SavedAddress]
     @Query private var allProducts: [Product]
     @Query private var allCategories: [Category]
+    @Query private var allStores: [StoreLocation]
     @Query private var pricingPolicies: [PricingPolicySettings]
     @Query private var taxRules: [IndianTaxRule]
     @Query private var regionalPriceRules: [RegionalPriceRule]
@@ -94,6 +95,13 @@ struct CheckoutView: View {
             taxRules: taxRules,
             promotions: promotionRules
         )
+    }
+
+    /// The store used for BOPIS pickup — prefers the user's assigned store, falls back to first active.
+    private var pickupStore: StoreLocation? {
+        let storeId = appState.currentStoreId
+        return allStores.first(where: { $0.id == storeId && $0.isOperational })
+            ?? allStores.first(where: { $0.isOperational })
     }
 
     private var merchandiseSubtotal: Double { pricing.merchandiseSubtotal }
@@ -287,10 +295,10 @@ struct CheckoutView: View {
                             .font(.title2)
                             .foregroundColor(AppColors.accent)
                         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                            Text("Maison Luxe Flagship")
+                            Text(pickupStore?.name ?? "Boutique Store")
                                 .font(AppTypography.label)
                                 .foregroundColor(AppColors.textPrimaryDark)
-                            Text("123 Luxury Avenue, New York, NY 10001")
+                            Text(pickupStore.map { "\($0.addressLine1), \($0.city), \($0.country)" } ?? "Nearest boutique location")
                                 .font(AppTypography.caption)
                                 .foregroundColor(AppColors.textSecondaryDark)
                             Text("Ready within 2 hours")
@@ -512,7 +520,7 @@ struct CheckoutView: View {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 sectionHeader("DELIVERY")
                 if selectedFulfillment == .bopis {
-                    Text("Pick Up In Store — Maison Luxe Flagship")
+                    Text("Pick Up In Store — \(pickupStore?.name ?? "Boutique")")
                         .font(AppTypography.bodyMedium)
                         .foregroundColor(AppColors.textPrimaryDark)
                 } else if let addr = selectedAddress {
@@ -801,8 +809,19 @@ struct CheckoutView: View {
             fulfillmentType: selectedFulfillment,
             paymentMethod: selectedPayment.title
         )
+        // Set boutique ID for BOPIS orders so the manager dashboard picks them up
+        if selectedFulfillment == .bopis, let store = pickupStore {
+            order.boutiqueId = store.code
+        }
         modelContext.insert(order)
-        for item in cartItems { modelContext.delete(item) }
+
+        // Decrement local product stock counts
+        for item in cartItems {
+            if let product = allProducts.first(where: { $0.id == item.productId }) {
+                product.stockCount = max(0, product.stockCount - item.quantity)
+            }
+            modelContext.delete(item)
+        }
         try? modelContext.save()
 
         // 2. Sync to Supabase so sales associates can view purchase history.

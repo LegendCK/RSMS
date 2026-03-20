@@ -285,7 +285,9 @@ struct BOPISOrderMonitorView: View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: AppSpacing.sm) {
                 ForEach(viewModel.filteredOrders) { order in
-                    BOPISOrderCard(order: order)
+                    BOPISOrderCard(order: order) {
+                        await viewModel.pullToRefresh(storeId: storeId)
+                    }
                         .padding(.horizontal, AppSpacing.screenHorizontal)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
@@ -359,6 +361,28 @@ struct BOPISOrderMonitorView: View {
 
 struct BOPISOrderCard: View {
     let order: BOPISOrder
+    var onStatusUpdated: (() async -> Void)? = nil
+
+    @State private var isUpdating = false
+    @State private var updateError = ""
+    @State private var showUpdateError = false
+
+    private var nextAction: (label: String, status: String, icon: String)? {
+        switch order.status.lowercased() {
+        case "pending", "confirmed":
+            return ("Start Processing", "processing", "arrow.triangle.2.circlepath")
+        case "processing":
+            return order.channel == .bopis
+                ? ("Ready for Pickup", "ready_for_pickup", "building.2.fill")
+                : ("Mark Shipped", "shipped", "shippingbox.fill")
+        case "ready_for_pickup":
+            return ("Complete", "completed", "checkmark.seal.fill")
+        case "shipped":
+            return ("Mark Delivered", "delivered", "checkmark.circle.fill")
+        default:
+            return nil
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -407,6 +431,33 @@ struct BOPISOrderCard: View {
             .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, AppSpacing.sm)
 
+            // Action button
+            if let action = nextAction {
+                Button {
+                    Task { await performUpdate(newStatus: action.status) }
+                } label: {
+                    HStack(spacing: 6) {
+                        if isUpdating {
+                            ProgressView().tint(.white).scaleEffect(0.7)
+                        } else {
+                            Image(systemName: action.icon)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        Text(isUpdating ? "Updating…" : action.label)
+                            .font(AppTypography.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 36)
+                    .background(AppColors.accent)
+                    .cornerRadius(AppSpacing.radiusSmall)
+                }
+                .disabled(isUpdating)
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, AppSpacing.xs)
+            }
+
             // Time remaining footer
             HStack(spacing: AppSpacing.xs) {
                 Image(systemName: timeRemainingIcon)
@@ -426,6 +477,11 @@ struct BOPISOrderCard: View {
             .background(slaColor.opacity(0.07))
         }
         .managerCardSurface()
+        .alert("Update Failed", isPresented: $showUpdateError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(updateError)
+        }
         .overlay(
             RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous)
                 .stroke(slaColor.opacity(order.slaStatus == .onTime ? 0 : 0.5), lineWidth: 1)
@@ -498,6 +554,26 @@ struct BOPISOrderCard: View {
         case .breached: return "exclamationmark.triangle.fill"
         case .atRisk:   return "clock.badge.exclamationmark"
         case .onTime:   return "checkmark.circle.fill"
+        }
+    }
+
+    // MARK: - Status Update
+
+    @MainActor
+    private func performUpdate(newStatus: String) async {
+        isUpdating = true
+        defer { isUpdating = false }
+        do {
+            try await OrderFulfillmentService.shared.updateOrderStatus(
+                orderId: order.id,
+                newStatus: newStatus
+            )
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            await onStatusUpdated?()
+        } catch {
+            updateError = error.localizedDescription
+            showUpdateError = true
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
         }
     }
 }

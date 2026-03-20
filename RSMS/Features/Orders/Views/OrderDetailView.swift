@@ -10,10 +10,12 @@ import SwiftData
 
 struct OrderDetailView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @Query private var stores: [StoreLocation]
     @Query private var pricingPolicies: [PricingPolicySettings]
     let order: Order
     @State private var showInvoiceSheet = false
+    @State private var statusSyncError = ""
     @State private var shareFile: ShareFile?
     @State private var invoiceError = ""
     @State private var showInvoiceError = false
@@ -113,6 +115,19 @@ struct OrderDetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(invoiceError)
+        }
+        .task { await syncStatus() }
+        .refreshable { await syncStatus() }
+    }
+
+    // MARK: - Sync Status
+
+    @MainActor
+    private func syncStatus() async {
+        do {
+            try await OrderStatusSyncService.shared.syncSingleOrder(order, modelContext: modelContext)
+        } catch {
+            print("[OrderDetailView] Status sync failed: \(error.localizedDescription)")
         }
     }
 
@@ -295,10 +310,10 @@ struct OrderDetailView: View {
                         .foregroundColor(AppColors.textPrimaryDark)
 
                     if order.fulfillmentType == .bopis {
-                        Text("Maison Luxe Flagship")
+                        Text(matchedStore?.name ?? "Boutique Store")
                             .font(AppTypography.bodySmall)
                             .foregroundColor(AppColors.textSecondaryDark)
-                        Text("123 Luxury Avenue, New York, NY 10001")
+                        Text(matchedStore.map { "\($0.addressLine1), \($0.city), \($0.country)" } ?? "Your boutique location")
                             .font(AppTypography.caption)
                             .foregroundColor(AppColors.textSecondaryDark)
                     } else {
