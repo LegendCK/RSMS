@@ -60,7 +60,7 @@ struct LiquidGlassConfig {
 /// Dynamic glass effect that responds to content and state
 struct DynamicLiquidGlass: ViewModifier {
     var config: LiquidGlassConfig = .regular
-    var backgroundColor: Color = Color.white
+    var backgroundColor: Color = AppColors.backgroundSecondary
     var cornerRadius: CGFloat = AppSpacing.radiusLarge
     
     func body(content: Content) -> some View {
@@ -132,7 +132,7 @@ extension View {
     /// Apply iOS 26 Liquid Glass effect with dynamic configuration
     func liquidGlass(
         config: LiquidGlassConfig = .regular,
-        backgroundColor: Color = Color.white,
+        backgroundColor: Color = AppColors.backgroundSecondary,
         cornerRadius: CGFloat = AppSpacing.radiusLarge
     ) -> some View {
         modifier(DynamicLiquidGlass(

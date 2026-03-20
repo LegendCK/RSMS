@@ -330,21 +330,28 @@ struct BOPISOrderMonitorView: View {
     private var emptyState: some View {
         VStack(spacing: AppSpacing.md) {
             Spacer()
-            Image(systemName: "shippingbox")
+            Image(systemName: viewModel.errorMessage != nil ? "exclamationmark.triangle" : "shippingbox")
                 .font(.system(size: 44, weight: .thin))
-                .foregroundColor(AppColors.accent.opacity(0.5))
-            Text("No Active Orders")
+                .foregroundColor(viewModel.errorMessage != nil ? AppColors.warning.opacity(0.6) : AppColors.accent.opacity(0.5))
+            Text(viewModel.errorMessage != nil ? "Cannot Load Orders" : "No Active Orders")
                 .font(AppTypography.heading3)
                 .foregroundColor(AppColors.textPrimaryDark)
-            Text(viewModel.searchText.isEmpty
-                ? "All BOPIS and ship-from-store orders are up to date."
-                : "No orders match your search.")
+            Text(emptyStateMessage)
                 .font(AppTypography.bodySmall)
                 .foregroundColor(AppColors.textSecondaryDark)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, AppSpacing.xl)
             Spacer()
         }
+    }
+
+    private var emptyStateMessage: String {
+        if let error = viewModel.errorMessage {
+            return error
+        }
+        return viewModel.searchText.isEmpty
+            ? "All BOPIS and ship-from-store orders are up to date."
+            : "No orders match your search."
     }
 }
 

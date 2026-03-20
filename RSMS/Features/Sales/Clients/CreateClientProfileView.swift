@@ -79,6 +79,7 @@ struct CreateClientProfileView: View {
                     .foregroundColor(AppColors.textPrimaryDark)
             }
         }
+        .task { await vm.loadCategories() }
         .alert("Validation Error", isPresented: $vm.showError) {
             Button("OK", role: .cancel) { }
         } message: {

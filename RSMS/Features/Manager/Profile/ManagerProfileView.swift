@@ -7,11 +7,39 @@
 //
 
 import SwiftUI
+import Supabase
 
 struct ManagerProfileView: View {
     @Environment(AppState.self) var appState
     @Environment(\.dismiss) private var dismiss
     @State private var showLogoutConfirmation = false
+
+    // Live store data
+    @State private var storeDTO: StoreDTO? = nil
+    @State private var staffList: [UserDTO] = []
+    @State private var isLoadingStore = false
+
+    // MARK: - Computed store display values
+
+    private var storeName: String { storeDTO?.name ?? "—" }
+    private var storeLocation: String {
+        let parts = [storeDTO?.city, storeDTO?.country].compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.isEmpty ? "—" : parts.joined(separator: ", ")
+    }
+    private var staffCountTitle: String {
+        let count = staffList.count
+        return count == 0 ? "No Staff" : "\(count) Staff Member\(count == 1 ? "" : "s")"
+    }
+    private var staffBreakdownSubtitle: String {
+        let sales     = staffList.filter { $0.role == "sales_associate" }.count
+        let inventory = staffList.filter { $0.role == "inventory_controller" }.count
+        let service   = staffList.filter { ["service_technician", "aftersales_specialist"].contains($0.role) }.count
+        var parts: [String] = []
+        if sales     > 0 { parts.append("\(sales) Sales") }
+        if inventory > 0 { parts.append("\(inventory) Inventory") }
+        if service   > 0 { parts.append("\(service) Service") }
+        return parts.isEmpty ? "No role breakdown available" : parts.joined(separator: ", ")
+    }
 
     var body: some View {
         NavigationStack {
@@ -27,9 +55,22 @@ struct ManagerProfileView: View {
                         // Store Info
                         sectionHeader("MY BOUTIQUE")
                         VStack(spacing: 0) {
-                            infoRow(icon: "building.2", title: "Fifth Avenue", subtitle: "New York, NY")
-                            infoRow(icon: "person.2", title: "4 Staff Members", subtitle: "2 Sales, 1 Inventory, 1 Service")
-                            infoRow(icon: "clock", title: "Store Hours", subtitle: "10:00 AM – 8:00 PM")
+                            if isLoadingStore {
+                                HStack {
+                                    ProgressView()
+                                        .tint(AppColors.accent)
+                                    Text("Loading store info…")
+                                        .font(AppTypography.caption)
+                                        .foregroundColor(AppColors.textSecondaryDark)
+                                }
+                                .padding(.vertical, AppSpacing.md)
+                            } else {
+                                infoRow(icon: "building.2", title: storeName, subtitle: storeLocation)
+                                infoRow(icon: "person.2", title: staffCountTitle, subtitle: staffBreakdownSubtitle)
+                                if let manager = storeDTO?.managerName, !manager.isEmpty {
+                                    infoRow(icon: "person.badge.key", title: "Manager", subtitle: manager)
+                                }
+                            }
                         }
                         .padding(.horizontal, AppSpacing.sm)
                         .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
@@ -97,6 +138,41 @@ struct ManagerProfileView: View {
             } message: {
                 Text("You will be signed out of the manager console.")
             }
+            .task { await loadStoreData() }
+        }
+    }
+
+    // MARK: - Data Fetching
+
+    @MainActor
+    private func loadStoreData() async {
+        guard let storeId = appState.currentStoreId else { return }
+        isLoadingStore = true
+        defer { isLoadingStore = false }
+
+        let client = SupabaseManager.shared.client
+        async let fetchedStore: StoreDTO = client
+            .from("stores")
+            .select()
+            .eq("id", value: storeId.uuidString.lowercased())
+            .single()
+            .execute()
+            .value
+        async let fetchedStaff: [UserDTO] = client
+            .from("users")
+            .select()
+            .eq("store_id", value: storeId.uuidString.lowercased())
+            .eq("is_active", value: true)
+            .neq("role", value: "boutique_manager")
+            .execute()
+            .value
+
+        do {
+            let (store, staff) = try await (fetchedStore, fetchedStaff)
+            storeDTO = store
+            staffList = staff
+        } catch {
+            print("[ManagerProfileView] Failed to load store data: \(error)")
         }
     }
 
@@ -115,7 +191,7 @@ struct ManagerProfileView: View {
                 Text(appState.currentUserEmail).font(AppTypography.bodyMedium).foregroundColor(AppColors.textSecondaryDark)
                 HStack(spacing: AppSpacing.xs) {
                     Image(systemName: "building.2").font(AppTypography.storeIcon)
-                    Text("BOUTIQUE MANAGER").font(AppTypography.overline).tracking(2)
+                    Text(appState.currentUserRole.rawValue.uppercased()).font(AppTypography.overline).tracking(2)
                 }
                 .foregroundColor(AppColors.secondary).padding(.top, AppSpacing.xxs)
             }

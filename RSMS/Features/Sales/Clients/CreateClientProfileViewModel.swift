@@ -34,14 +34,30 @@ final class CreateClientProfileViewModel {
     var marketingOptIn: Bool = false
     
     // Preferences (Stored in notes JSON)
-    var availableCategories: [String] = ["Jewellery", "Watches", "Handbags", "Ready-to-Wear", "Shoes", "Accessories"]
+    var availableCategories: [String] = []
     var preferredCategories: Set<String> = []
     var preferredBrands: [String] = []
     var communicationPreference: String = "Email"
-    
+
     // UI Helpers for new categories & brands
     var newCategoryText: String = ""
     var newBrandText: String = ""
+
+    /// Fetches live category names from Supabase.
+    func loadCategories() async {
+        do {
+            let categories = try await CatalogService.shared.fetchCategories()
+            let names = categories.filter(\.isActive).map(\.name).sorted()
+            availableCategories = names.isEmpty
+                ? ["Jewellery", "Watches", "Handbags", "Ready-to-Wear", "Shoes", "Accessories"]
+                : names
+        } catch {
+            print("[CreateClientProfileVM] Failed to fetch categories: \(error.localizedDescription)")
+            if availableCategories.isEmpty {
+                availableCategories = ["Jewellery", "Watches", "Handbags", "Ready-to-Wear", "Shoes", "Accessories"]
+            }
+        }
+    }
     
     // Sizes
     var sizeRing: String = ""

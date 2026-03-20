@@ -75,8 +75,8 @@ final class ClientDetailViewModel {
     var editAnniversaries: [ClientAnniversary] = []
     var newBrandText = ""
 
-    // All known categories (default + any custom ones from blob)
-    var availableCategories = ["Jewellery", "Watches", "Handbags", "Ready-to-Wear", "Shoes", "Accessories"]
+    // All known categories (fetched from Supabase + any custom ones from blob)
+    var availableCategories: [String] = []
 
     // MARK: - Convenience
     static let isoFormatter: DateFormatter = {
@@ -126,13 +126,31 @@ final class ClientDetailViewModel {
         async let o = ClientHistoryService.shared.fetchOrders(for: client.id)
         async let a = ClientHistoryService.shared.fetchAppointments(for: client.id)
         async let t = ClientHistoryService.shared.fetchServiceTickets(for: client.id)
+        async let c: Void = loadCategories()
         do {
-            let (ord, apt, tkt) = try await (o, a, t)
+            let (ord, apt, tkt, _) = try await (o, a, t, c)
             orders = ord
             appointments = apt
             serviceTickets = tkt
         } catch {
             print("[ClientDetailVM] loadHistory failed: \(error)")
+        }
+    }
+
+    /// Fetches live category names from Supabase.
+    func loadCategories() async {
+        do {
+            let categories = try await CatalogService.shared.fetchCategories()
+            let names = categories.filter(\.isActive).map(\.name).sorted()
+            if !names.isEmpty {
+                let merged = Set(names).union(availableCategories)
+                availableCategories = Array(merged).sorted()
+            }
+        } catch {
+            print("[ClientDetailVM] Failed to fetch categories: \(error.localizedDescription)")
+        }
+        if availableCategories.isEmpty {
+            availableCategories = ["Jewellery", "Watches", "Handbags", "Ready-to-Wear", "Shoes", "Accessories"]
         }
     }
 

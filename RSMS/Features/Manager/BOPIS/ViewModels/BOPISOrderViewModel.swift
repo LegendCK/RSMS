@@ -129,9 +129,10 @@ final class BOPISOrderViewModel {
 
     func fetch(storeId: UUID?) async {
         guard let storeId else {
-            // No store assigned — show seed data so the UI is never blank
-            if orders.isEmpty { orders = BOPISOrderSeedData.generate() }
+            // No store assigned — show empty state with guidance
+            orders = []
             isOffline = false
+            errorMessage = "No store assigned to your profile. Contact an admin to link your account to a store."
             return
         }
 
@@ -152,8 +153,7 @@ final class BOPISOrderViewModel {
 
             let fetched = rows.compactMap { BOPISOrder.from(dto: $0) }
 
-            // Supabase returned nothing (empty dev DB / demo mode) → use seed data
-            orders = fetched.isEmpty ? BOPISOrderSeedData.generate() : fetched
+            orders = fetched
             isOffline = false
             BOPISOrderCache.save(orders)
         } catch {
@@ -161,13 +161,11 @@ final class BOPISOrderViewModel {
             if !cached.isEmpty {
                 orders = cached
                 isOffline = true
+                errorMessage = "Showing cached data — connect to refresh."
             } else {
-                // Network failed and no cache → still show seed data
-                orders = BOPISOrderSeedData.generate()
+                orders = []
+                errorMessage = "Unable to load orders. Check your connection and pull to refresh."
             }
-            errorMessage = isOffline
-                ? "Showing cached data — connect to refresh."
-                : nil
         }
 
         isLoading = false

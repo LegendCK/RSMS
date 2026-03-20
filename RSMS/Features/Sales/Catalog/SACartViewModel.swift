@@ -80,7 +80,8 @@ final class SACartViewModel {
 
     var discountedSubtotal: Double { max(0, subtotal - discountAmount) }
 
-    let taxRate: Double = 0.08
+    /// Tax rate fetched from Supabase via TaxService (no hardcoded fallback).
+    var taxRate: Double { TaxService.shared.rate() }
     var tax:   Double { discountedSubtotal * taxRate }
     var total: Double { discountedSubtotal + tax }
 
@@ -180,13 +181,14 @@ final class SACartViewModel {
             ) }
             do {
                 try await OrderService.shared.syncOrder(
-                    clientId:    clientId,
-                    cartItems:   payload,
-                    orderNumber: orderNumber,
-                    subtotal:    subtotal,
-                    taxTotal:    tax,
-                    grandTotal:  total,
-                    channel:     "in_store"
+                    clientId:      clientId,
+                    cartItems:     payload,
+                    orderNumber:   orderNumber,
+                    subtotal:      subtotal,
+                    discountTotal: discountAmount,
+                    taxTotal:      tax,
+                    grandTotal:    total,
+                    channel:       "in_store"
                 )
             } catch {
                 print("[SACartVM] Supabase sync failed (order saved locally): \(error.localizedDescription)")
