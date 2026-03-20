@@ -13,6 +13,7 @@ struct SeedData {
 
     static func seedIfNeeded(modelContext: ModelContext) {
         // Users are sourced from Supabase via StaffSyncService — no local seed
+        seedPricingIfNeeded(modelContext: modelContext)
         seedCatalogIfNeeded(modelContext: modelContext)
         seedOrdersIfNeeded(modelContext: modelContext)
         seedClientsIfNeeded(modelContext: modelContext)
@@ -22,6 +23,39 @@ struct SeedData {
         seedEventsIfNeeded(modelContext: modelContext)
         seedNotificationsIfNeeded(modelContext: modelContext)
         try? modelContext.save()
+    }
+
+    // MARK: - Pricing / Tax (India)
+
+    private static func seedPricingIfNeeded(modelContext: ModelContext) {
+        let policyDesc = FetchDescriptor<PricingPolicySettings>()
+        if (try? modelContext.fetchCount(policyDesc)) == 0 {
+            modelContext.insert(
+                PricingPolicySettings(
+                    businessState: "Maharashtra",
+                    currencyCode: "INR",
+                    freeShippingThreshold: 500,
+                    standardShippingFee: 25,
+                    shippingTaxable: false
+                )
+            )
+        }
+
+        let taxDesc = FetchDescriptor<IndianTaxRule>()
+        if (try? modelContext.fetchCount(taxDesc)) == 0 {
+            let defaults = [
+                IndianTaxRule(goodsCategory: "Default", gstPercent: 18, notes: "Fallback GST rule"),
+                IndianTaxRule(goodsCategory: "Jewellery", gstPercent: 3, notes: "Typical GST for gold/diamond jewellery"),
+                IndianTaxRule(goodsCategory: "Watches", gstPercent: 18),
+                IndianTaxRule(goodsCategory: "Couture", gstPercent: 12),
+                IndianTaxRule(goodsCategory: "Leather Goods", gstPercent: 18),
+                IndianTaxRule(goodsCategory: "Accessories", gstPercent: 18),
+                IndianTaxRule(goodsCategory: "Handbags", gstPercent: 18),
+                IndianTaxRule(goodsCategory: "Clothing", gstPercent: 12),
+                IndianTaxRule(goodsCategory: "Shoes", gstPercent: 18),
+            ]
+            defaults.forEach { modelContext.insert($0) }
+        }
     }
 
     // MARK: - Catalog (Categories + Products)

@@ -16,6 +16,7 @@ struct ProductDTO: Codable, Identifiable {
     let name: String
     let brand: String?
     let categoryId: UUID?
+    let collectionId: UUID?
     let taxCategoryId: UUID?
     let description: String?
     let price: Double
@@ -32,6 +33,7 @@ struct ProductDTO: Codable, Identifiable {
         case name
         case brand
         case categoryId    = "category_id"
+        case collectionId  = "collection_id"
         case taxCategoryId = "tax_category_id"
         case description
         case price
@@ -96,12 +98,12 @@ struct ProductDTO: Codable, Identifiable {
         }
     }
 
-    /// Formatted price string in USD.
+    /// Formatted price string in INR.
     var formattedPrice: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: price)) ?? "$\(price)"
+        formatter.currencyCode = "INR"
+        return formatter.string(from: NSNumber(value: price)) ?? "INR \(price)"
     }
 }
 
@@ -112,6 +114,7 @@ struct ProductInsertDTO: Codable {
     let name: String
     let brand: String?
     let categoryId: UUID?
+    let collectionId: UUID?
     let taxCategoryId: UUID?
     let description: String?
     let price: Double
@@ -123,6 +126,7 @@ struct ProductInsertDTO: Codable {
     enum CodingKeys: String, CodingKey {
         case sku, name, brand, description, price
         case categoryId    = "category_id"
+        case collectionId  = "collection_id"
         case taxCategoryId = "tax_category_id"
         case costPrice     = "cost_price"
         case imageUrls     = "image_urls"
@@ -138,6 +142,7 @@ struct ProductUpdateDTO: Codable {
     let name: String
     let brand: String?
     let categoryId: UUID?
+    let collectionId: UUID?
     let description: String?
     let price: Double
     let costPrice: Double?
@@ -146,6 +151,7 @@ struct ProductUpdateDTO: Codable {
     enum CodingKeys: String, CodingKey {
         case sku, name, brand, description, price
         case categoryId = "category_id"
+        case collectionId = "collection_id"
         case costPrice = "cost_price"
         case isActive = "is_active"
     }

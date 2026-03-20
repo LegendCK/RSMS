@@ -2,8 +2,8 @@
 //  SalesTabView.swift
 //  RSMS
 //
-//  Sales Associate — 4 tab bar modules.
-//  Dashboard | Clients | Appointments | Profile
+//  Sales Associate — 5 tab bar modules.
+//  Dashboard | Clients | Catalog | Appointments | Profile
 //
 
 import SwiftUI
@@ -11,43 +11,56 @@ import SwiftData
 
 struct SalesTabView: View {
     @State private var selectedTab = 0
+    @State private var saCart = SACartViewModel()
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            NavigationStack { SalesDashboardView() }
-                .tabItem {
-                    Image(systemName: selectedTab == 0 ? "square.grid.2x2.fill" : "square.grid.2x2")
-                    Text("Dashboard")
-                }
-                .tag(0)
+        ZStack {
+            AppColors.backgroundPrimary
+                .ignoresSafeArea()
 
-            NavigationStack { SalesClientsView() }
-                .tabItem {
-                    Image(systemName: selectedTab == 1 ? "person.2.fill" : "person.2")
-                    Text("Clients")
-                }
-                .tag(1)
+            TabView(selection: $selectedTab) {
+                NavigationStack { SalesDashboardView() }
+                    .tabItem {
+                        Image(systemName: selectedTab == 0 ? "square.grid.2x2.fill" : "square.grid.2x2")
+                        Text("Dashboard")
+                    }
+                    .tag(0)
 
-            NavigationStack { SalesAppointmentsView() }
-                .tabItem {
-                    Image(systemName: selectedTab == 2 ? "calendar.circle.fill" : "calendar.circle")
-                    Text("Schedule")
-                }
-                .tag(2)
+                NavigationStack { SalesClientsView() }
+                    .tabItem {
+                        Image(systemName: selectedTab == 1 ? "person.2.fill" : "person.2")
+                        Text("Clients")
+                    }
+                    .tag(1)
 
-            NavigationStack { SalesProfileView() }
-                .tabItem {
-                    Image(systemName: selectedTab == 3 ? "person.fill" : "person")
-                    Text("Profile")
-                }
-                .tag(3)
+                SACatalogView()
+                    .tabItem {
+                        Image(systemName: selectedTab == 2 ? "tag.fill" : "tag")
+                        Text("Catalog")
+                    }
+                    .tag(2)
+
+                NavigationStack { SalesAppointmentsView() }
+                    .tabItem {
+                        Image(systemName: selectedTab == 3 ? "calendar.circle.fill" : "calendar.circle")
+                        Text("Schedule")
+                    }
+                    .tag(3)
+
+                NavigationStack { SalesProfileView() }
+                    .tabItem {
+                        Image(systemName: selectedTab == 4 ? "person.fill" : "person")
+                        Text("Profile")
+                    }
+                    .tag(4)
+            }
+            .environment(saCart)
+            .tint(AppColors.accent)
+            .tabBarMinimizeBehavior(.onScrollDown)
+            .toolbarColorScheme(.dark, for: .tabBar)
+            .toolbar(removing: .sidebarToggle)
+            .modifier(AppleMusicTabBarModifier())
         }
-        .background(AppColors.backgroundPrimary.ignoresSafeArea())
-        .tint(AppColors.accent)
-        .tabBarMinimizeBehavior(.onScrollDown)
-        .toolbarColorScheme(.dark, for: .tabBar)
-        .toolbar(removing: .sidebarToggle)
-        .modifier(AppleMusicTabBarModifier())
     }
 }
 

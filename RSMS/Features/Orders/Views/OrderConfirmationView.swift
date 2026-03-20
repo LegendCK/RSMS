@@ -7,15 +7,28 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct OrderConfirmationView: View {
     let order: Order
     @Environment(AppState.self) private var appState
+    @Query private var allStores: [StoreLocation]
 
     @State private var checkmarkScale: CGFloat  = 0.1
     @State private var ringProgress: Double      = 0
     @State private var contentOpacity: Double    = 0
     @State private var showItems                 = false
+
+    /// Resolve BOPIS store from boutiqueId or fall back to first active store
+    private var pickupStore: StoreLocation? {
+        if !order.boutiqueId.isEmpty {
+            return allStores.first(where: {
+                $0.code.caseInsensitiveCompare(order.boutiqueId) == .orderedSame ||
+                $0.id.uuidString.lowercased() == order.boutiqueId.lowercased()
+            })
+        }
+        return allStores.first(where: { $0.isOperational })
+    }
 
     // Parse order items from JSON
     private var orderItems: [[String: Any]] {
@@ -347,10 +360,10 @@ struct OrderConfirmationView: View {
                     Text("READY FOR PICKUP")
                         .font(AppTypography.overline).tracking(1)
                         .foregroundColor(AppColors.accent)
-                    Text("Maison Luxe Flagship")
+                    Text(pickupStore?.name ?? "Boutique Store")
                         .font(AppTypography.bodyMedium)
                         .foregroundColor(AppColors.textPrimaryDark)
-                    Text("123 Luxury Avenue, New York, NY 10001")
+                    Text(pickupStore.map { "\($0.addressLine1), \($0.city), \($0.country)" } ?? "Your nearest boutique")
                         .font(AppTypography.bodySmall)
                         .foregroundColor(AppColors.textSecondaryDark)
                 }
@@ -386,8 +399,8 @@ struct OrderConfirmationView: View {
     private func formatCurrency(_ v: Double) -> String {
         let f = NumberFormatter()
         f.numberStyle  = .currency
-        f.currencyCode = "USD"
-        return f.string(from: NSNumber(value: v)) ?? "$\(v)"
+        f.currencyCode = "INR"
+        return f.string(from: NSNumber(value: v)) ?? "INR \(v)"
     }
 
     private func runEntryAnimation() {

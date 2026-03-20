@@ -43,6 +43,7 @@ final class OrderService {
         cartItems: [(productId: UUID, productName: String, quantity: Int, unitPrice: Double)],
         orderNumber: String,
         subtotal: Double,
+        discountTotal: Double,
         taxTotal: Double,
         grandTotal: Double,
         channel: String      // "online" | "bopis" | "in_store" | "ship_from_store"
@@ -59,6 +60,7 @@ final class OrderService {
             let orderNumber: String
             let cartItems: [CartItemPayload]
             let subtotal: Double
+            let discountTotal: Double
             let taxTotal: Double
             let grandTotal: Double
             let channel: String
@@ -86,10 +88,11 @@ final class OrderService {
             orderNumber: orderNumber,
             cartItems: items,
             subtotal: subtotal,
+            discountTotal: discountTotal,
             taxTotal: taxTotal,
             grandTotal: grandTotal,
             channel: channel,
-            currency: "USD"
+            currency: "INR"
         )
 
         print("[OrderService] Calling create-order edge function for order: \(orderNumber)")

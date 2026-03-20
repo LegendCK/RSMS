@@ -32,6 +32,7 @@ struct OrderDTO: Codable, Identifiable {
     let currency: String            // ISO 4217, e.g. "USD"
     let isTaxFree: Bool
     let notes: String?
+    let eventId: UUID?          // nil = not event-tagged
     let createdAt: Date
     let updatedAt: Date
 
@@ -49,6 +50,7 @@ struct OrderDTO: Codable, Identifiable {
         case currency
         case isTaxFree    = "is_tax_free"
         case notes
+        case eventId      = "event_id"
         case createdAt    = "created_at"
         case updatedAt    = "updated_at"
     }
@@ -102,6 +104,7 @@ struct OrderInsertDTO: Codable {
     let currency: String
     let isTaxFree: Bool
     let notes: String?
+    let eventId: UUID?          // optional event tag
 
     enum CodingKeys: String, CodingKey {
         case orderNumber = "order_number"
@@ -112,6 +115,7 @@ struct OrderInsertDTO: Codable {
         case taxTotal    = "tax_total"
         case grandTotal  = "grand_total"
         case isTaxFree   = "is_tax_free"
+        case eventId     = "event_id"
     }
 }
 

@@ -95,6 +95,132 @@ final class CatalogService {
         }
     }
 
+    func updateCategory(
+        id: UUID,
+        name: String,
+        description: String?,
+        isActive: Bool = true
+    ) async throws -> CategoryDTO {
+        let payload = CategoryUpdateDTO(
+            name: name,
+            description: description.flatMap { $0.isEmpty ? nil : $0 },
+            isActive: isActive
+        )
+
+        return try await withRetry(label: "updateCategory") {
+            try await client
+                .from("categories")
+                .update(payload)
+                .eq("id", value: id.uuidString)
+                .select()
+                .single()
+                .execute()
+                .value
+        }
+    }
+
+    /// Soft-delete category by marking it inactive to avoid FK breakages.
+    func deleteCategory(id: UUID) async throws -> CategoryDTO {
+        return try await withRetry(label: "deleteCategory") {
+            let current: CategoryDTO = try await client
+                .from("categories")
+                .select()
+                .eq("id", value: id.uuidString)
+                .single()
+                .execute()
+                .value
+
+            return try await updateCategory(
+                id: id,
+                name: current.name,
+                description: current.description,
+                isActive: false
+            )
+        }
+    }
+
+    // MARK: - Collections
+
+    func fetchCollections() async throws -> [BrandCollectionDTO] {
+        try await withRetry(label: "fetchCollections") {
+            try await client
+                .from("brand_collections")
+                .select()
+                .order("name")
+                .execute()
+                .value
+        }
+    }
+
+    func createCollection(
+        name: String,
+        description: String?,
+        brand: String?,
+        isActive: Bool = true
+    ) async throws -> BrandCollectionDTO {
+        let payload = BrandCollectionInsertDTO(
+            name: name,
+            description: description.flatMap { $0.isEmpty ? nil : $0 },
+            brand: brand.flatMap { $0.isEmpty ? nil : $0 },
+            isActive: isActive
+        )
+        return try await withRetry(label: "createCollection") {
+            try await client
+                .from("brand_collections")
+                .insert(payload)
+                .select()
+                .single()
+                .execute()
+                .value
+        }
+    }
+
+    func updateCollection(
+        id: UUID,
+        name: String,
+        description: String?,
+        brand: String?,
+        isActive: Bool = true
+    ) async throws -> BrandCollectionDTO {
+        let payload = BrandCollectionUpdateDTO(
+            name: name,
+            description: description.flatMap { $0.isEmpty ? nil : $0 },
+            brand: brand.flatMap { $0.isEmpty ? nil : $0 },
+            isActive: isActive
+        )
+        return try await withRetry(label: "updateCollection") {
+            try await client
+                .from("brand_collections")
+                .update(payload)
+                .eq("id", value: id.uuidString)
+                .select()
+                .single()
+                .execute()
+                .value
+        }
+    }
+
+    /// Soft-delete collection by marking inactive.
+    func deleteCollection(id: UUID) async throws -> BrandCollectionDTO {
+        return try await withRetry(label: "deleteCollection") {
+            let current: BrandCollectionDTO = try await client
+                .from("brand_collections")
+                .select()
+                .eq("id", value: id.uuidString)
+                .single()
+                .execute()
+                .value
+
+            return try await updateCollection(
+                id: id,
+                name: current.name,
+                description: current.description,
+                brand: current.brand,
+                isActive: false
+            )
+        }
+    }
+
     // MARK: - Products
 
     func fetchProducts() async throws -> [ProductDTO] {
@@ -113,6 +239,7 @@ final class CatalogService {
         name: String,
         brand: String?,
         categoryId: UUID?,
+        collectionId: UUID?,
         price: Double,
         costPrice: Double?,
         description: String?,
@@ -143,6 +270,7 @@ final class CatalogService {
             name: name,
             brand: brand.flatMap { $0.isEmpty ? nil : $0 },
             categoryId: categoryId,
+            collectionId: collectionId,
             taxCategoryId: nil,
             description: description.flatMap { $0.isEmpty ? nil : $0 },
             price: price,
@@ -167,7 +295,7 @@ final class CatalogService {
     /// Performs a strict bulk insert of product catalog definitions.
     /// Will fail explicitly if any SKU violates the database UNIQUE constraint.
     func createProductsBulk(products: [ProductInsertDTO]) async throws {
-        try await withRetry(label: "createProductsBulk") {
+        _ = try await withRetry(label: "createProductsBulk") {
             try await client
                 .from("products")
                 .insert(products)
@@ -181,6 +309,7 @@ final class CatalogService {
         name: String,
         brand: String?,
         categoryId: UUID?,
+        collectionId: UUID?,
         price: Double,
         costPrice: Double?,
         description: String?,
@@ -192,6 +321,7 @@ final class CatalogService {
             name: name,
             brand: brand.flatMap { $0.isEmpty ? nil : $0 },
             categoryId: categoryId,
+            collectionId: collectionId,
             description: description.flatMap { $0.isEmpty ? nil : $0 },
             price: price,
             costPrice: costPrice,

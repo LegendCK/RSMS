@@ -10,11 +10,27 @@ import SwiftUI
 import SwiftData
 import Supabase
 
+enum ProductDetailMode {
+    case storefront
+    case adminCatalog
+}
+
 struct ProductDetailView: View {
     @Bindable var product: Product
+    let mode: ProductDetailMode
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Query private var allCartItems: [CartItem]
+    @Query(sort: \Category.displayOrder) private var allCategories: [Category]
+    @Query private var allReservations: [ReservationItem]
+    
+    private var hasActiveReservation: Bool {
+        allReservations.contains {
+            $0.customerEmail == appState.currentUserEmail &&
+            $0.productId == product.id &&
+            !$0.isExpired
+        }
+    }
 
     // Image gallery
     @State private var currentImageIndex = 0
@@ -23,6 +39,7 @@ struct ProductDetailView: View {
     // Bag/buy state
     @State private var addedToBag  = false
     @State private var showBuyNow  = false
+    @State private var showReserveSheet = false
     @State private var navigateToCart = false
 
     // Variant selection
@@ -42,6 +59,7 @@ struct ProductDetailView: View {
     @State private var selectedBarcodeItem: ProductItemDTO?
     @State private var isExportingAll = false
     @State private var exportAllPDFURL: URL?
+    @State private var showAdminManageSheet = false
 
     // MARK: - Variant data
 
@@ -87,13 +105,15 @@ struct ProductDetailView: View {
     }
 
     private var stockLabel: String {
-        variantStockCount > 5  ? "In Stock" :
+        if hasActiveReservation { return "Reserved" }
+        return variantStockCount > 5  ? "In Stock" :
         variantStockCount > 0  ? "Only \(variantStockCount) left" :
                                  "Out of Stock"
     }
 
     private var stockColor: Color {
-        variantStockCount > 5  ? AppColors.success :
+        if hasActiveReservation { return AppColors.accent }
+        return variantStockCount > 5  ? AppColors.success :
         variantStockCount > 0  ? AppColors.warning :
                                  AppColors.error
     }
@@ -110,6 +130,15 @@ struct ProductDetailView: View {
         let list = product.imageList
         if !list.isEmpty { return list }
         return [product.imageName]
+    }
+
+    private var isAdminMode: Bool {
+        mode == .adminCatalog
+    }
+
+    init(product: Product, mode: ProductDetailMode = .storefront) {
+        self.product = product
+        self.mode = mode
     }
 
     // MARK: - Body
@@ -129,8 +158,10 @@ struct ProductDetailView: View {
 
                         headerSection
                         priceStockRow
-                        colorPickerSection
-                        if needsSizeSelector { sizePickerSection }
+                        if !isAdminMode {
+                            colorPickerSection
+                            if needsSizeSelector { sizePickerSection }
+                        }
 
                         Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
                         descriptionSection
@@ -160,27 +191,44 @@ struct ProductDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 16) {
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3)) {
-                            product.isWishlisted.toggle()
-                            try? modelContext.save()
+                if isAdminMode {
+                    Button(action: { showAdminManageSheet = true }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "slider.horizontal.3")
+                            Text("Manage")
+                                .font(AppTypography.caption)
                         }
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    }) {
-                        Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
-                            .font(.system(size: 16, weight: .light))
-                            .foregroundColor(product.isWishlisted ? AppColors.accent : .black)
+                        .foregroundColor(AppColors.accent)
                     }
-                    CartShortcutButton()
+                } else {
+                    HStack(spacing: 16) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3)) {
+                                product.isWishlisted.toggle()
+                                try? modelContext.save()
+                            }
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }) {
+                            Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
+                                .font(.system(size: 16, weight: .light))
+                                .foregroundColor(product.isWishlisted ? AppColors.accent : .black)
+                        }
+                        CartShortcutButton()
+                    }
                 }
             }
         }
         .safeAreaInset(edge: .bottom) {
-            bottomActionBar
+            if isAdminMode {
+                adminManageBar
+            } else {
+                bottomActionBar
+            }
         }
         .navigationDestination(isPresented: $navigateToCart) {
-            CartView()
+            if !isAdminMode {
+                CartView()
+            }
         }
         .fullScreenCover(isPresented: $showGallery) {
             ProductImageGalleryView(
@@ -189,15 +237,32 @@ struct ProductDetailView: View {
             )
         }
         .sheet(isPresented: $showBuyNow) {
-            BuyNowSheetView(
+            if !isAdminMode {
+                BuyNowSheetView(
+                    product: product,
+                    selectedColor: colorVariants[selectedColorIndex],
+                    selectedSize: selectedSizeIndex.map { sizeVariants[$0] }
+                )
+            }
+        }
+        .sheet(isPresented: $showReserveSheet) {
+            ReserveSheetView(
                 product: product,
                 selectedColor: colorVariants[selectedColorIndex],
                 selectedSize: selectedSizeIndex.map { sizeVariants[$0] }
             )
+            .presentationDetents([.fraction(0.85), .large])
         }
         .sheet(isPresented: $showGuestGate) {
-            GuestAuthGateView(pendingAction: guestGateAction)
-                .presentationDetents([.large])
+            if !isAdminMode {
+                GuestAuthGateView(pendingAction: guestGateAction)
+                    .presentationDetents([.large])
+            }
+        }
+        .sheet(isPresented: $showAdminManageSheet) {
+            if isAdminMode {
+                AdminProductManageSheet(product: product, categories: allCategories)
+            }
         }
         .sheet(item: $selectedBarcodeItem) { item in
             BarcodeCardView(item: item, productName: product.name, brand: product.brand)
@@ -619,6 +684,30 @@ struct ProductDetailView: View {
 
     // MARK: - Bottom Action Bar
 
+    private var adminManageBar: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Button(action: { showAdminManageSheet = true }) {
+                    Label("Manage Product", systemImage: "slider.horizontal.3")
+                        .font(AppTypography.buttonPrimary)
+                        .foregroundColor(AppColors.textPrimaryLight)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(AppColors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 12)
+        }
+        .background(
+            Color.white
+                .shadow(color: .black.opacity(0.06), radius: 12, y: -4)
+                .ignoresSafeArea(edges: .bottom)
+        )
+    }
+
     private var bottomActionBar: some View {
         VStack(spacing: 0) {
             // Stock + cart indicator
@@ -646,7 +735,7 @@ struct ProductDetailView: View {
                 // Add to Bag — primary maroon
                 Button(action: { handleAddToBag() }) {
                     Text(
-                        variantStockCount > 0
+                        (variantStockCount > 0 || hasActiveReservation)
                         ? (addedToBag ? "Added" : (cartItemQuantity > 0 ? "Add Another" : "Add to Bag"))
                         : "Out of Stock"
                     )
@@ -659,25 +748,39 @@ struct ProductDetailView: View {
                     .animation(.spring(response: 0.3), value: addedToBag)
                     .scaleEffect(bagIconScale)
                 }
-                .opacity(variantStockCount > 0 ? 1.0 : 0.4)
-                .disabled(variantStockCount == 0 && !appState.isGuest)
+                .opacity((variantStockCount > 0 || hasActiveReservation) ? 1.0 : 0.4)
+                .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
 
                 // Buy Now — maroon outlined
                 Button(action: { handleBuyNow() }) {
-                    Text("Buy Now")
+                    Text(hasActiveReservation ? "Buy Reserved" : "Buy Now")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(variantStockCount > 0 ? AppColors.accent : AppColors.accent.opacity(0.3))
+                        .foregroundColor((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3))
                         .frame(width: 118)
                         .frame(height: 52)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(variantStockCount > 0 ? AppColors.accent : AppColors.accent.opacity(0.3), lineWidth: 1.5)
+                                .strokeBorder((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3), lineWidth: 1.5)
                         )
                 }
-                .disabled(variantStockCount == 0 && !appState.isGuest)
+                .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+            
+            Button(action: { handleReserve() }) {
+                Text(hasActiveReservation ? "Already Reserved" : "Reserve in Boutique")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(Color.black.opacity(0.04))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
+            .disabled((variantStockCount == 0 || hasActiveReservation) && !appState.isGuest)
+            .opacity((variantStockCount > 0 && !hasActiveReservation) ? 1.0 : 0.4)
         }
         .background(
             Color.white
@@ -759,6 +862,18 @@ struct ProductDetailView: View {
         showBuyNow = true
     }
 
+    private func handleReserve() {
+        guard !hasActiveReservation else { return }
+        
+        if appState.isGuest {
+            guestGateAction = "Reserve"
+            showGuestGate   = true
+            return
+        }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        showReserveSheet = true
+    }
+
     private func addProductToCart() {
         let email = appState.currentUserEmail
         if let existing = allCartItems.first(where: { $0.customerEmail == email && $0.productId == product.id }) {
@@ -827,6 +942,202 @@ struct ProductDetailView: View {
         if let output = url {
             exportAllPDFURL = output
             isExportingAll = true
+        }
+    }
+}
+
+private struct AdminProductManageSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    let product: Product
+    let categories: [Category]
+
+    @State private var name: String = ""
+    @State private var brand: String = ""
+    @State private var priceText: String = ""
+    @State private var stockText: String = ""
+    @State private var descriptionText: String = ""
+    @State private var selectedCategoryName: String = ""
+    @State private var selectedCollectionId: UUID?
+    @State private var isLimitedEdition = false
+    @State private var isFeatured = false
+    @State private var remoteCategories: [CategoryDTO] = []
+    @State private var remoteCollections: [BrandCollectionDTO] = []
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppSpacing.lg) {
+                    LuxuryTextField(placeholder: "Product Name", text: $name)
+                    LuxuryTextField(placeholder: "Brand", text: $brand)
+                    LuxuryTextField(placeholder: "Price (INR)", text: $priceText)
+                        .keyboardType(.decimalPad)
+                    LuxuryTextField(placeholder: "Stock Count", text: $stockText)
+                        .keyboardType(.numberPad)
+
+                    Menu {
+                        ForEach(categories) { category in
+                            Button(category.name) { selectedCategoryName = category.name }
+                        }
+                    } label: {
+                        HStack {
+                            Text(selectedCategoryName.isEmpty ? "Select Category" : selectedCategoryName)
+                                .foregroundColor(selectedCategoryName.isEmpty ? AppColors.neutral500 : AppColors.textPrimaryDark)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .foregroundColor(AppColors.neutral500)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(AppColors.backgroundSecondary)
+                        .cornerRadius(AppSpacing.radiusMedium)
+                    }
+
+                    Menu {
+                        Button("No Collection") { selectedCollectionId = nil }
+                        Divider()
+                        ForEach(remoteCollections.filter(\.isActive)) { collection in
+                            Button(collection.name) { selectedCollectionId = collection.id }
+                        }
+                    } label: {
+                        HStack {
+                            Text(selectedCollectionName)
+                                .foregroundColor(selectedCollectionId == nil ? AppColors.neutral500 : AppColors.textPrimaryDark)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .foregroundColor(AppColors.neutral500)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(AppColors.backgroundSecondary)
+                        .cornerRadius(AppSpacing.radiusMedium)
+                    }
+
+                    TextField("Description", text: $descriptionText, axis: .vertical)
+                        .lineLimit(4...8)
+                        .padding(AppSpacing.sm)
+                        .background(AppColors.backgroundSecondary)
+                        .cornerRadius(AppSpacing.radiusMedium)
+
+                    Toggle("Limited Edition", isOn: $isLimitedEdition)
+                        .tint(AppColors.accent)
+                    Toggle("Featured", isOn: $isFeatured)
+                        .tint(AppColors.accent)
+
+                    Button(action: saveChanges) {
+                        Text("Save Changes")
+                            .font(AppTypography.buttonPrimary)
+                            .foregroundColor(AppColors.textPrimaryLight)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, AppSpacing.md)
+                            .background(AppColors.accent)
+                            .cornerRadius(AppSpacing.radiusMedium)
+                    }
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.error)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.md)
+                .padding(.bottom, AppSpacing.xxxl)
+            }
+            .background(AppColors.backgroundPrimary.ignoresSafeArea())
+            .navigationTitle("Manage Product")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+            .onAppear {
+                name = product.name
+                brand = product.brand
+                priceText = String(format: "%.2f", product.price)
+                stockText = "\(product.stockCount)"
+                descriptionText = product.productDescription
+                selectedCategoryName = product.categoryName
+                isLimitedEdition = product.isLimitedEdition
+                isFeatured = product.isFeatured
+            }
+            .task { await loadRemoteMetadata() }
+        }
+    }
+
+    private func saveChanges() {
+        let parsedPrice = Double(priceText.replacingOccurrences(of: ",", with: ".")) ?? product.price
+        let parsedStock = Int(stockText) ?? product.stockCount
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBrand = brand.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDescription = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        Task {
+            do {
+                _ = try await CatalogService.shared.updateProduct(
+                    id: product.id,
+                    sku: product.sku,
+                    name: trimmedName,
+                    brand: trimmedBrand,
+                    categoryId: mappedCategoryId,
+                    collectionId: selectedCollectionId,
+                    price: parsedPrice,
+                    costPrice: nil,
+                    description: trimmedDescription,
+                    barcode: nil,
+                    isActive: true
+                )
+
+                product.name = trimmedName
+                product.brand = trimmedBrand
+                product.price = parsedPrice
+                product.stockCount = max(parsedStock, 0)
+                product.productDescription = trimmedDescription
+                if !selectedCategoryName.isEmpty {
+                    product.categoryName = selectedCategoryName
+                }
+                product.productTypeName = selectedCollectionName == "No Collection" ? "" : selectedCollectionName
+                product.isLimitedEdition = isLimitedEdition
+                product.isFeatured = isFeatured
+
+                try? modelContext.save()
+                dismiss()
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Sync failed: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    private var mappedCategoryId: UUID? {
+        remoteCategories.first(where: { $0.name == selectedCategoryName })?.id
+    }
+
+    private var selectedCollectionName: String {
+        guard let selectedCollectionId else { return "No Collection" }
+        return remoteCollections.first(where: { $0.id == selectedCollectionId })?.name ?? "No Collection"
+    }
+
+    private func loadRemoteMetadata() async {
+        do {
+            async let categories = CatalogService.shared.fetchCategories()
+            async let collections = CatalogService.shared.fetchCollections()
+            let (loadedCategories, loadedCollections) = try await (categories, collections)
+            remoteCategories = loadedCategories
+            remoteCollections = loadedCollections
+            if let matchedCollection = loadedCollections.first(where: { $0.name == product.productTypeName }) {
+                selectedCollectionId = matchedCollection.id
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = "Unable to load remote catalog metadata."
+            }
         }
     }
 }

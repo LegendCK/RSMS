@@ -108,6 +108,7 @@ struct MainTabView: View {
         do {
             syncErrorMessage = nil
             try await CustomerCatalogSyncService.shared.refreshLocalCatalog(modelContext: modelContext)
+            try? await PromotionSyncService.shared.refreshLocalPromotions(modelContext: modelContext)
             isPreparingCatalog = false
         } catch {
             // Safety: If sync fails but we have cached/seeded categories, allow the app to open.

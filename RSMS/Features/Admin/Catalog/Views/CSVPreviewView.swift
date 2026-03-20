@@ -165,6 +165,7 @@ struct CSVPreviewView: View {
                 name: row.name,
                 brand: row.brand.isEmpty ? nil : row.brand,
                 categoryId: nil, // Default uncategorized for CSV initially
+                collectionId: nil,
                 taxCategoryId: nil,
                 description: row.description.isEmpty ? nil : row.description,
                 price: row.parsedPrice,
