@@ -13,8 +13,10 @@ struct SACatalogProductDetailSheet: View {
     let product: ProductDTO
     let vm: SACatalogViewModel
 
+    @Environment(SACartViewModel.self) private var cart
     @Environment(\.dismiss) private var dismiss
     @State private var currentImageIndex = 0
+    @State private var addedToCart = false
 
     // Derived
     private var resolvedURLs: [URL] { product.resolvedImageURLs }
@@ -178,7 +180,44 @@ struct SACatalogProductDetailSheet: View {
             // Inventory detail card
             stockCard
                 .padding(.horizontal, AppSpacing.screenHorizontal)
+
+            // Add to Sale button
+            addToSaleButton
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.bottom, AppSpacing.xxxl)
         }
+    }
+
+    // MARK: - Add to Sale Button
+
+    private var addToSaleButton: some View {
+        Button {
+            guard stockQty > 0 else { return }
+            cart.addItem(product)
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                addedToCart = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                withAnimation { addedToCart = false }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: addedToCart ? "checkmark" : "cart.badge.plus")
+                    .font(.system(size: 16, weight: .semibold))
+                Text(addedToCart ? "Added to Cart" : (stockQty == 0 ? "Out of Stock" : "Add to Sale"))
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                addedToCart ? AppColors.success :
+                (stockQty == 0 ? AppColors.neutral500 : AppColors.accent)
+            )
+            .clipShape(Capsule())
+            .animation(.easeInOut(duration: 0.2), value: addedToCart)
+        }
+        .disabled(stockQty == 0)
     }
 
     // MARK: - Specs Grid
