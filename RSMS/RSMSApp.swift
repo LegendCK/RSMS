@@ -32,6 +32,7 @@ struct RSMSApp: App {
             InventoryDiscrepancy.self,
             StoreLocation.self,
             StaffShift.self,
+            ReservationItem.self,
             PricingPolicySettings.self,
             IndianTaxRule.self,
             RegionalPriceRule.self,

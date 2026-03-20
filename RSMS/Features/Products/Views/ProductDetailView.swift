@@ -22,6 +22,15 @@ struct ProductDetailView: View {
     @Environment(AppState.self) private var appState
     @Query private var allCartItems: [CartItem]
     @Query(sort: \Category.displayOrder) private var allCategories: [Category]
+    @Query private var allReservations: [ReservationItem]
+    
+    private var hasActiveReservation: Bool {
+        allReservations.contains {
+            $0.customerEmail == appState.currentUserEmail &&
+            $0.productId == product.id &&
+            !$0.isExpired
+        }
+    }
 
     // Image gallery
     @State private var currentImageIndex = 0
@@ -30,6 +39,7 @@ struct ProductDetailView: View {
     // Bag/buy state
     @State private var addedToBag  = false
     @State private var showBuyNow  = false
+    @State private var showReserveSheet = false
     @State private var navigateToCart = false
 
     // Variant selection
@@ -87,13 +97,15 @@ struct ProductDetailView: View {
     }
 
     private var stockLabel: String {
-        variantStockCount > 5  ? "In Stock" :
+        if hasActiveReservation { return "Reserved" }
+        return variantStockCount > 5  ? "In Stock" :
         variantStockCount > 0  ? "Only \(variantStockCount) left" :
                                  "Out of Stock"
     }
 
     private var stockColor: Color {
-        variantStockCount > 5  ? AppColors.success :
+        if hasActiveReservation { return AppColors.accent }
+        return variantStockCount > 5  ? AppColors.success :
         variantStockCount > 0  ? AppColors.warning :
                                  AppColors.error
     }
@@ -222,6 +234,14 @@ struct ProductDetailView: View {
                     selectedSize: selectedSizeIndex.map { sizeVariants[$0] }
                 )
             }
+        }
+        .sheet(isPresented: $showReserveSheet) {
+            ReserveSheetView(
+                product: product,
+                selectedColor: colorVariants[selectedColorIndex],
+                selectedSize: selectedSizeIndex.map { sizeVariants[$0] }
+            )
+            .presentationDetents([.fraction(0.85), .large])
         }
         .sheet(isPresented: $showGuestGate) {
             if !isAdminMode {
@@ -648,7 +668,7 @@ struct ProductDetailView: View {
                 // Add to Bag — primary maroon
                 Button(action: { handleAddToBag() }) {
                     Text(
-                        variantStockCount > 0
+                        (variantStockCount > 0 || hasActiveReservation)
                         ? (addedToBag ? "Added" : (cartItemQuantity > 0 ? "Add Another" : "Add to Bag"))
                         : "Out of Stock"
                     )
@@ -661,25 +681,39 @@ struct ProductDetailView: View {
                     .animation(.spring(response: 0.3), value: addedToBag)
                     .scaleEffect(bagIconScale)
                 }
-                .opacity(variantStockCount > 0 ? 1.0 : 0.4)
-                .disabled(variantStockCount == 0 && !appState.isGuest)
+                .opacity((variantStockCount > 0 || hasActiveReservation) ? 1.0 : 0.4)
+                .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
 
                 // Buy Now — maroon outlined
                 Button(action: { handleBuyNow() }) {
-                    Text("Buy Now")
+                    Text(hasActiveReservation ? "Buy Reserved" : "Buy Now")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(variantStockCount > 0 ? AppColors.accent : AppColors.accent.opacity(0.3))
+                        .foregroundColor((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3))
                         .frame(width: 118)
                         .frame(height: 52)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(variantStockCount > 0 ? AppColors.accent : AppColors.accent.opacity(0.3), lineWidth: 1.5)
+                                .strokeBorder((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3), lineWidth: 1.5)
                         )
                 }
-                .disabled(variantStockCount == 0 && !appState.isGuest)
+                .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+            
+            Button(action: { handleReserve() }) {
+                Text(hasActiveReservation ? "Already Reserved" : "Reserve in Boutique")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(Color.black.opacity(0.04))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
+            .disabled((variantStockCount == 0 || hasActiveReservation) && !appState.isGuest)
+            .opacity((variantStockCount > 0 && !hasActiveReservation) ? 1.0 : 0.4)
         }
         .background(
             Color.white
@@ -759,6 +793,18 @@ struct ProductDetailView: View {
         }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         showBuyNow = true
+    }
+
+    private func handleReserve() {
+        guard !hasActiveReservation else { return }
+        
+        if appState.isGuest {
+            guestGateAction = "Reserve"
+            showGuestGate   = true
+            return
+        }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        showReserveSheet = true
     }
 
     private func addProductToCart() {
