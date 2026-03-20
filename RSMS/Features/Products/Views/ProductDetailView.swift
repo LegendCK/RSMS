@@ -56,6 +56,9 @@ struct ProductDetailView: View {
     // Inventory Items
     @State private var remoteItems: [ProductItemDTO] = []
     @State private var isFetchingItems = false
+    @State private var selectedBarcodeItem: ProductItemDTO?
+    @State private var isExportingAll = false
+    @State private var exportAllPDFURL: URL?
     @State private var showAdminManageSheet = false
 
     // MARK: - Variant data
@@ -81,6 +84,11 @@ struct ProductDetailView: View {
     private var needsSizeSelector: Bool {
         let sizeable = ["clothing", "shoes", "footwear", "ready-to-wear", "apparel"]
         return sizeable.contains { product.categoryName.lowercased().contains($0) }
+    }
+
+    private var canViewInventory: Bool {
+        let role = appState.currentUserRole
+        return role == .inventoryController || role == .boutiqueManager || role == .corporateAdmin
     }
 
     private var variantStockCount: Int {
@@ -165,8 +173,10 @@ struct ProductDetailView: View {
                             specificationsSection
                         }
 
-                        Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
-                        inventorySection
+                        if canViewInventory {
+                            Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
+                            inventorySection
+                        }
 
                         Spacer().frame(height: 28)
                     }
@@ -252,6 +262,14 @@ struct ProductDetailView: View {
         .sheet(isPresented: $showAdminManageSheet) {
             if isAdminMode {
                 AdminProductManageSheet(product: product, categories: allCategories)
+            }
+        }
+        .sheet(item: $selectedBarcodeItem) { item in
+            BarcodeCardView(item: item, productName: product.name, brand: product.brand)
+        }
+        .sheet(isPresented: $isExportingAll, onDismiss: { exportAllPDFURL = nil }) {
+            if let url = exportAllPDFURL {
+                ShareSheet(activityItems: [url])
             }
         }
     }
@@ -578,40 +596,89 @@ struct ProductDetailView: View {
 
     private var inventorySection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("INVENTORY ITEMS")
-                .font(AppTypography.overline)
-                .tracking(2)
-                .foregroundColor(AppColors.accent)
+            HStack {
+                Text("INVENTORY ITEMS")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+                Spacer()
+                if !remoteItems.isEmpty {
+                    Button("Export All Barcodes") {
+                        handleExportAll()
+                    }
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.accent)
+                }
+            }
 
             if isFetchingItems {
                 ProgressView().tint(AppColors.accent)
             } else if remoteItems.isEmpty {
-                Text("No items in stock.")
-                    .font(AppTypography.bodySmall)
+                Text("No inventory yet. Add stock.")
+                    .font(AppTypography.bodyMedium)
                     .foregroundColor(AppColors.textSecondaryDark)
+                    .padding(.top, 4)
             } else {
-                ForEach(remoteItems) { item in
-                    HStack {
-                        Image(systemName: "barcode")
-                            .font(.system(size: 12))
-                            .foregroundColor(AppColors.textSecondaryDark)
-                        Text(item.barcode)
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundColor(AppColors.textPrimaryDark)
-                        Spacer()
-                        Text(item.itemStatus.displayName)
-                            .font(AppTypography.nano)
-                            .foregroundColor(item.itemStatus == .inStock ? AppColors.success : AppColors.textSecondaryDark)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                (item.itemStatus == .inStock ? AppColors.success : AppColors.textSecondaryDark).opacity(0.12)
-                            )
-                            .cornerRadius(4)
+                LazyVStack(spacing: AppSpacing.sm) {
+                    ForEach(remoteItems) { item in
+                        Button(action: {
+                            selectedBarcodeItem = item
+                        }) {
+                            inventoryRow(for: item)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .padding(.vertical, 4)
                 }
+                .padding(.top, 4)
             }
+        }
+    }
+
+    private func inventoryRow(for item: ProductItemDTO) -> some View {
+        HStack(spacing: AppSpacing.sm) {
+            Image(systemName: "barcode")
+                .font(.system(size: 14))
+                .foregroundColor(AppColors.accent.opacity(0.7))
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.barcode)
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundColor(AppColors.textPrimaryDark)
+                
+                Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(AppTypography.nano)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+            
+            Spacer()
+            
+            Text(item.itemStatus.displayName.uppercased())
+                .font(AppTypography.nano)
+                .tracking(1)
+                .foregroundColor(statusColor(for: item.itemStatus))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(statusColor(for: item.itemStatus).opacity(0.12))
+                .cornerRadius(4)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                        .stroke(Color.black.opacity(0.04), lineWidth: 1)
+                )
+        )
+    }
+
+    private func statusColor(for status: ProductItemStatus) -> Color {
+        switch status {
+        case .inStock: return AppColors.success
+        case .sold: return AppColors.error
+        case .reserved: return AppColors.warning
+        case .damaged: return AppColors.error
+        case .returned: return Color.purple
         }
     }
 
@@ -856,12 +923,25 @@ struct ProductDetailView: View {
                 .select("id, product_id, barcode, serial_number, status, store_id, created_at, products(*)")
                 .eq("product_id", value: product.id.uuidString)
                 .order("created_at", ascending: false)
-                .limit(20)
+                .limit(50)
                 .execute()
                 .value
             remoteItems = items
         } catch {
             print("[ProductDetailView] Failed to fetch items:", error)
+        }
+    }
+    
+    private func handleExportAll() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        let url = BarcodePDFService.shared.generatePDF(
+            items: remoteItems,
+            productName: product.name,
+            brand: product.brand
+        )
+        if let output = url {
+            exportAllPDFURL = output
+            isExportingAll = true
         }
     }
 }

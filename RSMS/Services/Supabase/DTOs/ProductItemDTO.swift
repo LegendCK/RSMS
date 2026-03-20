@@ -11,12 +11,12 @@ import Foundation
 
 // MARK: - Enums
 
-/// Status of a physical product item throughout its lifecycle.
 enum ProductItemStatus: String, Codable, CaseIterable {
     case inStock  = "IN_STOCK"
     case sold     = "SOLD"
     case reserved = "RESERVED"
     case damaged  = "DAMAGED"
+    case returned = "RETURNED"
 
     var displayName: String {
         switch self {
@@ -24,21 +24,23 @@ enum ProductItemStatus: String, Codable, CaseIterable {
         case .sold:     return "Sold"
         case .reserved: return "Reserved"
         case .damaged:  return "Damaged"
+        case .returned: return "Returned"
         }
     }
 }
 
-/// Type of a scanning session.
 enum ScanType: String, Codable, CaseIterable {
     case `in`  = "IN"
     case out   = "OUT"
     case audit = "AUDIT"
+    case `return` = "RETURN"
 
     var displayName: String {
         switch self {
         case .in:    return "Stock In"
         case .out:   return "Stock Out"
         case .audit: return "Audit"
+        case .return: return "Return"
         }
     }
 }

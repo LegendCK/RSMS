@@ -13,52 +13,48 @@ struct AdminTabView: View {
     @State private var selectedTab = 0
 
     var body: some View {
-        ZStack {
-            AppColors.backgroundPrimary
-                .ignoresSafeArea()
+        TabView(selection: $selectedTab) {
+            NavigationStack { AdminDashboardView() }
+                .tabItem {
+                    Image(systemName: selectedTab == 0 ? "square.grid.2x2.fill" : "square.grid.2x2")
+                    Text("Dashboard")
+                }
+                .tag(0)
 
-            TabView(selection: $selectedTab) {
-                NavigationStack { AdminDashboardView() }
-                    .tabItem {
-                        Image(systemName: selectedTab == 0 ? "square.grid.2x2.fill" : "square.grid.2x2")
-                        Text("Dashboard")
-                    }
-                    .tag(0)
+            NavigationStack { CatalogView() }
+                .tabItem {
+                    Image(systemName: selectedTab == 1 ? "tag.fill" : "tag")
+                    Text("Catalog")
+                }
+                .tag(1)
 
-                NavigationStack { CatalogView() }
-                    .tabItem {
-                        Image(systemName: selectedTab == 1 ? "tag.fill" : "tag")
-                        Text("Catalog")
-                    }
-                    .tag(1)
+            NavigationStack { OperationsView() }
+                .tabItem {
+                    Image(systemName: selectedTab == 2 ? "shippingbox.fill" : "shippingbox")
+                    Text("Operations")
+                }
+                .tag(2)
 
-                NavigationStack { OperationsView() }
-                    .tabItem {
-                        Image(systemName: selectedTab == 2 ? "shippingbox.fill" : "shippingbox")
-                        Text("Operations")
-                    }
-                    .tag(2)
+            NavigationStack { OrganizationView() }
+                .tabItem {
+                    Image(systemName: selectedTab == 3 ? "building.2.fill" : "building.2")
+                    Text("Organization")
+                }
+                .tag(3)
 
-                NavigationStack { OrganizationView() }
-                    .tabItem {
-                        Image(systemName: selectedTab == 3 ? "building.2.fill" : "building.2")
-                        Text("Organization")
-                    }
-                    .tag(3)
-
-                NavigationStack { AdminProfileView() }
-                    .tabItem {
-                        Image(systemName: selectedTab == 4 ? "person.fill" : "person")
-                        Text("Profile")
-                    }
-                    .tag(4)
-            }
-            .tint(AppColors.accent)
-            .tabBarMinimizeBehavior(.onScrollDown)
-            .toolbarColorScheme(.dark, for: .tabBar)
-            .toolbar(removing: .sidebarToggle)
-            .modifier(AppleMusicTabBarModifier())
+            NavigationStack { AdminProfileView() }
+                .tabItem {
+                    Image(systemName: selectedTab == 4 ? "person.fill" : "person")
+                    Text("Profile")
+                }
+                .tag(4)
         }
+        .background(AppColors.backgroundPrimary.ignoresSafeArea())
+        .tint(AppColors.accent)
+        .tabBarMinimizeBehavior(.onScrollDown)
+        .toolbarColorScheme(.dark, for: .tabBar)
+        .toolbar(removing: .sidebarToggle)
+        .modifier(AppleMusicTabBarModifier())
     }
 }
 

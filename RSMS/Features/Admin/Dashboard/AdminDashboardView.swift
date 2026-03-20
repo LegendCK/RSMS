@@ -10,6 +10,32 @@ import SwiftUI
 import SwiftData
 import Supabase
 
+enum ActiveAdminSheet: Identifiable {
+    case profile
+    case addSKU
+    case addStaff
+    case addStore
+    case addPromotion
+    case export
+    case salesInsights
+    case inventoryInsights
+    case shareFile(URL)
+
+    var id: String {
+        switch self {
+        case .profile: return "profile"
+        case .addSKU: return "addSKU"
+        case .addStaff: return "addStaff"
+        case .addStore: return "addStore"
+        case .addPromotion: return "addPromotion"
+        case .export: return "export"
+        case .salesInsights: return "salesInsights"
+        case .inventoryInsights: return "inventoryInsights"
+        case .shareFile(let url): return "shareFile-\(url.absoluteString)"
+        }
+    }
+}
+
 // MARK: - Main Dashboard View
 
 struct AdminDashboardView: View {
@@ -23,24 +49,23 @@ struct AdminDashboardView: View {
     @Query private var allAppointments: [Appointment]
     @Query private var allClients: [ClientProfile]
     @Query private var allAfterSalesTickets: [AfterSalesTicket]
-    @State private var showProfile = false
+    @State private var activeSheet: ActiveAdminSheet?
 
-    @State private var showAddSKU = false
-    @State private var showAddStaff = false
-    @State private var showAddStore = false
-    @State private var showAddPromotion = false
-    @State private var selectedInsight: DashboardInsightType?
-    @State private var showExportSheet = false
-    @State private var selectedReportScope: AdminReportScope = .all
-    @State private var selectedReportFormat: AdminReportFormat = .pdf
-    @State private var isExportingReport = false
-    @State private var exportFile: ShareFile?
-    @State private var exportErrorMessage = ""
-    @State private var showExportError = false
-    @State private var remoteSnapshot: AdminInsightsSnapshot?
-    @State private var isSyncingLiveData = false
-    @State private var liveSyncErrorMessage: String?
-    @State private var lastSyncedAt: Date?
+    // Low Stock Alert Cache
+    @State private var lowStockAlerts: [LowStockAlert] = []
+    @State private var isLoadingAlerts = false
+    @State private var hasFetchedAlerts = false
+
+    // Insights + Export
+  @State private var selectedReportScope: AdminReportScope = .all
+  @State private var selectedReportFormat: AdminReportFormat = .pdf
+  @State private var isExportingReport = false
+  @State private var exportErrorMessage = ""
+  @State private var showExportError = false
+  @State private var remoteSnapshot: AdminInsightsSnapshot?
+  @State private var isSyncingLiveData = false
+  @State private var liveSyncErrorMessage: String?
+  @State private var lastSyncedAt: Date?
 
     private let impact = UIImpactFeedbackGenerator(style: .medium)
 
@@ -99,72 +124,76 @@ struct AdminDashboardView: View {
         return max(allClients.count, 1)
     }
 
-    private enum DashboardInsightType: String, Identifiable {
-        case sales
-        case inventory
 
-        var id: String { rawValue }
-    }
 
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .top) {
-                Color(.systemGroupedBackground).ignoresSafeArea()
+        ZStack(alignment: .top) {
+            Color(.systemGroupedBackground).ignoresSafeArea()
 
-                // Maroon top glow
-                LinearGradient(
-                    colors: [AppColors.accent.opacity(0.13), Color.clear],
-                    startPoint: .top,
-                    endPoint: .init(x: 0.5, y: 0.22)
-                )
-                .ignoresSafeArea()
+            // Maroon top glow
+            LinearGradient(
+                colors: [AppColors.accent.opacity(0.13), Color.clear],
+                startPoint: .top,
+                endPoint: .init(x: 0.5, y: 0.22)
+            )
+            .ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 24) {
-                        welcomeHeader
-                        metricsGrid
-                        systemHealthBar
-                        alertsSection
-                        quickActionsGrid
-                        activityFeed
-                        Spacer().frame(height: 40)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 24) {
+                    welcomeHeader
+                    metricsGrid
+                    systemHealthBar
+                    lowStockSection
+                    alertsSection
+                    quickActionsGrid
+                    activityFeed
+                    Spacer().frame(height: 40)
+                }
+            }
+            .refreshable {
+                await fetchLowStock()
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("MAISON LUXE")
+                    .font(.system(size: 12, weight: .black))
+                    .tracking(4)
+                    .foregroundColor(.primary)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                HStack(spacing: 14) {
+                    Button(action: {}) {
+                        Image(systemName: "bell.badge")
+                            .font(.system(size: 16, weight: .light))
+                            .foregroundColor(.primary)
+                    }
+                    Button(action: { activeSheet = .profile }) {
+                        ZStack {
+                            Circle()
+                                .fill(AppColors.accent.opacity(0.12))
+                                .frame(width: 30, height: 30)
+                            Text(adminInitials)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(AppColors.accent)
+                        }
                     }
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("MAISON LUXE")
-                        .font(.system(size: 12, weight: .black))
-                        .tracking(4)
-                        .foregroundColor(.primary)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 14) {
-                        Button(action: {}) {
-                            Image(systemName: "bell.badge")
-                                .font(.system(size: 16, weight: .light))
-                                .foregroundColor(.primary)
-                        }
-                        Button(action: { showProfile = true }) {
-                            ZStack {
-                                Circle()
-                                    .fill(AppColors.accent.opacity(0.12))
-                                    .frame(width: 30, height: 30)
-                                Text(adminInitials)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(AppColors.accent)
-                            }
-                        }
-                    }
-                }
-            }
-            .sheet(isPresented: $showProfile) { AdminProfileView() }
-            .sheet(isPresented: $showAddSKU) { CreateProductSheet(modelContext: modelContext, categories: allCategories) }
-            .sheet(isPresented: $showAddStaff) { CreateUserSheet(modelContext: modelContext) }
-            .sheet(isPresented: $showAddStore) { CreateStoreSheet() }
-            .sheet(isPresented: $showAddPromotion) { CreatePromotionSheet() }
-            .sheet(isPresented: $showExportSheet) {
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .profile:
+                AdminProfileView()
+            case .addSKU:
+                CreateProductSheet(modelContext: modelContext, categories: allCategories)
+            case .addStaff:
+                CreateUserSheet(modelContext: modelContext)
+            case .addStore:
+                CreateStoreSheet()
+            case .addPromotion:
+                CreatePromotionSheet()
+            case .export:
                 AdminReportExportSheet(
                     selectedScope: $selectedReportScope,
                     selectedFormat: $selectedReportFormat,
@@ -173,40 +202,41 @@ struct AdminDashboardView: View {
                         Task { await exportReports() }
                     }
                 )
+            case .salesInsights:
+                DashboardSalesInsightsSheet(
+                    associateRating: associateRatingFeedback,
+                    appointmentRejectionRate: appointmentRejectionRate,
+                    churnRate: churnRate,
+                    retentionRate: retentionRate,
+                    stocksToSaleRatio: stocksToSaleRatio,
+                    monthlySalesTrend: monthlySalesTrend,
+                    snapshot: remoteSnapshot
+                )
+            case .inventoryInsights:
+                DashboardInventoryInsightsSheet(
+                    inventoryTurnoverRatio: inventoryTurnoverRatio,
+                    sellThroughRate: sellThroughRate,
+                    customerAcquisitionNoPurchaseRate: customerAcquisitionNoPurchaseRate,
+                    afterSalesLosses: afterSalesLosses,
+                    monthlySellThroughTrend: monthlySellThroughTrend,
+                    snapshot: remoteSnapshot
+                )
+            case .shareFile(let url):
+                ShareSheet(activityItems: [url])
             }
-            .sheet(item: $selectedInsight) { insight in
-                switch insight {
-                case .sales:
-                    DashboardSalesInsightsSheet(
-                        associateRating: associateRatingFeedback,
-                        appointmentRejectionRate: appointmentRejectionRate,
-                        churnRate: churnRate,
-                        retentionRate: retentionRate,
-                        stocksToSaleRatio: stocksToSaleRatio,
-                        monthlySalesTrend: monthlySalesTrend,
-                        snapshot: remoteSnapshot
-                    )
-                case .inventory:
-                    DashboardInventoryInsightsSheet(
-                        inventoryTurnoverRatio: inventoryTurnoverRatio,
-                        sellThroughRate: sellThroughRate,
-                        customerAcquisitionNoPurchaseRate: customerAcquisitionNoPurchaseRate,
-                        afterSalesLosses: afterSalesLosses,
-                        monthlySellThroughTrend: monthlySellThroughTrend,
-                        snapshot: remoteSnapshot
-                    )
-                }
-            }
-            .sheet(item: $exportFile) { file in
-                ShareSheet(activityItems: [file.url])
-            }
-            .alert("Export Error", isPresented: $showExportError) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(exportErrorMessage)
-            }
-            .task { await refreshLiveInsights() }
         }
+        .alert("Export Error", isPresented: $showExportError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(exportErrorMessage)
+        }
+        .task {
+            // Refresh insights and optionally fetch alerts on appearance
+            if !hasFetchedAlerts {
+                async let _ = fetchLowStock()
+            }
+            async let _ = refreshLiveInsights()
+        }        }
     }
 
     private var adminInitials: String {
@@ -371,7 +401,7 @@ struct AdminDashboardView: View {
                     badge: "Insights",
                     badgePositive: true
                 ) {
-                    selectedInsight = .sales
+                    activeSheet = .salesInsights
                 }
                 metricCard(
                     icon: "building.2.fill",
@@ -397,7 +427,7 @@ struct AdminDashboardView: View {
                     badge: "Insights",
                     badgePositive: true
                 ) {
-                    selectedInsight = .inventory
+                    activeSheet = .inventoryInsights
                 }
             }
             .padding(.horizontal, 20)
@@ -531,6 +561,72 @@ struct AdminDashboardView: View {
         .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
     }
 
+    // MARK: - Low Stock Section
+    
+    private var lowStockSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                sectionHeader("LOW STOCK ALERTS")
+                Spacer()
+                if isLoadingAlerts {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                        .padding(.trailing, 20)
+                }
+            }
+            
+            if lowStockAlerts.isEmpty && !isLoadingAlerts {
+                Text("No low stock items 🎉")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 20)
+            } else {
+                LazyVStack(spacing: 10) {
+                    ForEach(lowStockAlerts) { alert in
+                        lowStockRow(for: alert)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    private func lowStockRow(for alert: LowStockAlert) -> some View {
+        let isCritical = alert.alertLevel == .critical
+        let badgeColor = isCritical ? AppColors.error : AppColors.warning
+        
+        return HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(badgeColor)
+                .frame(width: 3, height: 40)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(alert.productName)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Text(alert.brand)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            
+            Text("\(alert.stockCount) Units Left")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(badgeColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(badgeColor.opacity(0.12))
+                .clipShape(Capsule())
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+    }
+
     // MARK: - Alerts
 
     private var alertsSection: some View {
@@ -602,19 +698,19 @@ struct AdminDashboardView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
                       spacing: 12) {
                 actionTile(icon: "plus.square.fill", label: "Add SKU", color: AppColors.accent) {
-                    impact.impactOccurred(); showAddSKU = true
+                    impact.impactOccurred(); activeSheet = .addSKU
                 }
                 actionTile(icon: "person.badge.plus", label: "Add Staff", color: AppColors.secondary) {
-                    impact.impactOccurred(); showAddStaff = true
+                    impact.impactOccurred(); activeSheet = .addStaff
                 }
                 actionTile(icon: "building.2.fill", label: "Add Store", color: AppColors.info) {
-                    impact.impactOccurred(); showAddStore = true
+                    impact.impactOccurred(); activeSheet = .addStore
                 }
                 actionTile(icon: "arrow.left.arrow.right", label: "Transfer", color: AppColors.success) {
                     impact.impactOccurred()
                 }
                 actionTile(icon: "percent", label: "Promotion", color: AppColors.warning) {
-                    impact.impactOccurred(); showAddPromotion = true
+                    impact.impactOccurred(); activeSheet = .addPromotion
                 }
                 actionTile(icon: "doc.text.fill", label: "Report", color: AppColors.secondaryLight) {
                     impact.impactOccurred()
@@ -623,7 +719,7 @@ struct AdminDashboardView: View {
                         showExportError = true
                         return
                     }
-                    showExportSheet = true
+                    activeSheet = .export
                 }
             }
             .padding(.horizontal, 20)
@@ -787,9 +883,9 @@ struct AdminDashboardView: View {
             }
 
             // Avoid sheet collision (export picker + share sheet).
-            showExportSheet = false
+            activeSheet = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                exportFile = ShareFile(url: fileURL)
+                activeSheet = .shareFile(fileURL)
             }
         } catch {
             exportErrorMessage = "Export failed: \(error.localizedDescription)"
@@ -826,6 +922,23 @@ struct AdminDashboardView: View {
             .foregroundColor(.primary.opacity(0.45))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
+    }
+    
+    private func fetchLowStock() async {
+        isLoadingAlerts = true
+        do {
+            let alerts = try await InventoryAnalyticsService.shared.fetchLowStockAlerts()
+            await MainActor.run {
+                self.lowStockAlerts = alerts
+                self.hasFetchedAlerts = true
+                self.isLoadingAlerts = false
+            }
+        } catch {
+            print("[AdminDashboardView] Failed to fetch low stock alerts:", error)
+            await MainActor.run {
+                self.isLoadingAlerts = false
+            }
+        }
     }
 }
 

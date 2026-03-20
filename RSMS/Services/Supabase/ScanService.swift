@@ -52,27 +52,59 @@ final class ScanService: ScanServiceProtocol, @unchecked Sendable {
     /// - OUT scan: set status = SOLD
     /// - AUDIT:    no status change
     func processScan(barcode: String, sessionId: UUID, type: ScanType) async throws -> ScanResultDTO {
-        // Step 1 — Lookup (throws if barcode not in product_items)
+        // Step 1: Pre-fetch for the UI (throws barcodeNotFound if missing)
         let result = try await lookupBarcode(barcode)
-
-        // Step 2 — Log the scan event (non-optional; this is the audit trail)
-        do {
-            try await logScan(barcode: barcode, sessionId: sessionId, type: type)
-        } catch {
-            // Log failure is critical — surface it so the user knows this scan wasn't recorded
-            throw ScanError.operationFailed("Scan could not be recorded: \(error.localizedDescription)")
-        }
-
-        // Step 3 — Status mutation (best-effort, retried, non-fatal on final failure)
-        let targetStatus: ProductItemStatus?
+        
+        // Step 2: Formulate dynamic status
+        let targetStatus: ProductItemStatus
         switch type {
         case .out:   targetStatus = .sold
         case .in:    targetStatus = .inStock
-        case .audit: targetStatus = nil
+        case .audit: targetStatus = .inStock // Value is safely ignored by SQL patch
+        case .return: targetStatus = .returned
         }
+        
+        // Strict Client-Side validation for Returns
+        if type == .return {
+            if result.itemStatusEnum == .inStock {
+                throw ScanError.operationFailed("Cannot return item currently in stock")
+            }
+            if result.itemStatusEnum == .returned {
+                throw ScanError.operationFailed("Item already returned")
+            }
+            if result.itemStatusEnum != .sold && result.itemStatusEnum != .damaged {
+                throw ScanError.operationFailed("Only sold or damaged items can be returned")
+            }
+        }
+        
+        let rpcScanType = (type == .return) ? "IN" : type.rawValue.uppercased()
 
-        if let newStatus = targetStatus {
-            await updateItemStatusWithRetry(barcode: barcode, status: newStatus, retries: 2)
+        // Step 3: Invoke the transaction-safe backend RPC
+        let params: [String: String] = [
+            "p_barcode": barcode,
+            "p_session_id": sessionId.uuidString,
+            "p_target_status": targetStatus.rawValue,
+            "p_scan_type": rpcScanType
+        ]
+        
+        do {
+            try await client.rpc("process_scan_event", params: params).execute()
+        } catch {
+            print("[ScanService] RPC ERROR: \(error)")
+            
+            // Step 4: Map core Postgres Exceptions to Human UX
+            let errorDesc = (error as? PostgrestError)?.message ?? error.localizedDescription
+            
+            if errorDesc.contains("already sold") {
+                throw ScanError.operationFailed("Item already sold")
+            } else if errorDesc.contains("not ACTIVE") {
+                throw ScanError.operationFailed("Session expired")
+            } else if errorDesc.contains("Unauthorized") {
+                throw ScanError.operationFailed("Permission denied")
+            } else if errorDesc.contains("not found") {
+                throw ScanError.operationFailed("Invalid barcode")
+            }
+            throw ScanError.operationFailed("Scan failed: \(errorDesc)")
         }
 
         return result

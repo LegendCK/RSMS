@@ -15,13 +15,11 @@ struct MainTabView: View {
     @State private var syncErrorMessage: String?
 
     var body: some View {
-        ZStack {
-            // Dark blurred background
-            AppColors.backgroundPrimary
-                .ignoresSafeArea()
-
+        Group {
             if isPreparingCatalog {
                 loadingState
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(AppColors.backgroundPrimary.ignoresSafeArea())
             } else {
                 TabView {
                     // Home Tab — path bound to AppState so any screen can pop to root
@@ -60,6 +58,7 @@ struct MainTabView: View {
                         }
                     }
                 }
+                .background(AppColors.backgroundPrimary.ignoresSafeArea())
                 .tint(AppColors.accent)  // Active tab tint (maroon)
                 .tabBarMinimizeBehavior(.onScrollDown)  // Collapse on scroll
                 .toolbarColorScheme(.dark, for: .tabBar)  // Dark styling

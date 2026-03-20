@@ -37,120 +37,119 @@ struct ManagerOperationsView: View {
     @State private var showTagEventSheet = false
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary.ignoresSafeArea()
+        ZStack {
+            AppColors.backgroundPrimary.ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: AppSpacing.xs) {
-                            segmentButton("Fulfillment", tag: 5)
-                            segmentButton("Sales", tag: 0)
-                            segmentButton("BOPIS", tag: 1)
-                            segmentButton("Discrepancies", tag: 2)
-                            segmentButton("VIP Events", tag: 3)
-                            segmentButton("Activity", tag: 4)
-                        }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
+            VStack(spacing: 0) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppSpacing.xs) {
+                        segmentButton("Fulfillment", tag: 5)
+                        segmentButton("Sales", tag: 0)
+                        segmentButton("BOPIS", tag: 1)
+                        segmentButton("Discrepancies", tag: 2)
+                        segmentButton("VIP Events", tag: 3)
+                        segmentButton("Activity", tag: 4)
                     }
-                    .padding(.top, AppSpacing.sm).padding(.bottom, AppSpacing.sm)
-
-                    switch selectedSection {
-                    case 0: salesSection
-                    case 1: bopisSection
-                    case 2: discrepanciesSection
-                    case 3: vipEventsSection
-                    case 4: activitySection
-                    case 5: fulfillmentSection
-                    default: salesSection
-                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
                 }
+                .padding(.top, AppSpacing.sm).padding(.bottom, AppSpacing.sm)
 
-                // ✅ FAB is now inside ZStack so it overlays content correctly
-                // instead of stacking vertically and eating half the screen.
-                if appState.currentUserRole == .inventoryController {
-                    VStack {
+                switch selectedSection {
+                case 0: salesSection
+                case 1: bopisSection
+                case 2: discrepanciesSection
+                case 3: vipEventsSection
+                case 4: activitySection
+                case 5: fulfillmentSection
+                default: salesSection
+                }
+            }
+
+            // ✅ FAB is now inside ZStack so it overlays content correctly
+            // instead of stacking vertically and eating half the screen.
+            if appState.currentUserRole == .inventoryController {
+                VStack {
+                    Spacer()
+                    HStack {
                         Spacer()
-                        HStack {
-                            Spacer()
-                            Button {
-                                showAddStock = true
-                            } label: {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 24, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 60, height: 60)
-                                    .background(AppColors.accent)
-                                    .clipShape(Circle())
-                                    .shadow(color: AppColors.accent.opacity(0.4), radius: 8, x: 0, y: 4)
-                            }
-                            .accessibilityLabel("Add Stock")
-                            .padding(.trailing, AppSpacing.screenHorizontal)
-                            .padding(.bottom, AppSpacing.md)
+                        Button {
+                            showAddStock = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 60, height: 60)
+                                .background(AppColors.accent)
+                                .clipShape(Circle())
+                                .shadow(color: AppColors.accent.opacity(0.4), radius: 8, x: 0, y: 4)
                         }
-                    }
-                    // No ignoresSafeArea here — lets SwiftUI respect the tab bar inset
-                    // so the FAB sits above the tab bar, not on top of it.
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Operations").font(AppTypography.navTitle).foregroundColor(AppColors.textPrimaryDark)
-                }
-                // Report Discrepancy button — visible only on the Discrepancies tab
-                if selectedSection == 2 {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button { showReportDiscrepancy = true } label: {
-                            Image(systemName: "plus.circle")
-                                .font(AppTypography.iconMedium)
-                                .foregroundColor(AppColors.accent)
-                        }
-                        .accessibilityLabel("Report Discrepancy")
-                    }
-                } else if selectedSection == 3 {
-                    // Create Event button on the VIP Events tab
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button { showCreateEvent = true } label: {
-                            Image(systemName: "plus.circle")
-                                .font(AppTypography.iconMedium)
-                                .foregroundColor(AppColors.accent)
-                        }
-                        .accessibilityLabel("Create Event")
-                    }
-                } else {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button { showInventoryWorkspace = true } label: {
-                            Image(systemName: "shippingbox")
-                                .font(AppTypography.iconMedium)
-                                .foregroundColor(AppColors.accent)
-                        }
-                        .accessibilityLabel("Open Inventory Workspace")
+                        .accessibilityLabel("Add Stock")
+                        .padding(.trailing, AppSpacing.screenHorizontal)
+                        .padding(.bottom, AppSpacing.md)
                     }
                 }
-            }
-            .navigationDestination(isPresented: $showInventoryWorkspace) {
-                ManagerInventoryView()
-            }
-            .sheet(isPresented: $showReportDiscrepancy) {
-                ReportDiscrepancySheet(products: allProducts) {
-                    Task { await loadLiveDiscrepancies() }
-                }
-            }
-            .sheet(item: $selectedEventForReport) { event in
-                EventSalesReportView(event: event)
-            }
-            .sheet(isPresented: $showCreateEvent) {
-                CreateEventSheet {
-                    Task { await loadLiveEvents() }
-                }
-            }
-            .task {
-                await loadLiveDiscrepancies()
-                await loadLiveEvents()
-                await loadLiveOrders()
+                // No ignoresSafeArea here — lets SwiftUI respect the tab bar inset
+                // so the FAB sits above the tab bar, not on top of it.
             }
         }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Operations").font(AppTypography.navTitle).foregroundColor(AppColors.textPrimaryDark)
+            }
+            // Report Discrepancy button — visible only on the Discrepancies tab
+            if selectedSection == 2 {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showReportDiscrepancy = true } label: {
+                        Image(systemName: "plus.circle")
+                            .font(AppTypography.iconMedium)
+                            .foregroundColor(AppColors.accent)
+                    }
+                    .accessibilityLabel("Report Discrepancy")
+                }
+            } else if selectedSection == 3 {
+                // Create Event button on the VIP Events tab
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showCreateEvent = true } label: {
+                        Image(systemName: "plus.circle")
+                            .font(AppTypography.iconMedium)
+                            .foregroundColor(AppColors.accent)
+                    }
+                    .accessibilityLabel("Create Event")
+                }
+            } else {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showInventoryWorkspace = true } label: {
+                        Image(systemName: "shippingbox")
+                            .font(AppTypography.iconMedium)
+                            .foregroundColor(AppColors.accent)
+                    }
+                    .accessibilityLabel("Open Inventory Workspace")
+                }
+            }
+        }
+        .navigationDestination(isPresented: $showInventoryWorkspace) {
+            ManagerInventoryView()
+        }
+        .sheet(isPresented: $showReportDiscrepancy) {
+            ReportDiscrepancySheet(products: allProducts) {
+                Task { await loadLiveDiscrepancies() }
+            }
+        }
+        .sheet(item: $selectedEventForReport) { event in
+            EventSalesReportView(event: event)
+        }
+        .sheet(isPresented: $showCreateEvent) {
+            CreateEventSheet {
+                Task { await loadLiveEvents() }
+            }
+        }
+        .task {
+            await loadLiveDiscrepancies()
+            await loadLiveEvents()
+            await loadLiveOrders()
+        }
+        // Additional un-conflicted sheets
         .sheet(isPresented: $showAddStock) {
             InventoryAddStockView()
         }
