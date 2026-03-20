@@ -22,6 +22,11 @@ struct AdminDashboardView: View {
     @State private var showAddSKU = false
     @State private var showAddStaff = false
     @State private var showAddStore = false
+    
+    // Low Stock Alert Cache
+    @State private var lowStockAlerts: [LowStockAlert] = []
+    @State private var isLoadingAlerts = false
+    @State private var hasFetchedAlerts = false
 
     private let impact = UIImpactFeedbackGenerator(style: .medium)
 
@@ -32,62 +37,69 @@ struct AdminDashboardView: View {
     private var totalInventoryUnits: Int { allProducts.reduce(0) { $0 + $1.stockCount } }
 
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .top) {
-                Color(.systemGroupedBackground).ignoresSafeArea()
+        ZStack(alignment: .top) {
+            Color(.systemGroupedBackground).ignoresSafeArea()
 
-                // Maroon top glow
-                LinearGradient(
-                    colors: [AppColors.accent.opacity(0.13), Color.clear],
-                    startPoint: .top,
-                    endPoint: .init(x: 0.5, y: 0.22)
-                )
-                .ignoresSafeArea()
+            // Maroon top glow
+            LinearGradient(
+                colors: [AppColors.accent.opacity(0.13), Color.clear],
+                startPoint: .top,
+                endPoint: .init(x: 0.5, y: 0.22)
+            )
+            .ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 24) {
-                        welcomeHeader
-                        metricsGrid
-                        systemHealthBar
-                        alertsSection
-                        quickActionsGrid
-                        activityFeed
-                        Spacer().frame(height: 40)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 24) {
+                    welcomeHeader
+                    metricsGrid
+                    systemHealthBar
+                    lowStockSection
+                    alertsSection
+                    quickActionsGrid
+                    activityFeed
+                    Spacer().frame(height: 40)
+                }
+            }
+            .refreshable {
+                await fetchLowStock()
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("MAISON LUXE")
+                    .font(.system(size: 12, weight: .black))
+                    .tracking(4)
+                    .foregroundColor(.primary)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                HStack(spacing: 14) {
+                    Button(action: {}) {
+                        Image(systemName: "bell.badge")
+                            .font(.system(size: 16, weight: .light))
+                            .foregroundColor(.primary)
+                    }
+                    Button(action: { showProfile = true }) {
+                        ZStack {
+                            Circle()
+                                .fill(AppColors.accent.opacity(0.12))
+                                .frame(width: 30, height: 30)
+                            Text(adminInitials)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(AppColors.accent)
+                        }
                     }
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("MAISON LUXE")
-                        .font(.system(size: 12, weight: .black))
-                        .tracking(4)
-                        .foregroundColor(.primary)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 14) {
-                        Button(action: {}) {
-                            Image(systemName: "bell.badge")
-                                .font(.system(size: 16, weight: .light))
-                                .foregroundColor(.primary)
-                        }
-                        Button(action: { showProfile = true }) {
-                            ZStack {
-                                Circle()
-                                    .fill(AppColors.accent.opacity(0.12))
-                                    .frame(width: 30, height: 30)
-                                Text(adminInitials)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(AppColors.accent)
-                            }
-                        }
-                    }
-                }
+        }
+        .sheet(isPresented: $showProfile) { AdminProfileView() }
+        .sheet(isPresented: $showAddSKU) { CreateProductSheet(modelContext: modelContext, categories: allCategories) }
+        .sheet(isPresented: $showAddStaff) { CreateUserSheet(modelContext: modelContext) }
+        .sheet(isPresented: $showAddStore) { CreateStoreSheet() }
+        .task {
+            if !hasFetchedAlerts {
+                await fetchLowStock()
             }
-            .sheet(isPresented: $showProfile) { AdminProfileView() }
-            .sheet(isPresented: $showAddSKU) { CreateProductSheet(modelContext: modelContext, categories: allCategories) }
-            .sheet(isPresented: $showAddStaff) { CreateUserSheet(modelContext: modelContext) }
-            .sheet(isPresented: $showAddStore) { CreateStoreSheet() }
         }
     }
 
@@ -206,6 +218,72 @@ struct AdminDashboardView: View {
         .padding(.vertical, 8)
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+    }
+
+    // MARK: - Low Stock Section
+    
+    private var lowStockSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                sectionHeader("LOW STOCK ALERTS")
+                Spacer()
+                if isLoadingAlerts {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                        .padding(.trailing, 20)
+                }
+            }
+            
+            if lowStockAlerts.isEmpty && !isLoadingAlerts {
+                Text("No low stock items 🎉")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 20)
+            } else {
+                LazyVStack(spacing: 10) {
+                    ForEach(lowStockAlerts) { alert in
+                        lowStockRow(for: alert)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    private func lowStockRow(for alert: LowStockAlert) -> some View {
+        let isCritical = alert.alertLevel == .critical
+        let badgeColor = isCritical ? AppColors.error : AppColors.warning
+        
+        return HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(badgeColor)
+                .frame(width: 3, height: 40)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(alert.productName)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Text(alert.brand)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            
+            Text("\(alert.stockCount) Units Left")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(badgeColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(badgeColor.opacity(0.12))
+                .clipShape(Capsule())
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
     }
 
@@ -403,6 +481,23 @@ struct AdminDashboardView: View {
             .foregroundColor(.primary.opacity(0.45))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
+    }
+    
+    private func fetchLowStock() async {
+        isLoadingAlerts = true
+        do {
+            let alerts = try await InventoryAnalyticsService.shared.fetchLowStockAlerts()
+            await MainActor.run {
+                self.lowStockAlerts = alerts
+                self.hasFetchedAlerts = true
+                self.isLoadingAlerts = false
+            }
+        } catch {
+            print("[AdminDashboardView] Failed to fetch low stock alerts:", error)
+            await MainActor.run {
+                self.isLoadingAlerts = false
+            }
+        }
     }
 }
 

@@ -26,26 +26,28 @@ struct InventoryAddStockView: View {
     @FocusState private var quantityFocused: Bool
 
     var body: some View {
-        ZStack {
-            AppColors.backgroundPrimary.ignoresSafeArea()
+        NavigationStack {
+            ZStack {
+                AppColors.backgroundPrimary.ignoresSafeArea()
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: AppSpacing.lg) {
-                    formCard
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: AppSpacing.lg) {
+                        formCard
 
-                    if case .success(let count, let items) = viewModel.state {
-                        successPanel(count: count, items: items)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        if case .success(let count, let items) = viewModel.state {
+                            successPanel(count: count, items: items)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+
+                        if case .failure(let msg) = viewModel.state {
+                            errorBanner(msg)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
                     }
-
-                    if case .failure(let msg) = viewModel.state {
-                        errorBanner(msg)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.top, AppSpacing.lg)
+                    .padding(.bottom, AppSpacing.xxxl)
                 }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
-                .padding(.top, AppSpacing.lg)
-                .padding(.bottom, AppSpacing.xxxl)
             }
         }
         .navigationTitle("Add Stock")

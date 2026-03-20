@@ -45,9 +45,10 @@ final class Product {
     var dimensions: String
 
     init(
+        id: UUID = UUID(),
         name: String,
         brand: String,
-        description: String,
+        description: String = "",
         price: Double,
         categoryName: String,
         imageName: String = "bag.fill",
@@ -67,7 +68,7 @@ final class Product {
         weight: Double = 0,
         dimensions: String = ""
     ) {
-        self.id = UUID()
+        self.id = id
         self.name = name
         self.brand = brand
         self.productDescription = description

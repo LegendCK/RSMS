@@ -125,6 +125,7 @@ struct ScannedItemCard: View {
         case .reserved: return .orange
         case .sold:     return .red
         case .damaged:  return Color(red: 0.9, green: 0.5, blue: 0.1)
+        case .returned: return .purple
         }
     }
 

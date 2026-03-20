@@ -213,6 +213,9 @@ struct ScannerView: View {
 
         case .error(let msg):
             toastBanner(icon: "xmark.circle.fill", text: msg, color: Color(red: 1, green: 0.35, blue: 0.35))
+            
+        case .found(let result) where viewModel.currentScanType == .return:
+            toastBanner(icon: "checkmark.circle.fill", text: "Item marked as returned", color: .purple)
 
         case .idle where viewModel.sessionActive:
             toastBanner(icon: "viewfinder", text: "Point camera at a barcode", color: Color.white.opacity(0.5))

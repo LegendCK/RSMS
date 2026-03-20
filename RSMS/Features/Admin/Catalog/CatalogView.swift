@@ -16,6 +16,7 @@ struct CatalogView: View {
     @State private var showAddCategory = false
     @State private var showAddProduct  = false
     
+    
     // CSV Upload State
     @State private var showFileImporter = false
     @State private var showCSVPreview = false
@@ -26,89 +27,84 @@ struct CatalogView: View {
     @State private var templateDocument: CSVTemplateDocument?
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary
-                    .ignoresSafeArea()
+        VStack(spacing: 0) {
+            Picker("", selection: $selectedSection) {
+                Text("Products").tag(0)
+                Text("Categories").tag(1)
+                Text("Pricing").tag(2)
+                Text("Promos").tag(3)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.top, AppSpacing.sm)
+            .padding(.bottom, AppSpacing.sm)
 
-                VStack(spacing: 0) {
-                    Picker("", selection: $selectedSection) {
-                        Text("Products").tag(0)
-                        Text("Categories").tag(1)
-                        Text("Pricing").tag(2)
-                        Text("Promos").tag(3)
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
-                    .padding(.top, AppSpacing.sm)
-                    .padding(.bottom, AppSpacing.sm)
-
-                    switch selectedSection {
-                    case 0: CatalogProductsSubview()
-                    case 1: CatalogCategoriesSubview()
-                    case 2: CatalogPricingSubview()
-                    case 3: CatalogPromotionsSubview()
-                    default: CatalogProductsSubview()
-                    }
-                }
+            switch selectedSection {
+            case 0: CatalogProductsSubview()
+            case 1: CatalogCategoriesSubview()
+            case 2: CatalogPricingSubview()
+            case 3: CatalogPromotionsSubview()
+            default: CatalogProductsSubview()
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Catalog")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showAddDialog = true }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(AppTypography.toolbarIcon)
-                            .foregroundColor(AppColors.accent)
-                    }
-                }
-            }
-            // Context-sensitive action sheet
-            .confirmationDialog("What would you like to add?", isPresented: $showAddDialog, titleVisibility: .visible) {
-                Button("New Product") { showAddProduct = true }
-                Button("New Category") { showAddCategory = true }
-                Button("Upload CSV") { showFileImporter = true }
-                Button("Download CSV Template") {
-                    templateDocument = CSVTemplateDocument(initialText: CSVParserService.generateTemplate())
-                    showTemplateExporter = true
-                }
-                Button("Cancel", role: .cancel) {}
-            }
-            // Add Category sheet
-            .sheet(isPresented: $showAddCategory) {
-                AddCategoryView()
-            }
-            // Add Product sheet — passes current categories for the picker
-            .sheet(isPresented: $showAddProduct) {
-                AddProductView(availableCategories: allCategories)
-            }
-            // CSV File Importer
-            .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.commaSeparatedText]) { result in
-                switch result {
-                case .success(let url):
-                    do {
-                        parsedCSVRows = try CSVParserService.parseCSV(url: url)
-                        showCSVPreview = true
-                    } catch {
-                        print("Failed to parse CSV: \\(error)")
-                    }
-                case .failure(let err):
-                    print("Failed to import file: \\(err)")
-                }
-            }
-            // CSV Preview Sheet
-            .sheet(isPresented: $showCSVPreview) {
-                if !parsedCSVRows.isEmpty {
-                    CSVPreviewView(rows: parsedCSVRows)
-                }
-            }
-            // CSV Template Exporter
-            .fileExporter(isPresented: $showTemplateExporter, document: templateDocument, contentType: .commaSeparatedText, defaultFilename: "Products_Template.csv") { _ in }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppColors.backgroundPrimary.ignoresSafeArea())
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Catalog")
+                    .font(AppTypography.navTitle)
+                    .foregroundColor(AppColors.textPrimaryDark)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: { showAddDialog = true }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(AppTypography.toolbarIcon)
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+        }
+        // Context-sensitive action sheet
+        .confirmationDialog("What would you like to add?", isPresented: $showAddDialog, titleVisibility: .visible) {
+            Button("New Product") { showAddProduct = true }
+            Button("New Category") { showAddCategory = true }
+            Button("Upload CSV") { showFileImporter = true }
+            Button("Download CSV Template") {
+                templateDocument = CSVTemplateDocument(initialText: CSVParserService.generateTemplate())
+                showTemplateExporter = true
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        // Add Category sheet
+        .sheet(isPresented: $showAddCategory) {
+            AddCategoryView()
+        }
+        // Add Product sheet — passes current categories for the picker
+        .sheet(isPresented: $showAddProduct) {
+            AddProductView(availableCategories: allCategories)
+        }
+        // CSV File Importer
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.commaSeparatedText]) { result in
+            switch result {
+            case .success(let url):
+                do {
+                    parsedCSVRows = try CSVParserService.parseCSV(url: url)
+                    showCSVPreview = true
+                } catch {
+                    print("Failed to parse CSV: \(error)")
+                }
+            case .failure(let err):
+                print("Failed to import file: \(err)")
+            }
+        }
+        // CSV Preview Sheet
+        .sheet(isPresented: $showCSVPreview) {
+            if !parsedCSVRows.isEmpty {
+                CSVPreviewView(rows: parsedCSVRows)
+            }
+        }
+        // CSV Template Exporter
+        .fileExporter(isPresented: $showTemplateExporter, document: templateDocument, contentType: .commaSeparatedText, defaultFilename: "Products_Template.csv") { _ in }
     }
 }
 
@@ -141,6 +137,7 @@ struct CSVTemplateDocument: FileDocument {
 
 struct CatalogProductsSubview: View {
     // Remote products from Supabase
+    @State private var selectedProduct: Product?
     @State private var remoteProducts: [ProductDTO] = []
     @State private var remoteCategories: [CategoryDTO] = []
     @State private var isLoading = false
@@ -222,22 +219,38 @@ struct CatalogProductsSubview: View {
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: AppSpacing.xs) {
-                        ForEach(filtered) { dto in
-                            if let localProduct = localProducts.first(where: { $0.id == dto.id }) {
-                                NavigationLink(destination: ProductDetailView(product: localProduct)) {
-                                    productRow(dto)
+                        ForEach(filtered, id: \.id) { dto in
+                            Button {
+                                if let existing = localProducts.first(where: { $0.id == dto.id }) {
+                                    selectedProduct = existing
+                                } else {
+                                    let newProduct = Product(
+                                        id: dto.id,
+                                        name: dto.name,
+                                        brand: dto.brand ?? "Maison Luxe",
+                                        description: dto.description ?? "",
+                                        price: dto.price,
+                                        categoryName: remoteCategories.first(where: { $0.id == dto.categoryId })?.name ?? "",
+                                        imageName: dto.primaryImageUrl ?? ""
+                                    )
+                                    modelContext.insert(newProduct)
+                                    try? modelContext.save()
+                                    selectedProduct = newProduct
                                 }
-                                .buttonStyle(.plain)
-                            } else {
+                            } label: {
                                 productRow(dto)
-                                    .opacity(0.5)
+                                    .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
                     .padding(.bottom, AppSpacing.xxxl)
                 }
                 .refreshable { await loadAll() }
+                .navigationDestination(item: $selectedProduct) { product in
+                    ProductDetailView(product: product)
+                }
             }
         }
         .task { await loadAll() }
@@ -306,6 +319,7 @@ struct CatalogProductsSubview: View {
                 .font(AppTypography.iconSmall)
                 .foregroundColor(AppColors.neutral500)
                 .frame(width: 28, height: AppSpacing.touchTarget)
+                .allowsHitTesting(false)
         }
         .padding(AppSpacing.sm)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -313,6 +327,7 @@ struct CatalogProductsSubview: View {
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.black.opacity(0.04), lineWidth: 0.5)
+                .allowsHitTesting(false)
         )
     }
  

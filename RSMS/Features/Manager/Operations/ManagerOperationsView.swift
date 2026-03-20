@@ -14,62 +14,60 @@ struct ManagerOperationsView: View {
     @State private var showAddStock = false
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary.ignoresSafeArea()
+        ZStack {
+            AppColors.backgroundPrimary.ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    Picker("", selection: $selectedSection) {
-                        Text("Sales").tag(0)
-                        Text("Discrepancies").tag(1)
-                        Text("VIP Events").tag(2)
-                        Text("Activity").tag(3)
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
-                    .padding(.top, AppSpacing.sm).padding(.bottom, AppSpacing.sm)
-
-                    switch selectedSection {
-                    case 0: salesSection
-                    case 1: discrepanciesSection
-                    case 2: vipEventsSection
-                    case 3: activitySection
-                    default: salesSection
-                    }
+            VStack(spacing: 0) {
+                Picker("", selection: $selectedSection) {
+                    Text("Sales").tag(0)
+                    Text("Discrepancies").tag(1)
+                    Text("VIP Events").tag(2)
+                    Text("Activity").tag(3)
                 }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.sm).padding(.bottom, AppSpacing.sm)
 
-                // ✅ FAB is now inside ZStack so it overlays content correctly
-                // instead of stacking vertically and eating half the screen.
-                if appState.currentUserRole == .inventoryController {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Button {
-                                showAddStock = true
-                            } label: {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 24, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 60, height: 60)
-                                    .background(AppColors.accent)
-                                    .clipShape(Circle())
-                                    .shadow(color: AppColors.accent.opacity(0.4), radius: 8, x: 0, y: 4)
-                            }
-                            .accessibilityLabel("Add Stock")
-                            .padding(.trailing, AppSpacing.screenHorizontal)
-                            .padding(.bottom, AppSpacing.md)
-                        }
-                    }
-                    // No ignoresSafeArea here — lets SwiftUI respect the tab bar inset
-                    // so the FAB sits above the tab bar, not on top of it.
+                switch selectedSection {
+                case 0: salesSection
+                case 1: discrepanciesSection
+                case 2: vipEventsSection
+                case 3: activitySection
+                default: salesSection
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Operations").font(AppTypography.navTitle).foregroundColor(AppColors.textPrimaryDark)
+
+            // ✅ FAB is now inside ZStack so it overlays content correctly
+            // instead of stacking vertically and eating half the screen.
+            if appState.currentUserRole == .inventoryController {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button {
+                            showAddStock = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 60, height: 60)
+                                .background(AppColors.accent)
+                                .clipShape(Circle())
+                                .shadow(color: AppColors.accent.opacity(0.4), radius: 8, x: 0, y: 4)
+                        }
+                        .accessibilityLabel("Add Stock")
+                        .padding(.trailing, AppSpacing.screenHorizontal)
+                        .padding(.bottom, AppSpacing.md)
+                    }
                 }
+                // No ignoresSafeArea here — lets SwiftUI respect the tab bar inset
+                // so the FAB sits above the tab bar, not on top of it.
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Operations").font(AppTypography.navTitle).foregroundColor(AppColors.textPrimaryDark)
             }
         }
         .sheet(isPresented: $showAddStock) {
