@@ -14,7 +14,7 @@ import Supabase
 struct ManagerOperationsView: View {
     @Environment(AppState.self) private var appState
     @Query(sort: \Product.name) private var allProducts: [Product]
-    @State private var selectedSection = 0
+    @State private var selectedSection = 5  // Default to Fulfillment
     @State private var showAddStock = false
     @State private var showInventoryWorkspace = false
     @State private var showReportDiscrepancy = false
@@ -42,15 +42,17 @@ struct ManagerOperationsView: View {
                 AppColors.backgroundPrimary.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    Picker("", selection: $selectedSection) {
-                        Text("Sales").tag(0)
-                        Text("BOPIS").tag(1)
-                        Text("Discrepancies").tag(2)
-                        Text("VIP Events").tag(3)
-                        Text("Activity").tag(4)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: AppSpacing.xs) {
+                            segmentButton("Fulfillment", tag: 5)
+                            segmentButton("Sales", tag: 0)
+                            segmentButton("BOPIS", tag: 1)
+                            segmentButton("Discrepancies", tag: 2)
+                            segmentButton("VIP Events", tag: 3)
+                            segmentButton("Activity", tag: 4)
+                        }
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
                     }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
                     .padding(.top, AppSpacing.sm).padding(.bottom, AppSpacing.sm)
 
                     switch selectedSection {
@@ -59,6 +61,7 @@ struct ManagerOperationsView: View {
                     case 2: discrepanciesSection
                     case 3: vipEventsSection
                     case 4: activitySection
+                    case 5: fulfillmentSection
                     default: salesSection
                     }
                 }
@@ -289,11 +292,34 @@ struct ManagerOperationsView: View {
         return fmt.string(from: NSNumber(value: value)) ?? "₹\(Int(value))"
     }
 
+    // MARK: - Fulfillment (Order Processing for IC)
+
+    private var fulfillmentSection: some View {
+        OrderFulfillmentView()
+    }
+
     // MARK: - BOPIS & Ship-from-Store Monitor
 
     private var bopisSection: some View {
         BOPISOrderMonitorView()
             .environment(appState)
+    }
+
+    // MARK: - Segment Button Helper
+
+    private func segmentButton(_ title: String, tag: Int) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) { selectedSection = tag }
+        } label: {
+            Text(title)
+                .font(AppTypography.caption)
+                .foregroundColor(selectedSection == tag ? AppColors.textPrimaryLight : AppColors.textPrimaryDark)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(selectedSection == tag ? AppColors.accent : AppColors.backgroundSecondary)
+                .cornerRadius(AppSpacing.radiusSmall)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Discrepancies (Live)

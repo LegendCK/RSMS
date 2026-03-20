@@ -92,7 +92,7 @@ final class OrderService {
             taxTotal: taxTotal,
             grandTotal: grandTotal,
             channel: channel,
-            currency: "USD"
+            currency: "INR"
         )
 
         print("[OrderService] Calling create-order edge function for order: \(orderNumber)")

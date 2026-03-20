@@ -10,9 +10,11 @@ import SwiftData
 
 struct OrdersListView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Order.createdAt, order: .reverse) private var allOrders: [Order]
 
     @State private var selectedFilter: OrderFilter = .all
+    @State private var isSyncing = false
 
     enum OrderFilter: String, CaseIterable {
         case all = "All"
@@ -73,6 +75,25 @@ struct OrdersListView: View {
         }
         .navigationTitle("My Orders")
         .navigationBarTitleDisplayMode(.large)
+        .refreshable { await syncOrderStatuses() }
+        .task { await syncOrderStatuses() }
+    }
+
+    // MARK: - Sync
+
+    @MainActor
+    private func syncOrderStatuses() async {
+        guard !appState.isGuest, !appState.currentUserEmail.isEmpty else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        do {
+            try await OrderStatusSyncService.shared.syncOrderStatuses(
+                customerEmail: appState.currentUserEmail,
+                modelContext: modelContext
+            )
+        } catch {
+            print("[OrdersListView] Status sync failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Empty State
