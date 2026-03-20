@@ -9,6 +9,7 @@
 
 import SwiftUI
 import SwiftData
+import Supabase
 
 struct ManagerOperationsView: View {
     @Environment(AppState.self) private var appState
@@ -22,6 +23,18 @@ struct ManagerOperationsView: View {
     @State private var liveDiscrepancies: [InventoryDiscrepancyDTO] = []
     @State private var isLoadingDiscrepancies = false
     @State private var discrepancyLoadError: String? = nil
+
+    // Live events data
+    @State private var liveEvents: [EventDTO] = []
+    @State private var isLoadingEvents = false
+    @State private var selectedEventForReport: EventDTO? = nil
+    @State private var showCreateEvent = false
+
+    // Live orders data
+    @State private var liveOrders: [OrderDTO] = []
+    @State private var isLoadingOrders = false
+    @State private var orderToTag: OrderDTO? = nil       // drives Tag to Event sheet
+    @State private var showTagEventSheet = false
 
     var body: some View {
         NavigationStack {
@@ -85,20 +98,26 @@ struct ManagerOperationsView: View {
                 // Report Discrepancy button — visible only on the Discrepancies tab
                 if selectedSection == 2 {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            showReportDiscrepancy = true
-                        } label: {
+                        Button { showReportDiscrepancy = true } label: {
                             Image(systemName: "plus.circle")
                                 .font(AppTypography.iconMedium)
                                 .foregroundColor(AppColors.accent)
                         }
                         .accessibilityLabel("Report Discrepancy")
                     }
+                } else if selectedSection == 3 {
+                    // Create Event button on the VIP Events tab
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button { showCreateEvent = true } label: {
+                            Image(systemName: "plus.circle")
+                                .font(AppTypography.iconMedium)
+                                .foregroundColor(AppColors.accent)
+                        }
+                        .accessibilityLabel("Create Event")
+                    }
                 } else {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            showInventoryWorkspace = true
-                        } label: {
+                        Button { showInventoryWorkspace = true } label: {
                             Image(systemName: "shippingbox")
                                 .font(AppTypography.iconMedium)
                                 .foregroundColor(AppColors.accent)
@@ -112,66 +131,164 @@ struct ManagerOperationsView: View {
             }
             .sheet(isPresented: $showReportDiscrepancy) {
                 ReportDiscrepancySheet(products: allProducts) {
-                    // Refresh list after submission
                     Task { await loadLiveDiscrepancies() }
+                }
+            }
+            .sheet(item: $selectedEventForReport) { event in
+                EventSalesReportView(event: event)
+            }
+            .sheet(isPresented: $showCreateEvent) {
+                CreateEventSheet {
+                    Task { await loadLiveEvents() }
                 }
             }
             .task {
                 await loadLiveDiscrepancies()
+                await loadLiveEvents()
+                await loadLiveOrders()
             }
         }
         .sheet(isPresented: $showAddStock) {
             InventoryAddStockView()
         }
+        .sheet(isPresented: $showTagEventSheet) {
+            if let order = orderToTag {
+                TagOrderToEventSheet(order: order, events: liveEvents) {
+                    Task {
+                        await loadLiveOrders()
+                        await loadLiveEvents()
+                    }
+                }
+            }
+        }
     }
 
-    // MARK: - Sales Transactions
+    // MARK: - Sales Transactions (Live)
 
     private var salesSection: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
-                // Today summary
+                // Summary stats from live orders
+                let todayOrders = liveOrders.filter { Calendar.current.isDateInToday($0.createdAt) }
+                let todayRevenue = todayOrders.reduce(0.0) { $0 + $1.grandTotal }
+                let avgOrder = todayOrders.isEmpty ? 0.0 : todayRevenue / Double(todayOrders.count)
+
                 HStack(spacing: AppSpacing.sm) {
-                    miniStat(value: "$42.8K", label: "Today", color: AppColors.accent)
-                    miniStat(value: "7", label: "Txns", color: AppColors.secondary)
-                    miniStat(value: "$6.1K", label: "Avg", color: AppColors.success)
+                    miniStat(value: formattedAmount(todayRevenue),
+                             label: "Today",   color: AppColors.accent)
+                    miniStat(value: "\(todayOrders.count)",
+                             label: "Txns",    color: AppColors.secondary)
+                    miniStat(value: formattedAmount(avgOrder),
+                             label: "Avg",     color: AppColors.success)
                 }
-                .padding(.horizontal, AppSpacing.screenHorizontal).padding(.top, AppSpacing.sm)
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.sm)
 
                 sLabel("RECENT TRANSACTIONS")
 
-                txnRow(id: "TXN-4821", customer: "Mrs. Eleanor Voss", items: "Perpetual Chronograph", amount: "$12,500", time: "11:42 AM", associate: "Alexander C.")
-                txnRow(id: "TXN-4820", customer: "Mr. James Liu", items: "Classic Flap Bag, Silk Scarf", amount: "$5,740", time: "10:15 AM", associate: "Isabella M.")
-                txnRow(id: "TXN-4819", customer: "Ms. Priya Kapoor", items: "Diamond Bezel Watch", amount: "$8,900", time: "9:38 AM", associate: "Alexander C.")
-                txnRow(id: "TXN-4818", customer: "Mr. David Park", items: "Gold Bracelet", amount: "$7,500", time: "Yesterday", associate: "Isabella M.")
-                txnRow(id: "TXN-4817", customer: "Mrs. Sofia Andersson", items: "Pearl Earrings, Leather Belt", amount: "$4,850", time: "Yesterday", associate: "Alexander C.")
+                if isLoadingOrders {
+                    ProgressView("Loading orders…")
+                        .padding(.top, AppSpacing.lg)
+                } else if liveOrders.isEmpty {
+                    VStack(spacing: AppSpacing.xs) {
+                        Image(systemName: "bag")
+                            .font(.system(size: 26, weight: .light))
+                            .foregroundColor(AppColors.neutral500)
+                        Text("No orders yet")
+                            .font(AppTypography.label)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, AppSpacing.xxl)
+                } else {
+                    ForEach(liveOrders.prefix(20)) { order in
+                        liveOrderRow(order)
+                    }
+                }
             }
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .refreshable { await loadLiveOrders() }
     }
 
-    private func txnRow(id: String, customer: String, items: String, amount: String, time: String, associate: String) -> some View {
+    private func liveOrderRow(_ order: OrderDTO) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
             HStack {
-                Text(id).font(AppTypography.monoID).foregroundColor(AppColors.neutral500)
+                Text(order.orderNumber ?? order.id.uuidString.prefix(8).description)
+                    .font(AppTypography.monoID)
+                    .foregroundColor(AppColors.neutral500)
                 Spacer()
-                Text(time).font(AppTypography.caption).foregroundColor(AppColors.neutral500)
+                // Event tag indicator
+                if order.eventId != nil {
+                    Label("Event", systemImage: "star.fill")
+                        .font(AppTypography.nano)
+                        .foregroundColor(AppColors.secondary)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(AppColors.secondary.opacity(0.1))
+                        .cornerRadius(4)
+                } else if !liveEvents.isEmpty {
+                    Button {
+                        orderToTag = order
+                        showTagEventSheet = true
+                    } label: {
+                        Label("Tag Event", systemImage: "star")
+                            .font(AppTypography.nano)
+                            .foregroundColor(AppColors.accent)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(AppColors.accent.opacity(0.08))
+                            .cornerRadius(4)
+                    }
+                }
+                Text(order.createdAt.formatted(date: .omitted, time: .shortened))
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.neutral500)
             }
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(customer).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                    Text(items).font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark).lineLimit(1)
-                    Text(associate).font(AppTypography.micro).foregroundColor(AppColors.secondary)
+                    Text(order.channel.replacingOccurrences(of: "_", with: " ").capitalized)
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(order.createdAt.formatted(date: .abbreviated, time: .omitted))
+                        .font(AppTypography.micro)
+                        .foregroundColor(AppColors.textSecondaryDark)
                 }
                 Spacer()
-                Text(amount).font(AppTypography.label).foregroundColor(AppColors.accent)
+                Text(order.formattedTotal)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.accent)
             }
         }
         .padding(AppSpacing.sm)
         .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
-    
+
+    private func loadLiveOrders() async {
+        guard let storeId = appState.currentStoreId else { return }
+        isLoadingOrders = true
+        defer { isLoadingOrders = false }
+        do {
+            liveOrders = try await SupabaseManager.shared.client
+                .from("orders")
+                .select()
+                .eq("store_id", value: storeId.uuidString.lowercased())
+                .order("created_at", ascending: false)
+                .limit(50)
+                .execute()
+                .value
+        } catch {
+            print("[ManagerOperationsView] Failed to load orders: \(error)")
+        }
+    }
+
+    private func formattedAmount(_ value: Double) -> String {
+        let fmt = NumberFormatter()
+        fmt.numberStyle = .currency
+        fmt.currencyCode = "INR"
+        fmt.maximumFractionDigits = 0
+        return fmt.string(from: NSNumber(value: value)) ?? "₹\(Int(value))"
+    }
+
     // MARK: - BOPIS & Ship-from-Store Monitor
 
     private var bopisSection: some View {
@@ -308,48 +425,120 @@ struct ManagerOperationsView: View {
         }
     }
 
-    // MARK: - VIP Events
+    // MARK: - VIP Events (Live)
 
     private var vipEventsSection: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
-                sLabel("TODAY")
+                HStack(spacing: AppSpacing.sm) {
+                    let upcoming = liveEvents.filter { $0.scheduledDate >= Date() }
+                    let past     = liveEvents.filter { $0.scheduledDate < Date() }
+                    miniStat(value: "\(upcoming.count)", label: "Upcoming", color: AppColors.secondary)
+                    miniStat(value: "\(past.count)",     label: "Past",     color: AppColors.neutral500)
+                    miniStat(value: "\(liveEvents.count)", label: "Total",  color: AppColors.accent)
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.sm)
 
-                vipCard(client: "Mrs. Eleanor Chen", type: "Private Viewing", time: "3:00 PM", associate: "Alexander C.", items: "Limited Ed. Collection", status: "Confirmed")
-                vipCard(client: "Mr. Robert Thornton", type: "Purchase Consultation", time: "5:30 PM", associate: "Isabella M.", items: "Perpetual Chronograph", status: "Confirmed")
+                if isLoadingEvents {
+                    ProgressView("Loading events…").padding(.top, AppSpacing.xl)
+                } else if liveEvents.isEmpty {
+                    VStack(spacing: AppSpacing.xs) {
+                        Image(systemName: "star.circle")
+                            .font(.system(size: 28, weight: .light))
+                            .foregroundColor(AppColors.secondary)
+                        Text("No events yet")
+                            .font(AppTypography.label)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        Text("Tap ＋ in the top-right to create your first boutique event.")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.top, AppSpacing.xxl)
+                } else {
+                    let upcoming = liveEvents.filter { $0.scheduledDate >= Date() }
+                    let past     = liveEvents.filter { $0.scheduledDate < Date() }
 
-                sLabel("UPCOMING")
-
-                vipCard(client: "Ms. Aiko Tanaka", type: "Styling Session", time: "Tomorrow 11:00 AM", associate: "Alexander C.", items: "Spring 2026 Collection", status: "Pending")
-                vipCard(client: "Mr. François Dubois", type: "Anniversary Gift", time: "Mar 12 2:00 PM", associate: "Isabella M.", items: "Diamond Pendant", status: "Confirmed")
+                    if !upcoming.isEmpty {
+                        sLabel("UPCOMING")
+                        ForEach(upcoming) { event in liveEventCard(event) }
+                    }
+                    if !past.isEmpty {
+                        sLabel("PAST EVENTS")
+                        ForEach(past.prefix(5)) { event in liveEventCard(event) }
+                    }
+                }
             }
-            .padding(.top, AppSpacing.sm)
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .refreshable { await loadLiveEvents() }
     }
 
-    private func vipCard(client: String, type: String, time: String, associate: String, items: String, status: String) -> some View {
+    private func liveEventCard(_ event: EventDTO) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(client).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
-                    Text(type).font(AppTypography.caption).foregroundColor(AppColors.secondary)
+                    Text(event.eventName)
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(event.eventType)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.secondary)
                 }
                 Spacer()
-                let sc = status == "Confirmed" ? AppColors.success : AppColors.warning
-                Text(status.uppercased()).font(AppTypography.nano).foregroundColor(sc)
-                    .padding(.horizontal, 8).padding(.vertical, 3).background(sc.opacity(0.12)).cornerRadius(4)
+                let sc: Color = event.status == "Confirmed" || event.status == "In Progress"
+                    ? AppColors.success
+                    : event.status == "Cancelled" ? AppColors.error : AppColors.warning
+                Text(event.status.uppercased())
+                    .font(AppTypography.nano).foregroundColor(sc)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(sc.opacity(0.12)).cornerRadius(4)
             }
             Divider().background(AppColors.border)
-            HStack(spacing: AppSpacing.xl) {
-                Label(time, systemImage: "clock").font(AppTypography.caption).foregroundColor(AppColors.accent)
-                Label(associate, systemImage: "person").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+            HStack(spacing: AppSpacing.md) {
+                Label(event.scheduledDate.formatted(date: .abbreviated, time: .shortened),
+                      systemImage: "calendar")
+                    .font(AppTypography.caption).foregroundColor(AppColors.accent)
+                Label("\(event.capacity) capacity", systemImage: "person.2")
+                    .font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
             }
-            Text("Items: \(items)").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
+            if !event.relatedCategory.isEmpty {
+                Label(event.relatedCategory, systemImage: "tag")
+                    .font(AppTypography.micro).foregroundColor(AppColors.textSecondaryDark)
+            }
+            // View Sales Report button
+            Button {
+                selectedEventForReport = event
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chart.bar.fill")
+                    Text("View Sales Report")
+                }
+                .font(AppTypography.actionSmall)
+                .foregroundColor(AppColors.accent)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.xs)
+                .background(AppColors.accent.opacity(0.08))
+                .cornerRadius(AppSpacing.radiusSmall)
+            }
         }
         .padding(AppSpacing.cardPadding)
         .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
         .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    private func loadLiveEvents() async {
+        guard let storeId = appState.currentStoreId else { return }
+        isLoadingEvents = true
+        defer { isLoadingEvents = false }
+        do {
+            liveEvents = try await EventSalesService.shared.fetchEvents(storeId: storeId)
+        } catch {
+            print("[ManagerOperationsView] Failed to load events: \(error)")
+        }
     }
 
     // MARK: - Activity Log

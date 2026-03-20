@@ -187,10 +187,6 @@ struct SACatalogProductDetailSheet: View {
         VStack(spacing: 0) {
             specRow("SKU", value: product.sku)
             Divider().padding(.leading, 120)
-            if let barcode = product.barcode {
-                specRow("Barcode", value: barcode)
-                Divider().padding(.leading, 120)
-            }
             specRow("Status", value: product.isActive ? "Active" : "Inactive",
                     valueColor: product.isActive ? AppColors.success : AppColors.error)
             if let cost = product.costPrice {

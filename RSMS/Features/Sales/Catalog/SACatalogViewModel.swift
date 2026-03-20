@@ -53,13 +53,12 @@ final class SACatalogViewModel {
     var filtered: [ProductDTO] {
         var list = products
 
-        // 1. Keyword search — name, SKU, barcode, brand
+        // 1. Keyword search — name, SKU, brand
         if !searchText.isEmpty {
             let q = searchText.lowercased()
             list = list.filter {
                 $0.name.lowercased().contains(q)
                 || $0.sku.lowercased().contains(q)
-                || ($0.barcode?.lowercased().contains(q) == true)
                 || ($0.brand?.lowercased().contains(q) == true)
                 || ($0.description?.lowercased().contains(q) == true)
             }
