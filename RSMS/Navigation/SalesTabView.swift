@@ -11,6 +11,7 @@ import SwiftData
 
 struct SalesTabView: View {
     @State private var selectedTab = 0
+    @State private var saCart = SACartViewModel()
 
     var body: some View {
         ZStack {
@@ -53,6 +54,7 @@ struct SalesTabView: View {
                     }
                     .tag(4)
             }
+            .environment(saCart)
             .tint(AppColors.accent)
             .tabBarMinimizeBehavior(.onScrollDown)
             .toolbarColorScheme(.dark, for: .tabBar)
