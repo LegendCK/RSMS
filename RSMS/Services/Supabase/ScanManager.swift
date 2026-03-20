@@ -87,7 +87,7 @@ struct ScanResult: Identifiable, Equatable {
 /// of callbacks for a single physical scan event.
 @MainActor
 final class ScanManager {
-    static let shared = ScanManager()
+    @MainActor static let shared = ScanManager()
 
     // MARK: - Configuration
 
@@ -120,12 +120,17 @@ final class ScanManager {
 
     // MARK: - Init
 
-    private init(
-        processor: ScanProcessor = RealTimeScanProcessor(),
-        service: ScanServiceProtocol = ScanService.shared
-    ) {
+    private init(processor: ScanProcessor, service: ScanServiceProtocol) {
         self.processor = processor
         self.service   = service
+    }
+
+    private convenience init() {
+        let service = ScanService.shared
+        self.init(
+            processor: RealTimeScanProcessor(service: service),
+            service: service
+        )
     }
 
     // MARK: - Session Lifecycle

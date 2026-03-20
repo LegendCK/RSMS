@@ -1,6 +1,17 @@
 import Foundation
 import Supabase
 
+enum PromotionServiceError: LocalizedError {
+    case promotionsTableMissing
+
+    var errorDescription: String? {
+        switch self {
+        case .promotionsTableMissing:
+            return "Promotions backend is not set up yet. Run the latest Supabase migrations and reload schema."
+        }
+    }
+}
+
 @MainActor
 final class PromotionService {
     static let shared = PromotionService()
@@ -30,9 +41,21 @@ final class PromotionService {
                 ].contains(urlError.code)
                 guard retryable && attempt < maxRetries else { throw urlError }
                 try await Task.sleep(nanoseconds: retryBaseDelay * UInt64(1 << attempt))
+            } catch {
+                if isMissingPromotionsTableError(error) {
+                    throw PromotionServiceError.promotionsTableMissing
+                }
+                throw error
             }
         }
         throw lastError!
+    }
+
+    private func isMissingPromotionsTableError(_ error: Error) -> Bool {
+        let text = error.localizedDescription.lowercased()
+        return text.contains("public.promotions")
+            || text.contains("relation \"promotions\" does not exist")
+            || text.contains("could not find the table")
     }
 
     func fetchPromotions(includeInactive: Bool = true) async throws -> [PromotionDTO] {

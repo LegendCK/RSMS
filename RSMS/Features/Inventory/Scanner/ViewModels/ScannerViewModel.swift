@@ -38,8 +38,12 @@ final class ScannerViewModel {
 
     private let manager: ScanManager
 
-    init(manager: ScanManager = .shared) {
+    init(manager: ScanManager) {
         self.manager = manager
+    }
+
+    convenience init() {
+        self.init(manager: ScanManager.shared)
     }
 
     // MARK: - Session Control

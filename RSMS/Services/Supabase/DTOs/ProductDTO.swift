@@ -13,6 +13,7 @@ import Foundation
 struct ProductDTO: Codable, Identifiable {
     let id: UUID
     let sku: String
+    let barcode: String?
     let name: String
     let brand: String?
     let categoryId: UUID?
@@ -30,6 +31,7 @@ struct ProductDTO: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id
         case sku
+        case barcode
         case name
         case brand
         case categoryId    = "category_id"

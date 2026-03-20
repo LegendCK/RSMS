@@ -184,6 +184,7 @@ final class SACartViewModel {
                     cartItems:   payload,
                     orderNumber: orderNumber,
                     subtotal:    subtotal,
+                    discountTotal: discountAmount,
                     taxTotal:    tax,
                     grandTotal:  total,
                     channel:     "in_store"

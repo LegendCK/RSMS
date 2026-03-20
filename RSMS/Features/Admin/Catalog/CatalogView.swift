@@ -94,10 +94,10 @@ struct CatalogView: View {
                         parsedCSVRows = try CSVParserService.parseCSV(url: url)
                         showCSVPreview = true
                     } catch {
-                        print("Failed to parse CSV: \\(error)")
+                        print("Failed to parse CSV: \(error)")
                     }
                 case .failure(let err):
-                    print("Failed to import file: \\(err)")
+                    print("Failed to import file: \(err)")
                 }
             }
             // CSV Preview Sheet
@@ -1642,17 +1642,29 @@ struct CatalogPromotionsSubview: View {
     private func loadAll() async {
         isLoading = true
         defer { isLoading = false }
+        errorMessage = nil
+
         do {
-            async let promos = PromotionService.shared.fetchPromotions()
-            async let products = CatalogService.shared.fetchProducts()
-            async let categories = CatalogService.shared.fetchCategories()
-            let (loadedPromotions, loadedProducts, loadedCategories) = try await (promos, products, categories)
-            promotions = loadedPromotions
-            remoteProducts = loadedProducts
-            remoteCategories = loadedCategories
-            errorMessage = nil
+            remoteProducts = try await CatalogService.shared.fetchProducts()
         } catch {
-            errorMessage = error.localizedDescription
+            remoteProducts = []
+            errorMessage = "Could not load products: \(error.localizedDescription)"
+        }
+
+        do {
+            remoteCategories = try await CatalogService.shared.fetchCategories()
+        } catch {
+            remoteCategories = []
+            let message = "Could not load categories: \(error.localizedDescription)"
+            errorMessage = errorMessage == nil ? message : "\(errorMessage!)\n\(message)"
+        }
+
+        do {
+            promotions = try await PromotionService.shared.fetchPromotions()
+        } catch {
+            promotions = []
+            let message = error.localizedDescription
+            errorMessage = errorMessage == nil ? message : "\(errorMessage!)\n\(message)"
         }
     }
 }
