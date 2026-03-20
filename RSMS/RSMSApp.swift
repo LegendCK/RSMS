@@ -32,6 +32,10 @@ struct RSMSApp: App {
             StoreLocation.self,
             StaffShift.self,
             ReservationItem.self,
+            PricingPolicySettings.self,
+            IndianTaxRule.self,
+            RegionalPriceRule.self,
+            PromotionRule.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -59,6 +63,8 @@ struct RSMSApp: App {
                 .environment(appState)
                 .onAppear {
                     seedDataIfNeeded()
+                    // Close any sessions that were left ACTIVE from a previous crash
+                    Task { await ScanManager.shared.cleanUpStaleSessions() }
                 }
         }
         .modelContainer(sharedModelContainer)

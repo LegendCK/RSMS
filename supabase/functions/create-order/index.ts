@@ -17,6 +17,7 @@ interface CreateOrderPayload {
   orderNumber: string;
   cartItems: CartItemPayload[];
   subtotal: number;
+  discountTotal?: number;
   taxTotal: number;
   grandTotal: number;
   channel: string;   // "online" | "bopis" | "in_store" | "ship_from_store"
@@ -107,6 +108,7 @@ serve(async (req: Request) => {
     // ── 5. Parse payload ───────────────────────────────────────────────────────
     const payload: CreateOrderPayload = await req.json();
     const currency = payload.currency ?? "USD";
+    const discountTotal = payload.discountTotal ?? 0;
 
     // ── 6. Insert order header ─────────────────────────────────────────────────
     const { data: order, error: orderError } = await admin
@@ -119,6 +121,7 @@ serve(async (req: Request) => {
         channel: payload.channel,
         status: "confirmed",
         subtotal: payload.subtotal,
+        discount_total: discountTotal,
         tax_total: payload.taxTotal,
         grand_total: payload.grandTotal,
         currency: currency,

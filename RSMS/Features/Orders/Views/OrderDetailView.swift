@@ -6,9 +6,17 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct OrderDetailView: View {
+    @Environment(AppState.self) private var appState
+    @Query private var stores: [StoreLocation]
+    @Query private var pricingPolicies: [PricingPolicySettings]
     let order: Order
+    @State private var showInvoiceSheet = false
+    @State private var shareFile: ShareFile?
+    @State private var invoiceError = ""
+    @State private var showInvoiceError = false
 
     private let statusFlow: [OrderStatus] = [
         .pending, .confirmed, .processing, .shipped, .delivered
@@ -24,6 +32,10 @@ struct OrderDetailView: View {
 
     private var currentStepIndex: Int {
         activeFlow.firstIndex(of: order.status) ?? 0
+    }
+
+    private var policy: PricingPolicySettings {
+        pricingPolicies.first ?? PricingPolicySettings()
     }
 
     var body: some View {
@@ -67,6 +79,13 @@ struct OrderDetailView: View {
                     paymentSection
                         .padding(.horizontal, AppSpacing.screenHorizontal)
 
+                    GoldDivider()
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+
+                    // Invoice actions
+                    invoiceSection
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+
                     Spacer().frame(height: AppSpacing.xxxl)
                 }
                 .padding(.top, AppSpacing.md)
@@ -74,6 +93,27 @@ struct OrderDetailView: View {
         }
         .navigationTitle("Order Details")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showInvoiceSheet = true
+                } label: {
+                    Image(systemName: "doc.text")
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+        }
+        .sheet(isPresented: $showInvoiceSheet) {
+            InvoiceDetailSheetView(invoice: invoiceSnapshot, onDownload: downloadInvoice)
+        }
+        .sheet(item: $shareFile) { file in
+            ShareSheet(activityItems: [file.url])
+        }
+        .alert("Invoice Error", isPresented: $showInvoiceError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(invoiceError)
+        }
     }
 
     // MARK: - Order Header
@@ -168,7 +208,7 @@ struct OrderDetailView: View {
                 .tracking(2)
                 .foregroundColor(AppColors.accent)
 
-            ForEach(parsedItems, id: \.name) { item in
+            ForEach(parsedItems) { item in
                 HStack(spacing: AppSpacing.md) {
                     ProductArtworkView(
                         imageSource: item.image,
@@ -296,9 +336,43 @@ struct OrderDetailView: View {
         }
     }
 
+    // MARK: - Invoice
+
+    private var invoiceSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("INVOICE")
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.accent)
+
+            Text("View a detailed tax invoice or download PDF for records.")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+
+            HStack(spacing: AppSpacing.sm) {
+                SecondaryButton(title: "View Invoice") {
+                    showInvoiceSheet = true
+                }
+                Button(action: downloadInvoice) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.down.doc")
+                        Text("Download PDF")
+                            .font(AppTypography.buttonPrimary)
+                    }
+                    .foregroundColor(AppColors.textPrimaryLight)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: AppSpacing.touchTarget)
+                    .background(AppColors.accent)
+                    .cornerRadius(AppSpacing.radiusMedium)
+                }
+            }
+        }
+    }
+
     // MARK: - Data Parsing
 
-    private struct ParsedItem: Hashable {
+    private struct ParsedItem: Identifiable {
+        let id: String
         let name: String
         let brand: String
         let qty: Int
@@ -311,28 +385,105 @@ struct OrderDetailView: View {
               let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
             return []
         }
-        return items.map { dict in
-            ParsedItem(
-                name: dict["name"] as? String ?? "Product",
+        return items.enumerated().map { offset, dict in
+            let name = dict["name"] as? String ?? "Product"
+            let qty = dict["qty"] as? Int ?? 1
+            let price = dict["price"] as? Double ?? 0
+            return ParsedItem(
+                id: "\(offset)-\(name)-\(qty)-\(price)",
+                name: name,
                 brand: dict["brand"] as? String ?? "Maison Luxe",
-                qty: dict["qty"] as? Int ?? 1,
-                price: dict["price"] as? Double ?? 0,
+                qty: qty,
+                price: price,
                 image: dict["image"] as? String ?? "bag.fill"
             )
         }
     }
 
-    private var parsedAddress: String {
+    private var parsedAddressDictionary: [String: String] {
         guard let data = order.shippingAddress.data(using: .utf8),
               let addr = try? JSONSerialization.jsonObject(with: data) as? [String: String] else {
-            return "Address on file"
+            return [:]
         }
+        return addr
+    }
+
+    private var parsedAddress: String {
+        let addr = parsedAddressDictionary
         let line1 = addr["line1"] ?? ""
         let city = addr["city"] ?? ""
         let state = addr["state"] ?? ""
         let zip = addr["zip"] ?? ""
         if line1.isEmpty { return "Address on file" }
         return "\(line1), \(city), \(state) \(zip)"
+    }
+
+    private var invoiceSnapshot: InvoiceSnapshot {
+        let buyerState = parsedAddressDictionary["state"] ?? policy.businessState
+        let intraState = IndianPricingEngine.normalizeState(buyerState) == IndianPricingEngine.normalizeState(policy.businessState)
+        let cgst = intraState ? order.tax / 2 : 0
+        let sgst = intraState ? order.tax / 2 : 0
+        let igst = intraState ? 0 : order.tax
+        let customerName = resolvedCustomerName
+        let storeName = resolvedStoreName
+        let storeAddress = resolvedStoreAddress
+        let invoiceItems = parsedItems.map {
+            InvoiceLineItem(
+                name: $0.name,
+                brand: $0.brand,
+                quantity: $0.qty,
+                unitPrice: $0.price
+            )
+        }
+
+        return InvoiceSnapshot(
+            invoiceNumber: "INV-\(order.orderNumber)",
+            orderNumber: order.orderNumber,
+            issuedAt: order.createdAt,
+            customerName: customerName,
+            customerEmail: order.customerEmail,
+            storeName: storeName,
+            storeAddress: storeAddress,
+            shippingAddress: parsedAddress,
+            fulfillmentLabel: order.fulfillmentType.rawValue,
+            paymentMethod: order.paymentMethod,
+            currencyCode: "INR",
+            items: invoiceItems,
+            subtotal: order.subtotal,
+            taxBreakdown: InvoiceTaxBreakdown(cgst: cgst, sgst: sgst, igst: igst, cess: 0, other: 0),
+            total: order.total
+        )
+    }
+
+    private var resolvedStoreName: String {
+        if let matched = matchedStore {
+            return matched.name
+        }
+        return "Maison Luxe India"
+    }
+
+    private var resolvedStoreAddress: String {
+        if let matched = matchedStore {
+            return "\(matched.addressLine1), \(matched.city), \(matched.stateProvince) \(matched.postalCode), \(matched.country)"
+        }
+        return "Mumbai, Maharashtra, India"
+    }
+
+    private var matchedStore: StoreLocation? {
+        guard !order.boutiqueId.isEmpty else { return nil }
+        return stores.first {
+            $0.code.caseInsensitiveCompare(order.boutiqueId) == .orderedSame ||
+            $0.name.caseInsensitiveCompare(order.boutiqueId) == .orderedSame
+        }
+    }
+
+    private var resolvedCustomerName: String {
+        if order.customerEmail == appState.currentUserEmail, !appState.currentUserName.isEmpty {
+            return appState.currentUserName
+        }
+        let localPart = order.customerEmail.split(separator: "@").first.map(String.init) ?? "Customer"
+        let parts = localPart.split(separator: ".").map { $0.capitalized }
+        return parts.isEmpty ? "Customer" : parts.joined(separator: " ")
     }
 
     private var paymentIcon: String {
@@ -390,7 +541,17 @@ struct OrderDetailView: View {
     private func formatCurrency(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
+        formatter.currencyCode = "INR"
+        return formatter.string(from: NSNumber(value: value)) ?? "INR \(value)"
+    }
+
+    private func downloadInvoice() {
+        do {
+            let pdfURL = try InvoicePDFService.generatePDF(for: invoiceSnapshot)
+            shareFile = ShareFile(url: pdfURL)
+        } catch {
+            invoiceError = "Unable to generate invoice PDF. Please try again."
+            showInvoiceError = true
+        }
     }
 }

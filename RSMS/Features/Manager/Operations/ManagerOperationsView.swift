@@ -9,7 +9,10 @@ import SwiftUI
 import SwiftData
 
 struct ManagerOperationsView: View {
+    @Environment(AppState.self) private var appState
     @State private var selectedSection = 0
+    @State private var showAddStock = false
+    @State private var showInventoryWorkspace = false
 
     var body: some View {
         NavigationStack {
@@ -19,9 +22,10 @@ struct ManagerOperationsView: View {
                 VStack(spacing: 0) {
                     Picker("", selection: $selectedSection) {
                         Text("Sales").tag(0)
-                        Text("Discrepancies").tag(1)
-                        Text("VIP Events").tag(2)
-                        Text("Activity").tag(3)
+                        Text("BOPIS").tag(1)
+                        Text("Discrepancies").tag(2)
+                        Text("VIP Events").tag(3)
+                        Text("Activity").tag(4)
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -29,11 +33,39 @@ struct ManagerOperationsView: View {
 
                     switch selectedSection {
                     case 0: salesSection
-                    case 1: discrepanciesSection
-                    case 2: vipEventsSection
-                    case 3: activitySection
+                    case 1: bopisSection
+                    case 2: discrepanciesSection
+                    case 3: vipEventsSection
+                    case 4: activitySection
                     default: salesSection
                     }
+                }
+
+                // ✅ FAB is now inside ZStack so it overlays content correctly
+                // instead of stacking vertically and eating half the screen.
+                if appState.currentUserRole == .inventoryController {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Button {
+                                showAddStock = true
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 24, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 60, height: 60)
+                                    .background(AppColors.accent)
+                                    .clipShape(Circle())
+                                    .shadow(color: AppColors.accent.opacity(0.4), radius: 8, x: 0, y: 4)
+                            }
+                            .accessibilityLabel("Add Stock")
+                            .padding(.trailing, AppSpacing.screenHorizontal)
+                            .padding(.bottom, AppSpacing.md)
+                        }
+                    }
+                    // No ignoresSafeArea here — lets SwiftUI respect the tab bar inset
+                    // so the FAB sits above the tab bar, not on top of it.
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -41,7 +73,23 @@ struct ManagerOperationsView: View {
                 ToolbarItem(placement: .principal) {
                     Text("Operations").font(AppTypography.navTitle).foregroundColor(AppColors.textPrimaryDark)
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showInventoryWorkspace = true
+                    } label: {
+                        Image(systemName: "shippingbox")
+                            .font(AppTypography.iconMedium)
+                            .foregroundColor(AppColors.accent)
+                    }
+                    .accessibilityLabel("Open Inventory Workspace")
+                }
             }
+            .navigationDestination(isPresented: $showInventoryWorkspace) {
+                ManagerInventoryView()
+            }
+        }
+        .sheet(isPresented: $showAddStock) {
+            InventoryAddStockView()
         }
     }
 
@@ -91,6 +139,13 @@ struct ManagerOperationsView: View {
         .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
+    
+    // MARK: - BOPIS & Ship-from-Store Monitor
+
+    private var bopisSection: some View {
+        BOPISOrderMonitorView()
+            .environment(appState)
+    }
 
     // MARK: - Discrepancies
 
@@ -129,15 +184,15 @@ struct ManagerOperationsView: View {
             HStack(spacing: AppSpacing.xl) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("System").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                    Text("\(system)").font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
+                    Text(String(system)).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Counted").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                    Text("\(counted)").font(AppTypography.label).foregroundColor(system != counted ? AppColors.error : AppColors.success)
+                    Text(String(counted)).font(AppTypography.label).foregroundColor(system != counted ? AppColors.error : AppColors.success)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Variance").font(AppTypography.caption).foregroundColor(AppColors.textSecondaryDark)
-                    Text("\(counted - system)").font(AppTypography.label).foregroundColor(AppColors.error)
+                    Text(String(counted - system)).font(AppTypography.label).foregroundColor(AppColors.error)
                 }
             }
             HStack {

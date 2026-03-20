@@ -386,8 +386,8 @@ struct OrderConfirmationView: View {
     private func formatCurrency(_ v: Double) -> String {
         let f = NumberFormatter()
         f.numberStyle  = .currency
-        f.currencyCode = "USD"
-        return f.string(from: NSNumber(value: v)) ?? "$\(v)"
+        f.currencyCode = "INR"
+        return f.string(from: NSNumber(value: v)) ?? "INR \(v)"
     }
 
     private func runEntryAnimation() {

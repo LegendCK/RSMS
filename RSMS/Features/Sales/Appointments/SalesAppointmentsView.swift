@@ -14,6 +14,7 @@ struct SalesAppointmentsView: View {
     @State private var showCreateForm = false
     @State private var selectedAppointment: AppointmentDTO?
     @State private var requestToAccept: AppointmentDTO?
+    @State private var requestToReject: AppointmentDTO?
 
     var body: some View {
         NavigationStack {
@@ -39,6 +40,9 @@ struct SalesAppointmentsView: View {
                                 listSection
                             }
                         }
+                        // Force full rebuild when switching tabs so cached request cards
+                        // never bleed into the Upcoming / Today / Past sections.
+                        .id(selectedSection)
                     }
                     .refreshable {
                         await vm.loadSchedule()
@@ -75,6 +79,12 @@ struct SalesAppointmentsView: View {
             .task {
                 await vm.loadSchedule()
             }
+            .onChange(of: vm.pendingTabSwitch) { _, newTab in
+                if let tab = newTab {
+                    selectedSection = tab
+                    vm.pendingTabSwitch = nil
+                }
+            }
             .alert("Error", isPresented: $vm.showError) {
                 Button("OK", role: .cancel) { }
             } message: {
@@ -84,6 +94,11 @@ struct SalesAppointmentsView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(vm.requestAlertMessage)
+            }
+            .alert("Appointment Cancelled", isPresented: $vm.showCancellationAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(vm.cancellationAlertMessage)
             }
             .alert("Accept Appointment", isPresented: Binding(
                 get: { requestToAccept != nil },
@@ -103,6 +118,24 @@ struct SalesAppointmentsView: View {
                     Text("Confirm \(request.scheduledAt.formatted(date: .abbreviated, time: .shortened)) • \(request.durationMinutes) min?")
                 }
             }
+            .alert("Reject Appointment", isPresented: Binding(
+                get: { requestToReject != nil },
+                set: { if !$0 { requestToReject = nil } }
+            )) {
+                Button("Reject", role: .destructive) {
+                    if let request = requestToReject {
+                        Task { await vm.rejectRequest(request) }
+                    }
+                    requestToReject = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    requestToReject = nil
+                }
+            } message: {
+                if let request = requestToReject {
+                    Text("Reject request for \(request.scheduledAt.formatted(date: .abbreviated, time: .shortened))?")
+                }
+            }
         }
     }
     
@@ -113,44 +146,64 @@ struct SalesAppointmentsView: View {
                 .padding(.top, 40)
         } else {
             ForEach(vm.requestedAppointments) { request in
-                HStack(spacing: AppSpacing.md) {
-                    VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: AppSpacing.md) {
+                    VStack(alignment: .leading, spacing: 6) {
                         if let customer = vm.customer(for: request) {
                             Text(customer.fullName)
                                 .font(AppTypography.bodyMedium.bold())
                                 .foregroundColor(AppColors.textPrimaryDark)
+                                .lineLimit(1)
                             Text(customer.email)
                                 .font(AppTypography.caption)
                                 .foregroundColor(AppColors.textSecondaryDark)
+                                .lineLimit(1)
                         } else {
-                            Text("Customer #\(request.clientId.uuidString.prefix(8))")
+                            Text("Customer details unavailable")
                                 .font(AppTypography.bodyMedium.bold())
                                 .foregroundColor(AppColors.textPrimaryDark)
                         }
+
                         Text(request.scheduledAt.formatted(date: .abbreviated, time: .shortened))
                             .font(AppTypography.bodyMedium)
                             .foregroundColor(AppColors.textSecondaryDark)
-                        Text("\(request.type.capitalized) • \(request.durationMinutes) min")
+
+                        Text("\(request.type.replacingOccurrences(of: "_", with: " ").capitalized) • \(request.durationMinutes) min")
                             .font(AppTypography.caption)
                             .foregroundColor(AppColors.textSecondaryDark)
                     }
-                    Spacer()
-                    Button("Accept") {
-                        requestToAccept = request
+
+                    GoldDivider()
+
+                    HStack(spacing: AppSpacing.sm) {
+                        Spacer(minLength: 0)
+
+                        Button("Reject") {
+                            requestToReject = request
+                        }
+                        .font(AppTypography.buttonPrimary)
+                        .frame(minWidth: 96)
+                        .padding(.vertical, 10)
+                        .background(AppColors.error.opacity(0.12))
+                        .foregroundColor(AppColors.error)
+                        .clipShape(Capsule())
+
+                        Button("Accept") {
+                            requestToAccept = request
+                        }
+                        .font(AppTypography.buttonPrimary)
+                        .frame(minWidth: 104)
+                        .padding(.vertical, 10)
+                        .background(AppColors.accent)
+                        .foregroundColor(AppColors.backgroundPrimary)
+                        .clipShape(Capsule())
                     }
-                    .font(AppTypography.buttonPrimary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(AppColors.accent)
-                    .foregroundColor(AppColors.backgroundPrimary)
-                    .cornerRadius(8)
                 }
                 .padding()
                 .background(AppColors.surfaceDark)
-                .cornerRadius(12)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(AppColors.accent.opacity(0.3), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.accent.opacity(0.24), lineWidth: 1)
                 )
                 .padding(.horizontal, AppSpacing.screenHorizontal)
             }
@@ -159,10 +212,16 @@ struct SalesAppointmentsView: View {
     }
     
     private func currentList() -> [AppointmentDTO] {
+        func nonRequested(_ list: [AppointmentDTO]) -> [AppointmentDTO] {
+            list.filter {
+                $0.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "requested"
+            }
+        }
+
         switch selectedSection {
-        case 0: return vm.todayAppointments
-        case 1: return vm.upcomingAppointments
-        case 2: return vm.pastAppointments
+        case 0: return nonRequested(vm.todayAppointments)
+        case 1: return nonRequested(vm.upcomingAppointments)
+        case 2: return nonRequested(vm.pastAppointments)
         default: return []
         }
     }
@@ -207,7 +266,7 @@ struct SalesAppointmentsView: View {
     
     @ViewBuilder
     private func appointmentCard(_ appointment: AppointmentDTO) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     if let customer = vm.customer(for: appointment) {
@@ -218,20 +277,22 @@ struct SalesAppointmentsView: View {
                             .font(AppTypography.caption)
                             .foregroundColor(AppColors.textSecondaryDark)
                     } else {
-                        Text("Customer #\(appointment.clientId.uuidString.prefix(8))")
+                        Text("Customer details unavailable")
                             .font(AppTypography.bodyMedium.bold())
                             .foregroundColor(AppColors.textPrimaryDark)
                     }
                 }
                 Spacer()
-                Text(appointment.type.uppercased())
+                Text(appointment.type.replacingOccurrences(of: "_", with: " ").uppercased())
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.accent)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .background(AppColors.accent.opacity(0.1))
-                    .cornerRadius(4)
+                    .clipShape(Capsule())
             }
+
+            GoldDivider()
 
             Text(appointment.scheduledAt.formatted(date: .abbreviated, time: .shortened))
                 .font(AppTypography.bodyMedium)

@@ -43,6 +43,7 @@ final class AppointmentService {
             .from("appointments")
             .select()
             .eq("status", value: "requested")
+            .is("associate_id", value: nil)
             .order("scheduled_at", ascending: true)
             .execute()
             .value
@@ -55,6 +56,7 @@ final class AppointmentService {
             .select()
             .eq("store_id", value: storeId.uuidString.lowercased())
             .eq("status", value: "requested")
+            .is("associate_id", value: nil)
             .order("scheduled_at", ascending: true)
             .execute()
             .value
@@ -82,5 +84,46 @@ final class AppointmentService {
             .single()
             .execute()
             .value
+    }
+
+    /// Cancels an appointment by setting its status to "cancelled".
+    func cancelAppointment(_ appointment: AppointmentDTO) async throws -> AppointmentDTO {
+        let payload = AppointmentInsertDTO(
+            clientId: appointment.clientId,
+            storeId: appointment.storeId,
+            associateId: appointment.associateId,
+            type: appointment.type,
+            status: "cancelled",
+            scheduledAt: appointment.scheduledAt,
+            durationMinutes: appointment.durationMinutes,
+            notes: appointment.notes,
+            videoLink: appointment.videoLink
+        )
+        return try await updateAppointment(id: appointment.id, payload: payload)
+    }
+
+    /// Submits a reschedule request: sets status back to "requested", clears the associate,
+    /// and updates scheduledAt to the customer's preferred new time.
+    func requestReschedule(_ appointment: AppointmentDTO, newDate: Date) async throws -> AppointmentDTO {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        let originalStr = formatter.string(from: appointment.scheduledAt)
+        let rescheduleNote = "Reschedule requested (original: \(originalStr))"
+        let combinedNotes = [appointment.notes?.isEmpty == false ? appointment.notes : nil, rescheduleNote]
+            .compactMap { $0 }
+            .joined(separator: "\n")
+        let payload = AppointmentInsertDTO(
+            clientId: appointment.clientId,
+            storeId: appointment.storeId,
+            associateId: nil,
+            type: appointment.type,
+            status: "requested",
+            scheduledAt: newDate,
+            durationMinutes: appointment.durationMinutes,
+            notes: combinedNotes,
+            videoLink: appointment.videoLink
+        )
+        return try await updateAppointment(id: appointment.id, payload: payload)
     }
 }

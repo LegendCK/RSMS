@@ -35,13 +35,12 @@ struct AddProductView: View {
     @State private var sku: String = ""
     @State private var productName: String = ""
     @State private var selectedCategory: Category? = nil
+    @State private var selectedCollectionId: UUID? = nil
     @State private var priceText: String = ""
 
-    // Optional fields
     @State private var brand: String = ""
     @State private var costPriceText: String = ""
     @State private var descriptionText: String = ""
-    @State private var barcode: String = ""
 
     // Toggles
     @State private var isActive: Bool = true
@@ -51,6 +50,8 @@ struct AddProductView: View {
     @State private var isSaving: Bool = false
     @State private var errorMessage: String? = nil
     @State private var showPhotosPicker: Bool = false
+    @State private var remoteCategories: [CategoryDTO] = []
+    @State private var remoteCollections: [BrandCollectionDTO] = []
 
     private var isFormValid: Bool {
         !sku.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -138,9 +139,9 @@ struct AddProductView: View {
                             divider
 
                             // Price
-                            fieldRow(label: "Price (USD) *") {
+                            fieldRow(label: "Price (INR) *") {
                                 HStack(spacing: 4) {
-                                    Text("$")
+                                    Text("₹")
                                         .font(AppTypography.bodyMedium)
                                         .foregroundColor(AppColors.neutral500)
                                     TextField("0.00", text: $priceText)
@@ -163,9 +164,9 @@ struct AddProductView: View {
                             divider
 
                             // Cost Price
-                            fieldRow(label: "Cost Price (USD)") {
+                            fieldRow(label: "Cost Price (INR)") {
                                 HStack(spacing: 4) {
-                                    Text("$")
+                                    Text("₹")
                                         .font(AppTypography.bodyMedium)
                                         .foregroundColor(AppColors.neutral500)
                                     TextField("0.00", text: $costPriceText)
@@ -177,11 +178,24 @@ struct AddProductView: View {
 
                             divider
 
-                            // Barcode
-                            fieldRow(label: "Barcode") {
-                                TextField("UPC / EAN", text: $barcode)
-                                    .font(AppTypography.bodyMedium)
-                                    .foregroundColor(AppColors.textPrimaryDark)
+                            fieldRow(label: "Collection") {
+                                Menu {
+                                    Button("No Collection") { selectedCollectionId = nil }
+                                    Divider()
+                                    ForEach(remoteCollections.filter(\.isActive)) { collection in
+                                        Button(collection.name) { selectedCollectionId = collection.id }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(selectedCollectionName)
+                                            .font(AppTypography.bodyMedium)
+                                            .foregroundColor(selectedCollectionId == nil ? AppColors.neutral500 : AppColors.textPrimaryDark)
+                                        Spacer()
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(AppTypography.caption)
+                                            .foregroundColor(AppColors.neutral500)
+                                    }
+                                }
                             }
                         }
 
@@ -297,6 +311,9 @@ struct AddProductView: View {
             // FIX: Use the no-argument closure form — safest across iOS 17+ and Xcode 26
             .onChange(of: selectedPhotoItems) {
                 loadImages(from: selectedPhotoItems)
+            }
+            .task {
+                await loadRemoteMetadata()
             }
         }
     }
@@ -520,7 +537,8 @@ struct AddProductView: View {
                     sku: sku.trimmingCharacters(in: .whitespaces),
                     name: productName.trimmingCharacters(in: .whitespaces),
                     brand: brand.trimmingCharacters(in: .whitespaces),
-                    categoryId: nil, // local SwiftData Category has no Supabase UUID mapping
+                    categoryId: mappedCategoryId,
+                    collectionId: selectedCollectionId,
                     price: price,
                     costPrice: costPriceDouble,
                     description: descriptionText.trimmingCharacters(in: .whitespaces),
@@ -558,10 +576,32 @@ struct AddProductView: View {
             rating: 0,
             stockCount: 0,
             sku: sku.trimmingCharacters(in: .whitespaces),
-            barcode: barcode.trimmingCharacters(in: .whitespaces)
+            productTypeName: selectedCollectionName == "No Collection" ? "" : selectedCollectionName
         )
         modelContext.insert(product)
         try? modelContext.save()
+    }
+
+    private var mappedCategoryId: UUID? {
+        guard let categoryName = selectedCategory?.name else { return nil }
+        return remoteCategories.first(where: { $0.name == categoryName })?.id
+    }
+
+    private var selectedCollectionName: String {
+        guard let selectedCollectionId else { return "No Collection" }
+        return remoteCollections.first(where: { $0.id == selectedCollectionId })?.name ?? "No Collection"
+    }
+
+    private func loadRemoteMetadata() async {
+        do {
+            async let categories = CatalogService.shared.fetchCategories()
+            async let collections = CatalogService.shared.fetchCollections()
+            let (loadedCategories, loadedCollections) = try await (categories, collections)
+            remoteCategories = loadedCategories
+            remoteCollections = loadedCollections
+        } catch {
+            print("[AddProductView] Metadata load failed: \(error)")
+        }
     }
 }
 

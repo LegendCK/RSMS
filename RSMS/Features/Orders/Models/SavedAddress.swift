@@ -30,7 +30,7 @@ final class SavedAddress {
         city: String = "",
         state: String = "",
         zip: String = "",
-        country: String = "US",
+        country: String = "IN",
         isDefault: Bool = false
     ) {
         self.id            = UUID()
