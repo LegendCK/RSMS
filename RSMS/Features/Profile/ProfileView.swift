@@ -67,6 +67,9 @@ struct ProfileView: View {
 
                 // Boutique section
                 Section("Boutique") {
+                    NavigationLink(destination: MyReservationsView()) {
+                        Label("My Reservations", systemImage: "clock.arrow.circlepath")
+                    }
                     NavigationLink(destination: CustomerBookAppointmentView()) {
                         Label("Book an Appointment", systemImage: "calendar")
                     }
