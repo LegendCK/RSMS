@@ -22,9 +22,10 @@ struct ManagerOperationsView: View {
                 VStack(spacing: 0) {
                     Picker("", selection: $selectedSection) {
                         Text("Sales").tag(0)
-                        Text("Discrepancies").tag(1)
-                        Text("VIP Events").tag(2)
-                        Text("Activity").tag(3)
+                        Text("BOPIS").tag(1)
+                        Text("Discrepancies").tag(2)
+                        Text("VIP Events").tag(3)
+                        Text("Activity").tag(4)
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -32,9 +33,10 @@ struct ManagerOperationsView: View {
 
                     switch selectedSection {
                     case 0: salesSection
-                    case 1: discrepanciesSection
-                    case 2: vipEventsSection
-                    case 3: activitySection
+                    case 1: bopisSection
+                    case 2: discrepanciesSection
+                    case 3: vipEventsSection
+                    case 4: activitySection
                     default: salesSection
                     }
                 }
@@ -136,6 +138,13 @@ struct ManagerOperationsView: View {
         .padding(AppSpacing.sm)
         .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
         .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+    
+    // MARK: - BOPIS & Ship-from-Store Monitor
+
+    private var bopisSection: some View {
+        BOPISOrderMonitorView()
+            .environment(appState)
     }
 
     // MARK: - Discrepancies
