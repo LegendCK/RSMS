@@ -24,6 +24,7 @@ protocol ServiceTicketServiceProtocol: Sendable {
     func fetchTickets(storeId: UUID) async throws -> [ServiceTicketDTO]
     func fetchTicket(id: UUID) async throws -> ServiceTicketDTO
     func updateStatus(ticketId: UUID, status: String) async throws
+    func updateTicket(ticketId: UUID, patch: ServiceTicketUpdatePatch) async throws -> ServiceTicketDTO
     func resolveProductId(forBarcode barcode: String) async throws -> UUID
 }
 
@@ -90,6 +91,18 @@ final class ServiceTicketService: ServiceTicketServiceProtocol, @unchecked Senda
             .update(ServiceTicketStatusPatch(status: status))
             .eq("id", value: ticketId.uuidString)
             .execute()
+    }
+
+    func updateTicket(ticketId: UUID, patch: ServiceTicketUpdatePatch) async throws -> ServiceTicketDTO {
+        let ticket: ServiceTicketDTO = try await client
+            .from("service_tickets")
+            .update(patch)
+            .eq("id", value: ticketId.uuidString)
+            .select()
+            .single()
+            .execute()
+            .value
+        return ticket
     }
 
     // MARK: - Barcode → Product ID Resolution

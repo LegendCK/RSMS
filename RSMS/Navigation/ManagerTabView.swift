@@ -5,14 +5,12 @@
 //  Boutique Manager & Inventory Controller tab bar.
 //
 //  Tab layout:
-//    Manager  → Dashboard | Operations | Scanner | Staff | Profile
+//    Manager  → Dashboard | Insights | Operations | Staff | Profile
 //    IC       → Operations | Scanner | Repairs | Staff | Profile
 //
-//  The Repairs tab is injected only for inventoryController so boutique
-//  managers never see it. Tab tags are computed to stay contiguous
-//  regardless of which conditional tabs are shown.
-//
-//  REPLACE the existing ManagerTabView.swift with this file.
+//  Boutique Managers do NOT have a Scanner tab — they use Insights instead.
+//  Inventory Controllers keep Scanner + Repairs.
+//  Tab tags are computed to stay contiguous regardless of role.
 //
 
 import SwiftUI
@@ -52,6 +50,17 @@ struct ManagerTabView: View {
                         .tag(0)
                 }
 
+                // ── Insights (Boutique Manager only) ──────────────────────
+                if showsDashboard {
+                    NavigationStack { ManagerInsightsView() }
+                        .tabItem {
+                            Image(systemName: selectedTab == insightsTag
+                                  ? "chart.bar.fill" : "chart.bar")
+                            Text("Insights")
+                        }
+                        .tag(insightsTag)
+                }
+
                 // ── Operations ────────────────────────────────────────────
                 NavigationStack { ManagerOperationsView() }
                     .tabItem {
@@ -61,13 +70,15 @@ struct ManagerTabView: View {
                     }
                     .tag(operationsTag)
 
-                // ── Scanner ───────────────────────────────────────────────
-                NavigationStack { ScannerView() }
-                    .tabItem {
-                        Image(systemName: "barcode.viewfinder")
-                        Text("Scanner")
-                    }
-                    .tag(scannerTag)
+                // ── Scanner (Inventory Controller only) ───────────────────
+                if isIC {
+                    NavigationStack { ScannerView() }
+                        .tabItem {
+                            Image(systemName: "barcode.viewfinder")
+                            Text("Scanner")
+                        }
+                        .tag(scannerTag)
+                }
 
                 // ── Repairs (Inventory Controller only) ───────────────────
                 if isIC {
@@ -112,26 +123,30 @@ struct ManagerTabView: View {
             .onReceive(NotificationCenter.default.publisher(
                 for: Notification.Name("switchToScannerTab"))
             ) { _ in
-                selectedTab = scannerTag
+                if isIC { selectedTab = scannerTag }
             }
             .onReceive(NotificationCenter.default.publisher(
                 for: Notification.Name("switchToRepairsTab"))
             ) { _ in
-                if isIC { selectedTab = repairsTag }
+                if isIC { selectedTab = repairsTab }
             }
         }
     }
 
     // MARK: - Tab Tags
     //
-    // Tags are consecutive integers. The Repairs slot only exists for IC
-    // users, so staffTag and profileTag shift accordingly.
+    // Tags shift based on role. Manager: 0=Dashboard, 1=Insights, 2=Operations, 3=Staff, 4=Profile
+    //                            IC:      0=Operations, 1=Scanner, 2=Repairs, 3=Staff, 4=Profile
 
-    private var operationsTag: Int { showsDashboard ? 1 : 0 }
-    private var scannerTag:    Int { operationsTag + 1 }
-    private var repairsTag:    Int { scannerTag + 1 }           // IC only
-    private var staffTag:      Int { isIC ? repairsTag + 1 : scannerTag + 1 }
+    private var insightsTag:   Int { 1 }                                      // Manager only
+    private var operationsTag: Int { showsDashboard ? 2 : 0 }
+    private var scannerTag:    Int { isIC ? operationsTag + 1 : operationsTag }  // IC only
+    private var repairsTag:    Int { isIC ? scannerTag + 1 : scannerTag }        // IC only
+    private var staffTag:      Int { isIC ? repairsTag + 1 : operationsTag + 1 }
     private var profileTag:    Int { staffTag + 1 }
+
+    // Alias for notification handler (avoids "repairsTag" being used as a tag expression)
+    private var repairsTab: Int { repairsTag }
 }
 
 #Preview {

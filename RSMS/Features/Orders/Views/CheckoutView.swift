@@ -162,7 +162,18 @@ struct CheckoutView: View {
                 }
         }
         .onAppear {
-            selectedAddress = savedAddresses.first(where: { $0.isDefault }) ?? savedAddresses.first
+            Task { @MainActor in
+                if savedAddresses.isEmpty,
+                   !appState.isGuest,
+                   let clientId = appState.currentUserProfile?.id ?? appState.currentClientProfile?.id {
+                    await AddressSyncService.shared.hydrateLocalAddressesIfNeeded(
+                        customerEmail: appState.currentUserEmail,
+                        clientId: clientId,
+                        modelContext: modelContext
+                    )
+                }
+                selectedAddress = savedAddresses.first(where: { $0.isDefault }) ?? savedAddresses.first
+            }
         }
         .onChange(of: appState.shouldNavigateHome) { _, newValue in
             guard newValue else { return }
@@ -706,7 +717,7 @@ struct CheckoutView: View {
         }
 
         let newAddress = SavedAddress(
-            customerEmail: appState.currentUserEmail,
+            customerEmail: appState.currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             label: savedAddresses.isEmpty ? "Home" : "Other",
             line1: trimmedLine1,
             line2: addressLine2.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -798,7 +809,7 @@ struct CheckoutView: View {
         // 1. Save locally (always — source of truth for the customer order history UI)
         let order = Order(
             orderNumber: num,
-            customerEmail: appState.currentUserEmail,
+            customerEmail: appState.currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             status: .confirmed,
             orderItems: itemsJSON,
             subtotal: snapshotSubtotal,

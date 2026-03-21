@@ -21,3 +21,8 @@ struct ShareSheet: UIViewControllerRepresentable {
         // No-OP
     }
 }
+
+struct ShareFile: Identifiable {
+    let id = UUID()
+    let url: URL
+}

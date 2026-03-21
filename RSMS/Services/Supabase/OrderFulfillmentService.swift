@@ -11,6 +11,18 @@
 import Foundation
 import Supabase
 
+enum OrderFulfillmentError: LocalizedError {
+    case statusUpdateRejected(attempted: [String], underlying: Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .statusUpdateRejected(let attempted, let underlying):
+            let attempts = attempted.joined(separator: ", ")
+            return "Status update rejected. Tried: \(attempts). Backend error: \(underlying.localizedDescription)"
+        }
+    }
+}
+
 @MainActor
 final class OrderFulfillmentService {
     static let shared = OrderFulfillmentService()
@@ -29,14 +41,30 @@ final class OrderFulfillmentService {
         }
 
         let now = ISO8601DateFormatter().string(from: Date())
+        let candidates = Array(NSOrderedSet(array: OrderStatusMapper.writeCandidates(for: newStatus)).compactMap { $0 as? String })
+        var lastError: Error?
+        var attempted: [String] = []
 
-        try await client
-            .from("orders")
-            .update(StatusUpdate(status: newStatus, updated_at: now))
-            .eq("id", value: orderId.uuidString.lowercased())
-            .execute()
+        for candidate in candidates {
+            attempted.append(candidate)
+            do {
+                try await client
+                    .from("orders")
+                    .update(StatusUpdate(status: candidate, updated_at: now))
+                    .eq("id", value: orderId.uuidString.lowercased())
+                    .execute()
 
-        print("[OrderFulfillmentService] ✅ Order \(orderId) → \(newStatus)")
+                print("[OrderFulfillmentService] ✅ Order \(orderId) → \(candidate)")
+                return
+            } catch {
+                lastError = error
+                print("[OrderFulfillmentService] Status candidate rejected for \(orderId): \(candidate) — \(error.localizedDescription)")
+            }
+        }
+
+        if let lastError {
+            throw OrderFulfillmentError.statusUpdateRejected(attempted: attempted, underlying: lastError)
+        }
     }
 
     // MARK: - Fetch Order Items
@@ -45,7 +73,7 @@ final class OrderFulfillmentService {
     func fetchOrderItems(orderId: UUID) async throws -> [OrderItemWithProduct] {
         let response = try await client
             .from("order_items")
-            .select("id, order_id, product_id, quantity, unit_price, line_total, products(name, sku)")
+            .select("id, order_id, product_id, quantity, unit_price, line_total, products(name, sku, image_urls)")
             .eq("order_id", value: orderId.uuidString.lowercased())
             .execute()
 
@@ -98,7 +126,7 @@ final class OrderFulfillmentService {
 
     /// Fetches all non-terminal orders for a store that need fulfillment.
     func fetchFulfillmentOrders(storeId: UUID) async throws -> [OrderDTO] {
-        let orders: [OrderDTO] = try await client
+        var orders: [OrderDTO] = try await client
             .from("orders")
             .select()
             .eq("store_id", value: storeId.uuidString.lowercased())
@@ -108,7 +136,71 @@ final class OrderFulfillmentService {
             .execute()
             .value
 
+        let orderIds = orders.map(\.id)
+        let clientIds = Set(orders.compactMap(\.clientId))
+
+        let itemSummaryByOrderId = try await fetchItemSummaries(orderIds: orderIds)
+        let clientById = try await fetchClientsById(ids: Array(clientIds))
+
+        for index in orders.indices {
+            let orderId = orders[index].id
+            let summary = itemSummaryByOrderId[orderId]
+            orders[index].itemCount = summary?.itemCount ?? 0
+            orders[index].totalQuantity = summary?.totalQuantity ?? 0
+
+            guard let clientId = orders[index].clientId,
+                  let client = clientById[clientId] else {
+                continue
+            }
+
+            let fullName = [client.firstName, client.lastName]
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+
+            orders[index].customerName = fullName.isEmpty ? "Guest Customer" : fullName
+            orders[index].customerEmail = client.email
+        }
+
         return orders
+    }
+}
+
+private extension OrderFulfillmentService {
+    func fetchClientsById(ids: [UUID]) async throws -> [UUID: ClientLiteRow] {
+        guard !ids.isEmpty else { return [:] }
+
+        let response = try await client
+            .from("clients")
+            .select("id, first_name, last_name, email")
+            .in("id", values: ids.map { $0.uuidString.lowercased() })
+            .execute()
+
+        let rows = try JSONDecoder().decode([ClientLiteRow].self, from: response.data)
+        return Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+    }
+
+    func fetchItemSummaries(orderIds: [UUID]) async throws -> [UUID: OrderItemSummary] {
+        guard !orderIds.isEmpty else { return [:] }
+
+        let response = try await client
+            .from("order_items")
+            .select("order_id, quantity")
+            .in("order_id", values: orderIds.map { $0.uuidString.lowercased() })
+            .execute()
+
+        let rows = try JSONDecoder().decode([OrderItemQtyRow].self, from: response.data)
+        var summaryByOrderId: [UUID: OrderItemSummary] = [:]
+
+        for row in rows {
+            let existing = summaryByOrderId[row.orderId] ?? OrderItemSummary(itemCount: 0, totalQuantity: 0)
+            summaryByOrderId[row.orderId] = OrderItemSummary(
+                itemCount: existing.itemCount + 1,
+                totalQuantity: existing.totalQuantity + row.quantity
+            )
+        }
+
+        return summaryByOrderId
     }
 }
 
@@ -126,8 +218,45 @@ struct OrderItemWithProduct: Codable, Identifiable {
     struct EmbeddedProduct: Codable {
         let name: String?
         let sku: String?
+        let imageUrls: [String]?
+
+        enum CodingKeys: String, CodingKey {
+            case name
+            case sku
+            case imageUrls = "image_urls"
+        }
     }
 
     var productName: String { products?.name ?? "Unknown Product" }
     var productSku: String { products?.sku ?? "—" }
+    var productPrimaryImage: String? { products?.imageUrls?.first }
+}
+
+private struct ClientLiteRow: Codable {
+    let id: UUID
+    let firstName: String
+    let lastName: String
+    let email: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case firstName = "first_name"
+        case lastName = "last_name"
+        case email
+    }
+}
+
+private struct OrderItemQtyRow: Codable {
+    let orderId: UUID
+    let quantity: Int
+
+    enum CodingKeys: String, CodingKey {
+        case orderId = "order_id"
+        case quantity
+    }
+}
+
+private struct OrderItemSummary {
+    let itemCount: Int
+    let totalQuantity: Int
 }

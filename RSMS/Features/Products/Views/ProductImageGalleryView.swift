@@ -100,19 +100,7 @@ private struct ZoomableImageCell: View {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .scaleEffect(scale)
-                            .offset(offset)
-                            .gesture(dragGesture)
-                            .gesture(magnificationGesture)
-                            .onTapGesture(count: 2) {
-                                withAnimation(.spring(response: 0.35)) {
-                                    scale = scale > 1 ? 1.0 : 2.2
-                                    offset = .zero
-                                }
-                            }
+                        zoomableImage(image)
                     case .empty:
                         ProgressView().tint(AppColors.accent)
                     case .failure:
@@ -126,6 +114,34 @@ private struct ZoomableImageCell: View {
             }
         }
         .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private func zoomableImage(_ image: Image) -> some View {
+        let base = image
+            .resizable()
+            .scaledToFit()
+            .scaleEffect(scale)
+            .offset(offset)
+            .simultaneousGesture(magnificationGesture)
+            .onTapGesture(count: 2) {
+                withAnimation(.spring(response: 0.35)) {
+                    if scale > 1 {
+                        scale = 1.0
+                        offset = .zero
+                        lastOffset = .zero
+                    } else {
+                        scale = 2.2
+                    }
+                }
+            }
+
+        if scale > 1 {
+            base.highPriorityGesture(dragGesture)
+        } else {
+            // When not zoomed, keep horizontal drags free so TabView can page.
+            base
+        }
     }
 
     private var fallbackIcon: some View {
@@ -143,8 +159,12 @@ private struct ZoomableImageCell: View {
             }
             .onEnded { _ in
                 lastScale = 1.0
-                if scale < 1.0 {
-                    withAnimation(.spring()) { scale = 1.0; offset = .zero }
+                if scale <= 1.02 {
+                    withAnimation(.spring()) {
+                        scale = 1.0
+                        offset = .zero
+                        lastOffset = .zero
+                    }
                 }
             }
     }

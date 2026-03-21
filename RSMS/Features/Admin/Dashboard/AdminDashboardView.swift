@@ -181,6 +181,7 @@ struct AdminDashboardView: View {
                     }
                 }
             }
+        }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .profile:
@@ -236,7 +237,7 @@ struct AdminDashboardView: View {
                 async let _ = fetchLowStock()
             }
             async let _ = refreshLiveInsights()
-        }        }
+        }
     }
 
     private var adminInitials: String {
