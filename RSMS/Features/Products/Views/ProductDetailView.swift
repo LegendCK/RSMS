@@ -60,6 +60,9 @@ struct ProductDetailView: View {
     @State private var isExportingAll = false
     @State private var exportAllPDFURL: URL?
     @State private var showAdminManageSheet = false
+    @State private var isCheckingWarranty = false
+    @State private var warrantyResult: WarrantyLookupResult?
+    @State private var warrantyError: String?
 
     // MARK: - Variant data
 
@@ -145,7 +148,12 @@ struct ProductDetailView: View {
 
     var body: some View {
         ZStack {
-            Color.white.ignoresSafeArea()
+            LinearGradient(
+                colors: [AppColors.backgroundWarmWhite, AppColors.backgroundPrimary],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -161,20 +169,26 @@ struct ProductDetailView: View {
                         if !isAdminMode {
                             colorPickerSection
                             if needsSizeSelector { sizePickerSection }
+                            inlineActionSection
                         }
 
-                        Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
+                        sectionDivider
                         descriptionSection
-                        Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
+                        sectionDivider
                         detailsSection
 
+                        if !isAdminMode {
+                            sectionDivider
+                            warrantySection
+                        }
+
                         if !product.parsedAttributes.isEmpty {
-                            Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
+                            sectionDivider
                             specificationsSection
                         }
 
                         if canViewInventory {
-                            Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
+                            sectionDivider
                             inventorySection
                         }
 
@@ -182,6 +196,18 @@ struct ProductDetailView: View {
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
                     .padding(.top, AppSpacing.xl)
+                    .padding(.bottom, AppSpacing.md)
+                    .background(
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            .fill(Color.white.opacity(0.94))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                    .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                            )
+                            .shadow(color: .black.opacity(0.08), radius: 16, y: 6)
+                    )
+                    .padding(.horizontal, 12)
+                    .offset(y: -24)
                 }
             }
         }
@@ -211,18 +237,21 @@ struct ProductDetailView: View {
                         }) {
                             Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
                                 .font(.system(size: 16, weight: .light))
-                                .foregroundColor(product.isWishlisted ? AppColors.accent : .black)
+                                .foregroundColor(product.isWishlisted ? AppColors.accent : AppColors.textPrimaryDark)
+                                .frame(width: 34, height: 34)
+                                .background(.ultraThinMaterial, in: Circle())
                         }
                         CartShortcutButton()
                     }
                 }
             }
         }
+        .if(!isAdminMode) { view in
+            view.toolbar(.hidden, for: .tabBar)
+        }
         .safeAreaInset(edge: .bottom) {
             if isAdminMode {
                 adminManageBar
-            } else {
-                bottomActionBar
             }
         }
         .navigationDestination(isPresented: $navigateToCart) {
@@ -574,6 +603,66 @@ struct ProductDetailView: View {
         }
     }
 
+    // MARK: - Warranty
+
+    private var warrantySection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("WARRANTY")
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.accent)
+
+            Text("Check coverage for this product based on purchase history.")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+
+            Button {
+                Task { await checkWarrantyFromProductDetail() }
+            } label: {
+                HStack(spacing: AppSpacing.xs) {
+                    if isCheckingWarranty {
+                        ProgressView().tint(.white)
+                        Text("Checking...")
+                    } else {
+                        Image(systemName: "checkmark.shield")
+                        Text("Check Warranty")
+                    }
+                }
+                .font(AppTypography.buttonSecondary)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: AppSpacing.touchTarget)
+                .background(AppColors.accent)
+                .cornerRadius(AppSpacing.radiusMedium)
+            }
+            .disabled(isCheckingWarranty)
+            .opacity(isCheckingWarranty ? 0.75 : 1)
+
+            if let result = warrantyResult {
+                HStack(spacing: AppSpacing.xs) {
+                    Circle()
+                        .fill(warrantyStatusColor(result.status))
+                        .frame(width: 8, height: 8)
+                    Text("Status: \(result.status.rawValue)")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
+
+                detailRow(label: "Coverage", value: result.coveragePeriodText)
+                detailRow(
+                    label: "Eligible Services",
+                    value: result.eligibleServices.isEmpty ? "None" : result.eligibleServices.joined(separator: ", ")
+                )
+            }
+
+            if let warrantyError, !warrantyError.isEmpty {
+                Text(warrantyError)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.error)
+            }
+        }
+    }
+
     // MARK: - Specifications
 
     private var specificationsSection: some View {
@@ -682,6 +771,33 @@ struct ProductDetailView: View {
         }
     }
 
+    private func warrantyStatusColor(_ status: WarrantyCoverageStatus) -> Color {
+        switch status {
+        case .valid: return AppColors.success
+        case .expired: return AppColors.warning
+        case .notFound: return AppColors.error
+        }
+    }
+
+    @MainActor
+    private func checkWarrantyFromProductDetail() async {
+        guard !isCheckingWarranty else { return }
+        isCheckingWarranty = true
+        warrantyError = nil
+
+        do {
+            warrantyResult = try await WarrantyService.shared.lookupWarranty(
+                mode: .productId,
+                query: product.id.uuidString
+            )
+        } catch {
+            warrantyResult = nil
+            warrantyError = error.localizedDescription
+        }
+
+        isCheckingWarranty = false
+    }
+
     // MARK: - Bottom Action Bar
 
     private var adminManageBar: some View {
@@ -709,84 +825,178 @@ struct ProductDetailView: View {
     }
 
     private var bottomActionBar: some View {
-        VStack(spacing: 0) {
-            // Stock + cart indicator
-            HStack(spacing: 6) {
+        VStack(spacing: AppSpacing.sm) {
+            HStack(spacing: 8) {
                 Circle()
                     .fill(stockColor)
-                    .frame(width: 6, height: 6)
+                    .frame(width: 7, height: 7)
                 Text(stockLabel)
-                    .font(.system(size: 11, weight: .light))
-                    .foregroundColor(.black.opacity(0.55))
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
                 Spacer()
                 if cartItemQuantity > 0 {
                     Button(action: { navigateToCart = true }) {
-                        Text("\(cartItemQuantity) in bag — View")
-                            .font(.system(size: 11, weight: .medium))
+                        Text("Bag (\(cartItemQuantity))")
+                            .font(AppTypography.caption)
                             .foregroundColor(AppColors.accent)
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 10)
+
+            Button(action: { handleAddToBag() }) {
+                Text(
+                    (variantStockCount > 0 || hasActiveReservation)
+                    ? (addedToBag ? "Added To Bag" : (cartItemQuantity > 0 ? "Add Another To Bag" : "Add To Bag"))
+                    : "Out of Stock"
+                )
+                .font(AppTypography.buttonPrimary)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(addedToBag ? AppColors.success : AppColors.accent)
+                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .animation(.spring(response: 0.3), value: addedToBag)
+                .scaleEffect(bagIconScale)
+            }
+            .opacity((variantStockCount > 0 || hasActiveReservation) ? 1 : 0.45)
+            .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
 
             HStack(spacing: 10) {
-                // Add to Bag — primary maroon
+                Button(action: { handleBuyNow() }) {
+                    Text(hasActiveReservation ? "Buy Reserved" : "Buy Now")
+                        .font(AppTypography.buttonPrimary)
+                        .foregroundColor((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .fill(AppColors.backgroundPrimary)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .stroke((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3), lineWidth: 1.5)
+                        )
+                }
+                .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
+
+                Button(action: { handleReserve() }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: hasActiveReservation ? "checkmark.seal.fill" : "building.2")
+                            .font(.system(size: 13, weight: .medium))
+                        Text(hasActiveReservation ? "Already Reserved" : "Reserve")
+                            .font(AppTypography.buttonSecondary)
+                    }
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(AppColors.backgroundSecondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+                .disabled((variantStockCount == 0 || hasActiveReservation) && !appState.isGuest)
+                .opacity((variantStockCount > 0 && !hasActiveReservation) ? 1 : 0.45)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.65), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.1), radius: 14, y: 6)
+        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+
+    private var inlineActionSection: some View {
+        VStack(spacing: AppSpacing.sm) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(stockColor)
+                    .frame(width: 7, height: 7)
+                Text(stockLabel)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                Spacer()
+                if cartItemQuantity > 0 {
+                    Button(action: { navigateToCart = true }) {
+                        Text("Bag (\(cartItemQuantity))")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.accent)
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
                 Button(action: { handleAddToBag() }) {
                     Text(
                         (variantStockCount > 0 || hasActiveReservation)
-                        ? (addedToBag ? "Added" : (cartItemQuantity > 0 ? "Add Another" : "Add to Bag"))
+                        ? (addedToBag ? "Added To Bag" : (cartItemQuantity > 0 ? "Add Another To Bag" : "Add To Bag"))
                         : "Out of Stock"
                     )
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(AppTypography.buttonPrimary)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 52)
+                    .frame(height: 48)
                     .background(addedToBag ? AppColors.success : AppColors.accent)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .animation(.spring(response: 0.3), value: addedToBag)
                     .scaleEffect(bagIconScale)
                 }
-                .opacity((variantStockCount > 0 || hasActiveReservation) ? 1.0 : 0.4)
+                .opacity((variantStockCount > 0 || hasActiveReservation) ? 1 : 0.45)
                 .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
 
-                // Buy Now — maroon outlined
                 Button(action: { handleBuyNow() }) {
                     Text(hasActiveReservation ? "Buy Reserved" : "Buy Now")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(AppTypography.buttonPrimary)
                         .foregroundColor((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3))
-                        .frame(width: 118)
-                        .frame(height: 52)
+                        .frame(width: 126)
+                        .frame(height: 48)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3), lineWidth: 1.5)
+                                .stroke((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3), lineWidth: 1.5)
                         )
                 }
                 .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
-            
+
             Button(action: { handleReserve() }) {
-                Text(hasActiveReservation ? "Already Reserved" : "Reserve in Boutique")
-                    .font(.system(size: 14, weight: .medium))
+                Text(hasActiveReservation ? "Already Reserved" : "Reserve In Boutique")
+                    .font(AppTypography.buttonSecondary)
                     .foregroundColor(AppColors.textSecondaryDark)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(Color.black.opacity(0.04))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .frame(height: 42)
+                    .background(AppColors.backgroundSecondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
             .disabled((variantStockCount == 0 || hasActiveReservation) && !appState.isGuest)
-            .opacity((variantStockCount > 0 && !hasActiveReservation) ? 1.0 : 0.4)
+            .opacity((variantStockCount > 0 && !hasActiveReservation) ? 1 : 0.45)
         }
+        .padding(12)
         .background(
-            Color.white
-                .shadow(color: .black.opacity(0.06), radius: 12, y: -4)
-                .ignoresSafeArea(edges: .bottom)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(AppColors.accent.opacity(0.15), lineWidth: 1)
+                )
         )
+    }
+
+    private var sectionDivider: some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: [Color.clear, AppColors.accent.opacity(0.32), Color.clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(height: 1)
     }
 
     // MARK: - Variant Chips

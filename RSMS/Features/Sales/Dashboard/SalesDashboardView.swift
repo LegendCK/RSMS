@@ -10,6 +10,7 @@ import SwiftData
 
 struct SalesDashboardView: View {
     @Environment(AppState.self) private var appState
+    @State private var showAfterSales = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -62,7 +63,12 @@ struct SalesDashboardView: View {
                         quickAction(title: "New Client", icon: "person.badge.plus", color: AppColors.accent)
                         quickAction(title: "Book Appointment", icon: "calendar.badge.plus", color: AppColors.info)
                         quickAction(title: "Start Sale", icon: "bag.badge.plus", color: AppColors.accent)
-                        quickAction(title: "Service Ticket", icon: "wrench.and.screwdriver", color: AppColors.secondary)
+                        Button {
+                            showAfterSales = true
+                        } label: {
+                            quickAction(title: "Service Ticket", icon: "wrench.and.screwdriver", color: AppColors.secondary)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 28)
@@ -102,6 +108,9 @@ struct SalesDashboardView: View {
                     .tracking(4)
                     .foregroundColor(.primary)
             }
+        }
+        .sheet(isPresented: $showAfterSales) {
+            SalesAfterSalesView()
         }
     }
 

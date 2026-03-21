@@ -128,12 +128,6 @@ struct AddressEditView: View {
                         .font(AppTypography.bodyMedium)
                         .foregroundColor(AppColors.accent)
                 }
-                ToolbarItem(placement: .keyboard) {
-                    Button("Done") {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
-                                                        to: nil, from: nil, for: nil)
-                    }
-                }
             }
             .onAppear { populate() }
         }
@@ -174,6 +168,7 @@ struct AddressEditView: View {
             UINotificationFeedbackGenerator().notificationOccurred(.error)
             return
         }
+        let currentId: UUID
         if let a = address {
             a.label     = label
             a.line1     = line1
@@ -183,9 +178,10 @@ struct AddressEditView: View {
             a.zip       = zip
             a.country   = country
             a.isDefault = isDefault
+            currentId = a.id
         } else {
             let a = SavedAddress(
-                customerEmail: appState.currentUserEmail,
+                customerEmail: appState.currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
                 label: label,
                 line1: line1,
                 line2: line2,
@@ -196,8 +192,39 @@ struct AddressEditView: View {
                 isDefault: isDefault
             )
             modelContext.insert(a)
+            currentId = a.id
         }
+
+        // Ensure only one default address exists for this user.
+        if isDefault {
+            let all = (try? modelContext.fetch(FetchDescriptor<SavedAddress>())) ?? []
+            let mine = all.filter {
+                $0.customerEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    == appState.currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            }
+            for addr in mine where addr.id != currentId {
+                addr.isDefault = false
+            }
+        }
+
         try? modelContext.save()
+
+        // Best-effort sync of the default address to Supabase client profile.
+        if !appState.isGuest,
+           let clientId = appState.currentUserProfile?.id ?? appState.currentClientProfile?.id,
+           isDefault {
+            let all = (try? modelContext.fetch(FetchDescriptor<SavedAddress>())) ?? []
+            if let defaultAddr = all.first(where: {
+                $0.customerEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    == appState.currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    && $0.isDefault
+            }) {
+                Task {
+                    await AddressSyncService.shared.syncDefaultAddressToClient(address: defaultAddr, clientId: clientId)
+                }
+            }
+        }
+
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         dismiss()
     }

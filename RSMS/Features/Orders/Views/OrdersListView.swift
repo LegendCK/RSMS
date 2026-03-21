@@ -23,7 +23,10 @@ struct OrdersListView: View {
     }
 
     private var customerOrders: [Order] {
-        allOrders.filter { $0.customerEmail == appState.currentUserEmail }
+        let email = appState.currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return allOrders.filter {
+            $0.customerEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == email
+        }
     }
 
     private var filteredOrders: [Order] {
@@ -89,6 +92,7 @@ struct OrdersListView: View {
         do {
             try await OrderStatusSyncService.shared.syncOrderStatuses(
                 customerEmail: appState.currentUserEmail,
+                clientId: appState.currentUserProfile?.id ?? appState.currentClientProfile?.id,
                 modelContext: modelContext
             )
         } catch {

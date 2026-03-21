@@ -19,6 +19,9 @@ struct OrderDetailView: View {
     @State private var shareFile: ShareFile?
     @State private var invoiceError = ""
     @State private var showInvoiceError = false
+    @State private var checkingWarrantyItemId: String?
+    @State private var warrantyResultsByItem: [String: WarrantyLookupResult] = [:]
+    @State private var warrantyErrorsByItem: [String: String] = [:]
 
     private let statusFlow: [OrderStatus] = [
         .pending, .confirmed, .processing, .shipped, .delivered
@@ -224,35 +227,74 @@ struct OrderDetailView: View {
                 .foregroundColor(AppColors.accent)
 
             ForEach(parsedItems) { item in
-                HStack(spacing: AppSpacing.md) {
-                    ProductArtworkView(
-                        imageSource: item.image,
-                        fallbackSymbol: "bag.fill",
-                        cornerRadius: AppSpacing.radiusSmall
-                    )
-                    .frame(width: 56, height: 56)
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    HStack(spacing: AppSpacing.md) {
+                        ProductArtworkView(
+                            imageSource: item.image,
+                            fallbackSymbol: "bag.fill",
+                            cornerRadius: AppSpacing.radiusSmall
+                        )
+                        .frame(width: 56, height: 56)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.brand.uppercased())
-                            .font(AppTypography.overline)
-                            .tracking(1)
-                            .foregroundColor(AppColors.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.brand.uppercased())
+                                .font(AppTypography.overline)
+                                .tracking(1)
+                                .foregroundColor(AppColors.accent)
 
-                        Text(item.name)
-                            .font(AppTypography.label)
+                            Text(item.name)
+                                .font(AppTypography.label)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                                .lineLimit(1)
+
+                            Text("Qty: \(item.qty)")
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                        }
+
+                        Spacer()
+
+                        Text(formatCurrency(item.price * Double(item.qty)))
+                            .font(AppTypography.priceSmall)
                             .foregroundColor(AppColors.textPrimaryDark)
-                            .lineLimit(1)
-
-                        Text("Qty: \(item.qty)")
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.textSecondaryDark)
                     }
 
-                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button {
+                            Task { await lookupWarranty(for: item) }
+                        } label: {
+                            HStack(spacing: 6) {
+                                if checkingWarrantyItemId == item.id {
+                                    ProgressView().scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "checkmark.shield")
+                                }
+                                Text("Check Warranty")
+                            }
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.accent)
+                        }
+                        .disabled(checkingWarrantyItemId == item.id)
+                    }
 
-                    Text(formatCurrency(item.price * Double(item.qty)))
-                        .font(AppTypography.priceSmall)
-                        .foregroundColor(AppColors.textPrimaryDark)
+                    if let result = warrantyResultsByItem[item.id] {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(warrantyStatusColor(result.status))
+                                .frame(width: 7, height: 7)
+                            Text("Warranty \(result.status.rawValue) • \(result.coveragePeriodText)")
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    if let error = warrantyErrorsByItem[item.id] {
+                        Text(error)
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.error)
+                    }
                 }
             }
         }
@@ -393,6 +435,12 @@ struct OrderDetailView: View {
         let qty: Int
         let price: Double
         let image: String
+        let productId: String?
+
+        var productUUID: UUID? {
+            guard let productId else { return nil }
+            return UUID(uuidString: productId)
+        }
     }
 
     private var parsedItems: [ParsedItem] {
@@ -410,7 +458,8 @@ struct OrderDetailView: View {
                 brand: dict["brand"] as? String ?? "Maison Luxe",
                 qty: qty,
                 price: price,
-                image: dict["image"] as? String ?? "bag.fill"
+                image: dict["image"] as? String ?? "bag.fill",
+                productId: (dict["productId"] as? String) ?? (dict["product_id"] as? String)
             )
         }
     }
@@ -567,6 +616,43 @@ struct OrderDetailView: View {
         } catch {
             invoiceError = "Unable to generate invoice PDF. Please try again."
             showInvoiceError = true
+        }
+    }
+
+    @MainActor
+    private func lookupWarranty(for item: ParsedItem) async {
+        guard checkingWarrantyItemId == nil else { return }
+
+        checkingWarrantyItemId = item.id
+        warrantyErrorsByItem[item.id] = nil
+
+        do {
+            let result: WarrantyLookupResult
+            if let productUUID = item.productUUID {
+                result = try await WarrantyService.shared.lookupWarranty(
+                    mode: .productId,
+                    query: productUUID.uuidString
+                )
+            } else {
+                result = try await WarrantyService.shared.lookupWarranty(
+                    mode: .purchaseRecord,
+                    query: order.orderNumber
+                )
+            }
+            warrantyResultsByItem[item.id] = result
+        } catch {
+            warrantyResultsByItem[item.id] = nil
+            warrantyErrorsByItem[item.id] = error.localizedDescription
+        }
+
+        checkingWarrantyItemId = nil
+    }
+
+    private func warrantyStatusColor(_ status: WarrantyCoverageStatus) -> Color {
+        switch status {
+        case .valid: return AppColors.success
+        case .expired: return AppColors.warning
+        case .notFound: return AppColors.error
         }
     }
 }

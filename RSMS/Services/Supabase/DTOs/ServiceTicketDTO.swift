@@ -115,6 +115,20 @@ struct ServiceTicketStatusPatch: Encodable {
     let status: String
 }
 
+struct ServiceTicketUpdatePatch: Encodable {
+    let status: String?
+    let notes: String?
+    let estimatedCost: Double?
+    let finalCost: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case notes
+        case estimatedCost = "estimated_cost"
+        case finalCost = "final_cost"
+    }
+}
+
 // MARK: - RepairStatus
 // Values match the DB CHECK constraint on service_tickets.status
 

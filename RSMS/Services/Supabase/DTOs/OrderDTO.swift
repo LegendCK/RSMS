@@ -35,6 +35,10 @@ struct OrderDTO: Codable, Identifiable {
     let eventId: UUID?          // nil = not event-tagged
     let createdAt: Date
     let updatedAt: Date
+    var customerName: String = "Guest Customer"
+    var customerEmail: String? = nil
+    var itemCount: Int = 0
+    var totalQuantity: Int = 0
 
     enum CodingKeys: String, CodingKey {
         case id

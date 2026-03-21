@@ -32,24 +32,24 @@ struct OrderFulfillmentView: View {
     private var filteredOrders: [OrderDTO] {
         switch selectedFilter {
         case .pending:
-            return orders.filter { ["confirmed", "pending"].contains($0.status) }
+            return orders.filter { ["confirmed", "pending"].contains(OrderStatusMapper.canonical($0.status)) }
         case .processing:
-            return orders.filter { $0.status == "processing" }
+            return orders.filter { OrderStatusMapper.canonical($0.status) == "processing" }
         case .shipped:
-            return orders.filter { ["shipped", "ready_for_pickup"].contains($0.status) }
+            return orders.filter { ["shipped", "ready_for_pickup"].contains(OrderStatusMapper.canonical($0.status)) }
         case .all:
             return orders
         }
     }
 
     private var pendingCount: Int {
-        orders.filter { ["confirmed", "pending"].contains($0.status) }.count
+        orders.filter { ["confirmed", "pending"].contains(OrderStatusMapper.canonical($0.status)) }.count
     }
     private var processingCount: Int {
-        orders.filter { $0.status == "processing" }.count
+        orders.filter { OrderStatusMapper.canonical($0.status) == "processing" }.count
     }
     private var shippedCount: Int {
-        orders.filter { ["shipped", "ready_for_pickup"].contains($0.status) }.count
+        orders.filter { ["shipped", "ready_for_pickup"].contains(OrderStatusMapper.canonical($0.status)) }.count
     }
 
     var body: some View {
@@ -164,8 +164,12 @@ struct OrderFulfillmentCard: View {
     @State private var errorMessage = ""
     @State private var showError = false
 
+    private var canonicalStatus: String {
+        OrderStatusMapper.canonical(order.status)
+    }
+
     private var statusColor: Color {
-        switch order.status {
+        switch canonicalStatus {
         case "pending", "confirmed": return AppColors.warning
         case "processing": return AppColors.accent
         case "shipped", "ready_for_pickup": return AppColors.success
@@ -174,7 +178,7 @@ struct OrderFulfillmentCard: View {
     }
 
     private var statusLabel: String {
-        switch order.status {
+        switch canonicalStatus {
         case "pending": return "PENDING"
         case "confirmed": return "CONFIRMED"
         case "processing": return "PROCESSING"
@@ -185,7 +189,7 @@ struct OrderFulfillmentCard: View {
     }
 
     private var nextAction: (label: String, status: String, icon: String)? {
-        switch order.status {
+        switch canonicalStatus {
         case "pending", "confirmed":
             return ("Start Processing", "processing", "arrow.triangle.2.circlepath")
         case "processing":
@@ -213,6 +217,16 @@ struct OrderFulfillmentCard: View {
                     Text(order.createdAt.formatted(date: .abbreviated, time: .shortened))
                         .font(AppTypography.micro)
                         .foregroundColor(AppColors.textSecondaryDark)
+                    Text(order.customerName)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                        .lineLimit(1)
+                    if let customerEmail = order.customerEmail, !customerEmail.isEmpty {
+                        Text(customerEmail)
+                            .font(AppTypography.micro)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .lineLimit(1)
+                    }
                 }
                 Spacer()
                 Text(statusLabel)
@@ -239,6 +253,16 @@ struct OrderFulfillmentCard: View {
                 Text(order.formattedTotal)
                     .font(AppTypography.priceSmall)
                     .foregroundColor(AppColors.accent)
+            }
+
+            HStack(spacing: 4) {
+                Image(systemName: "bag")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppColors.neutral500)
+                Text("\(max(order.itemCount, 0)) item\(order.itemCount == 1 ? "" : "s") • Qty \(max(order.totalQuantity, 0))")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                Spacer()
             }
 
             // Expand to show items
@@ -275,10 +299,24 @@ struct OrderFulfillmentCard: View {
                     VStack(spacing: AppSpacing.xs) {
                         ForEach(orderItems) { item in
                             HStack(spacing: AppSpacing.sm) {
-                                Image(systemName: "cube.box.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppColors.accent)
-                                    .frame(width: 24)
+                                Group {
+                                    if let image = item.productPrimaryImage, !image.isEmpty {
+                                        ProductArtworkView(
+                                            imageSource: image,
+                                            fallbackSymbol: "cube.box.fill",
+                                            cornerRadius: AppSpacing.radiusSmall
+                                        )
+                                    } else {
+                                        RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
+                                            .fill(AppColors.backgroundSecondary)
+                                            .overlay(
+                                                Image(systemName: "cube.box.fill")
+                                                    .font(.system(size: 14))
+                                                    .foregroundColor(AppColors.accent)
+                                            )
+                                    }
+                                }
+                                .frame(width: 40, height: 40)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(item.productName)
                                         .font(AppTypography.label)
@@ -346,7 +384,7 @@ struct OrderFulfillmentCard: View {
 
         do {
             // When moving to "processing", decrement Supabase inventory
-            if newStatus == "processing" {
+            if OrderStatusMapper.canonical(newStatus) == "processing" {
                 // Load items if not already loaded
                 if orderItems.isEmpty {
                     await loadItems()

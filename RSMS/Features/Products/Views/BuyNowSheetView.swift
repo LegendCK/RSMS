@@ -162,7 +162,18 @@ struct BuyNowSheetView: View {
                 Text(orderError ?? "Something went wrong. Please try again.")
             })
             .onAppear {
-                selectedAddress = savedAddresses.first(where: { $0.isDefault }) ?? savedAddresses.first
+                Task { @MainActor in
+                    if savedAddresses.isEmpty,
+                       !appState.isGuest,
+                       let clientId = appState.currentUserProfile?.id ?? appState.currentClientProfile?.id {
+                        await AddressSyncService.shared.hydrateLocalAddressesIfNeeded(
+                            customerEmail: appState.currentUserEmail,
+                            clientId: clientId,
+                            modelContext: modelContext
+                        )
+                    }
+                    selectedAddress = savedAddresses.first(where: { $0.isDefault }) ?? savedAddresses.first
+                }
             }
             .onChange(of: appState.shouldNavigateHome) { _, newValue in
                 guard newValue else { return }
@@ -656,7 +667,7 @@ struct BuyNowSheetView: View {
         }
 
         let newAddress = SavedAddress(
-            customerEmail: appState.currentUserEmail,
+            customerEmail: appState.currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             label: savedAddresses.isEmpty ? "Home" : "Other",
             line1: trimmedLine1,
             line2: inlineAddressLine2.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -746,7 +757,7 @@ struct BuyNowSheetView: View {
         // 1. Save locally (always — source of truth for customer order history UI)
         let order = Order(
             orderNumber: orderNum,
-            customerEmail: appState.currentUserEmail,
+            customerEmail: appState.currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             status: .confirmed,
             orderItems: itemsJSON,
             subtotal: subtotal,

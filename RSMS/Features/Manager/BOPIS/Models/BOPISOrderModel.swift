@@ -77,7 +77,7 @@ struct BOPISOrder: Identifiable, Codable, Equatable {
     }
 
     var isTerminal: Bool {
-        ["completed", "cancelled", "delivered"].contains(status.lowercased())
+        ["completed", "cancelled", "delivered"].contains(OrderStatusMapper.canonical(status))
     }
 
     var timeRemainingLabel: String {

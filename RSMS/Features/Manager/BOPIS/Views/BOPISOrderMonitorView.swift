@@ -367,8 +367,21 @@ struct BOPISOrderCard: View {
     @State private var updateError = ""
     @State private var showUpdateError = false
 
+    private var canonicalStatus: String {
+        OrderStatusMapper.canonical(order.status)
+    }
+
+    private var normalizedStatusLabel: String {
+        switch canonicalStatus {
+        case "ready_for_pickup":
+            return "Ready For Pickup"
+        default:
+            return canonicalStatus.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
     private var nextAction: (label: String, status: String, icon: String)? {
-        switch order.status.lowercased() {
+        switch canonicalStatus {
         case "pending", "confirmed":
             return ("Start Processing", "processing", "arrow.triangle.2.circlepath")
         case "processing":
@@ -426,7 +439,7 @@ struct BOPISOrderCard: View {
                 detailRow(icon: "person.fill", label: "Client", value: order.clientEmail)
                 detailRow(icon: "clock.fill", label: "Deadline", value: order.formattedDeadline, valueColor: deadlineColor)
                 detailRow(icon: "indianrupeesign.circle.fill", label: "Total", value: order.formattedTotal)
-                detailRow(icon: "tag.fill", label: "Status", value: order.status.capitalized)
+                detailRow(icon: "tag.fill", label: "Status", value: normalizedStatusLabel)
             }
             .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, AppSpacing.sm)
