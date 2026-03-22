@@ -23,6 +23,7 @@ struct AddProductView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
 
     // Passed-in categories so the picker is pre-populated
     let availableCategories: [Category]
@@ -45,6 +46,8 @@ struct AddProductView: View {
     // Toggles
     @State private var isActive: Bool = true
     @State private var isLimitedEdition: Bool = false
+    @State private var warrantyCoverageMonthsText: String = "24"
+    @State private var warrantyEligibleServicesText: String = "Manufacturing defect repair, Stitching or hardware fix, Functional inspection"
 
     // UI state
     @State private var isSaving: Bool = false
@@ -233,6 +236,28 @@ struct AddProductView: View {
                                 subtitle: "Marks product with LTD badge",
                                 isOn: $isLimitedEdition
                             )
+                        }
+
+                        formCard("Warranty Policy") {
+                            fieldRow(label: "Coverage (months)") {
+                                TextField("e.g. 24", text: $warrantyCoverageMonthsText)
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                    .keyboardType(.numberPad)
+                            }
+
+                            divider
+
+                            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                                Text("Eligible Services")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                                TextField("Comma separated", text: $warrantyEligibleServicesText, axis: .vertical)
+                                    .lineLimit(2...4)
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                            }
+                            .padding(.vertical, AppSpacing.xs)
                         }
 
                         // Error banner
@@ -548,6 +573,14 @@ struct AddProductView: View {
                 )
                 print("[AddProductView] Created product in Supabase: \(dto.id)")
 
+                let coverage = max(0, Int(warrantyCoverageMonthsText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0)
+                try await ProductWarrantyPolicyService.shared.upsertPolicy(
+                    productId: dto.id,
+                    coverageMonths: coverage,
+                    eligibleServices: parsedWarrantyServices,
+                    updatedBy: appState.currentUserProfile?.id
+                )
+
                 persistToSwiftData()
                 dismiss()
 
@@ -578,6 +611,7 @@ struct AddProductView: View {
             sku: sku.trimmingCharacters(in: .whitespaces),
             productTypeName: selectedCollectionName == "No Collection" ? "" : selectedCollectionName
         )
+        product.attributes = warrantyAttributesJSON
         modelContext.insert(product)
         try? modelContext.save()
     }
@@ -602,6 +636,26 @@ struct AddProductView: View {
         } catch {
             print("[AddProductView] Metadata load failed: \(error)")
         }
+    }
+
+    private var parsedWarrantyServices: [String] {
+        warrantyEligibleServicesText
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private var warrantyAttributesJSON: String {
+        let months = max(0, Int(warrantyCoverageMonthsText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0)
+        let dict: [String: String] = [
+            "warranty_coverage_months": "\(months)",
+            "warranty_eligible_services": parsedWarrantyServices.joined(separator: ", ")
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: dict),
+              let json = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return json
     }
 }
 

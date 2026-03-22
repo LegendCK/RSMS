@@ -120,12 +120,14 @@ struct ServiceTicketUpdatePatch: Encodable {
     let notes: String?
     let estimatedCost: Double?
     let finalCost: Double?
+    let assignedTo: UUID?
 
     enum CodingKeys: String, CodingKey {
         case status
         case notes
         case estimatedCost = "estimated_cost"
         case finalCost = "final_cost"
+        case assignedTo = "assigned_to"
     }
 }
 

@@ -251,7 +251,7 @@ struct CatalogProductsSubview: View {
                 }
                 .refreshable { await loadAll() }
                 .navigationDestination(item: $selectedProduct) { product in
-                    ProductDetailView(product: product)
+                    ProductDetailView(product: product, mode: .adminCatalog)
                 }
             }
         }

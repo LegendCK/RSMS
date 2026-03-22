@@ -22,6 +22,11 @@ struct OrderDetailView: View {
     @State private var checkingWarrantyItemId: String?
     @State private var warrantyResultsByItem: [String: WarrantyLookupResult] = [:]
     @State private var warrantyErrorsByItem: [String: String] = [:]
+    @State private var selectedExchangeItemId: String?
+    @State private var exchangeReason: String = ""
+    @State private var isSubmittingExchangeRequest = false
+    @State private var exchangeRequestTicketNumber: String?
+    @State private var exchangeRequestError: String?
 
     private let statusFlow: [OrderStatus] = [
         .pending, .confirmed, .processing, .shipped, .delivered
@@ -61,6 +66,13 @@ struct OrderDetailView: View {
 
                     // Order items
                     orderItemsSection
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+
+                    GoldDivider()
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+
+                    // Customer exchange request
+                    exchangeRequestSection
                         .padding(.horizontal, AppSpacing.screenHorizontal)
 
                     GoldDivider()
@@ -121,6 +133,11 @@ struct OrderDetailView: View {
         }
         .task { await syncStatus() }
         .refreshable { await syncStatus() }
+        .onAppear {
+            if selectedExchangeItemId == nil {
+                selectedExchangeItemId = parsedItems.first?.id
+            }
+        }
     }
 
     // MARK: - Sync Status
@@ -328,6 +345,85 @@ struct OrderDetailView: View {
                 Text(order.formattedTotal)
                     .font(AppTypography.priceDisplay)
                     .foregroundColor(AppColors.accent)
+            }
+        }
+    }
+
+    // MARK: - Exchange Request
+
+    private var exchangeRequestSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("EXCHANGE REQUEST")
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.accent)
+
+            Text("Need a size or item exchange? Submit a request to after-sales and we will contact you.")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+
+            if parsedItems.count > 1 {
+                Picker("Select Item", selection: Binding(
+                    get: { selectedExchangeItemId ?? parsedItems.first?.id ?? "" },
+                    set: { selectedExchangeItemId = $0 }
+                )) {
+                    ForEach(parsedItems) { item in
+                        Text("\(item.name) • Qty \(item.qty)")
+                            .tag(item.id)
+                    }
+                }
+                .pickerStyle(.menu)
+            } else if let selectedItem = selectedExchangeItem {
+                Text("Item: \(selectedItem.name) • Qty \(selectedItem.qty)")
+                    .font(AppTypography.bodySmall)
+                    .foregroundColor(AppColors.textPrimaryDark)
+            }
+
+            TextEditor(text: $exchangeReason)
+                .frame(minHeight: 88)
+                .font(AppTypography.bodyMedium)
+                .scrollContentBackground(.hidden)
+                .padding(AppSpacing.xs)
+                .background(
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                        .fill(AppColors.backgroundSecondary)
+                )
+
+            Button {
+                Task { await submitExchangeRequest() }
+            } label: {
+                HStack(spacing: AppSpacing.xs) {
+                    if isSubmittingExchangeRequest {
+                        ProgressView().tint(.white)
+                        Text("Submitting...")
+                    } else {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                        Text("Submit Exchange Request")
+                    }
+                }
+                .font(AppTypography.buttonPrimary)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: AppSpacing.touchTarget)
+                .background(
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                        .fill(AppColors.accent)
+                )
+                .opacity(canSubmitExchangeRequest ? 1 : 0.45)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSubmitExchangeRequest)
+
+            if let exchangeRequestTicketNumber {
+                Text("Request submitted. Ticket: \(exchangeRequestTicketNumber)")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.success)
+            }
+
+            if let exchangeRequestError {
+                Text(exchangeRequestError)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.error)
             }
         }
     }
@@ -559,6 +655,20 @@ struct OrderDetailView: View {
         }
     }
 
+    private var selectedExchangeItem: ParsedItem? {
+        if let selectedExchangeItemId,
+           let match = parsedItems.first(where: { $0.id == selectedExchangeItemId }) {
+            return match
+        }
+        return parsedItems.first
+    }
+
+    private var canSubmitExchangeRequest: Bool {
+        !isSubmittingExchangeRequest
+            && selectedExchangeItem != nil
+            && !exchangeReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     // MARK: - Helpers
 
     private func summaryRow(label: String, value: String) -> some View {
@@ -646,6 +756,37 @@ struct OrderDetailView: View {
         }
 
         checkingWarrantyItemId = nil
+    }
+
+    @MainActor
+    private func submitExchangeRequest() async {
+        guard canSubmitExchangeRequest, let selectedItem = selectedExchangeItem else { return }
+
+        isSubmittingExchangeRequest = true
+        exchangeRequestError = nil
+        defer { isSubmittingExchangeRequest = false }
+
+        let reason = exchangeReason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let remoteContext = try? await ServiceTicketService.shared.resolveOrderContext(orderNumber: order.orderNumber)
+        let resolvedStoreId = remoteContext?.storeId ?? matchedStore?.id ?? appState.currentStoreId
+
+        do {
+            let ticketNumber = try await ServiceTicketService.shared.submitCustomerExchangeRequest(
+                orderNumber: order.orderNumber,
+                productId: selectedItem.productUUID,
+                itemName: selectedItem.name,
+                quantity: selectedItem.qty,
+                reason: reason,
+                customerEmail: order.customerEmail,
+                knownStoreId: resolvedStoreId
+            )
+            exchangeRequestTicketNumber = ticketNumber ?? "Submitted"
+            exchangeReason = ""
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } catch {
+            exchangeRequestError = "Failed to submit exchange request: \(error.localizedDescription)"
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+        }
     }
 
     private func warrantyStatusColor(_ status: WarrantyCoverageStatus) -> Color {
