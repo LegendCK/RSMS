@@ -136,24 +136,34 @@ struct BOPISOrder: Identifiable, Codable, Equatable {
 
 // MARK: - Lightweight DTO used internally for decoding
 
+// Nested client row returned by PostgREST join: clients(email)
+private struct _BOPISClientSnippet: Codable {
+    let email: String?
+}
+
 struct _BOPISOrderDTO: Codable {
     let id: UUID
     let orderNumber: String?
     let channel: String
     let status: String
-    let clientEmail: String?
     let grandTotal: Double
     let currency: String
     let createdAt: Date
+    /// Populated via PostgREST join: .select("…, clients(email)")
+    /// Nil for guest/walk-in orders where client_id is NULL.
+    private let clients: _BOPISClientSnippet?
+
+    /// Convenience accessor so call-sites keep using dto.clientEmail
+    var clientEmail: String? { clients?.email }
 
     enum CodingKeys: String, CodingKey {
         case id
-        case orderNumber  = "order_number"
+        case orderNumber = "order_number"
         case channel, status
-        case clientEmail  = "client_email"
-        case grandTotal   = "grand_total"
+        case grandTotal  = "grand_total"
         case currency
-        case createdAt    = "created_at"
+        case createdAt   = "created_at"
+        case clients
     }
 }
 
