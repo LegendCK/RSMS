@@ -84,6 +84,9 @@ struct ICDashboardView: View {
                 }
             }
             .task { await loadDashboard() }
+            .onReceive(NotificationCenter.default.publisher(for: .inventoryStockUpdated)) { _ in
+                Task { await loadDashboard() }
+            }
         }
     }
 

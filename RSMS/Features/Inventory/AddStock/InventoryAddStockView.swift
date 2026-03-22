@@ -20,6 +20,7 @@ struct InventoryAddStockView: View {
     @Query private var localProducts: [Product]
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
     @State private var viewModel = AddStockViewModel()
     @State private var showProductPicker = false
     @State private var stateVersion = 0
@@ -267,7 +268,8 @@ struct InventoryAddStockView: View {
     private var submitButton: some View {
         Button {
             quantityFocused = false
-            Task { await viewModel.createStock() }
+            let sid = appState.currentStoreId
+            Task { await viewModel.createStock(storeId: sid) }
         } label: {
             Group {
                 if case .loading = viewModel.state {
