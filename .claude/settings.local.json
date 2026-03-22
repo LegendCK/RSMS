@@ -27,7 +27,10 @@
       "Bash(grep -r \"create table.*users\" /Users/ekanshjindal/Internship/Infosys/RSMS-3/supabase/migrations/*.sql)",
       "Bash(git fetch:*)",
       "Bash(git rebase:*)",
-      "Bash(grep -l \"import Supabase\" /Users/ekanshjindal/Internship/Infosys/RSMS-3/RSMS/Features/Manager/Operations/*.swift)"
+      "Bash(grep -l \"import Supabase\" /Users/ekanshjindal/Internship/Infosys/RSMS-3/RSMS/Features/Manager/Operations/*.swift)",
+      "Bash(find /Users/ekanshjindal/Internship/Infosys/RSMS-3 -type f -name *Transfer* -o -name *Replenishment*)",
+      "Bash(python3 -c \":*)",
+      "Bash(xcodebuild -scheme RSMS -destination 'platform=iOS Simulator,name=iPhone 17' -quiet build)"
     ]
   }
 }

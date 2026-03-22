@@ -46,7 +46,8 @@ final class OrderService {
         discountTotal: Double,
         taxTotal: Double,
         grandTotal: Double,
-        channel: String      // "online" | "bopis" | "in_store" | "ship_from_store"
+        channel: String,      // "online" | "bopis" | "in_store" | "ship_from_store"
+        storeId: UUID? = nil  // Nearest store for online orders; nil = edge function default
     ) async throws {
 
         struct CartItemPayload: Encodable {
@@ -65,6 +66,7 @@ final class OrderService {
             let grandTotal: Double
             let channel: String
             let currency: String
+            let storeId: String?   // nearest store UUID — edge function uses this if present
         }
 
         struct EdgeResponse: Decodable {
@@ -92,7 +94,8 @@ final class OrderService {
             taxTotal: taxTotal,
             grandTotal: grandTotal,
             channel: channel,
-            currency: "INR"
+            currency: "INR",
+            storeId: storeId?.uuidString.lowercased()
         )
 
         print("[OrderService] Calling create-order edge function for order: \(orderNumber)")
@@ -124,5 +127,30 @@ final class OrderService {
         let orderId = response.orderId ?? "unknown"
         let itemCount = response.itemsInserted ?? 0
         print("[OrderService] ✅ Order \(orderNumber) saved to Supabase (id: \(orderId), items: \(itemCount))")
+
+        // Assign the nearest store — the edge function may not set store_id, so we
+        // patch it directly after creation so IC fulfillment queries pick it up.
+        if let sid = storeId, let orderUUID = UUID(uuidString: orderId) {
+            await assignStoreToOrder(orderId: orderUUID, storeId: sid)
+        }
+    }
+
+    // MARK: - Patch store_id via SECURITY DEFINER RPC (bypasses RLS)
+
+    /// Calls the `assign_order_store` Postgres function which runs as the table owner
+    /// (SECURITY DEFINER), so the customer's RLS policy doesn't block the update.
+    private func assignStoreToOrder(orderId: UUID, storeId: UUID) async {
+        let params: [String: String] = [
+            "p_order_id": orderId.uuidString.lowercased(),
+            "p_store_id": storeId.uuidString.lowercased()
+        ]
+        do {
+            try await client
+                .rpc("assign_order_store", params: params)
+                .execute()
+            print("[OrderService] ✅ store_id assigned → \(storeId) for order \(orderId)")
+        } catch {
+            print("[OrderService] store_id RPC failed (non-fatal): \(error.localizedDescription)")
+        }
     }
 }

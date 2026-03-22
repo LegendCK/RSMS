@@ -155,10 +155,10 @@ struct ManagerTabView: View {
 
     private var insightsTag:   Int { 1 }                        // Manager only
     private var operationsTag: Int { showsDashboard ? 2 : 1 }   // Manager=2, IC=1
-    private var scannerTag:    Int { isIC ? 2 : operationsTag }  // IC only
-    private var repairsTag:    Int { isIC ? 3 : scannerTag }     // IC only
-    private var staffTag:      Int { showsDashboard ? operationsTag + 1 : profileTag }  // Manager only
-    private var profileTag:    Int { isIC ? 4 : staffTag + 1 }
+    private var scannerTag:    Int { 2 }                         // IC only (always 2)
+    private var repairsTag:    Int { 3 }                         // IC only (always 3)
+    private var staffTag:      Int { 3 }                         // Manager only (always 3)
+    private var profileTag:    Int { 4 }                         // Always last tab
 
     // Alias for notification handler (avoids "repairsTag" being used as a tag expression)
     private var repairsTab: Int { repairsTag }

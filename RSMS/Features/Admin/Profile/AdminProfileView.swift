@@ -13,15 +13,14 @@ struct AdminProfileView: View {
     @State private var showLogoutConfirmation = false
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary
-                    .ignoresSafeArea()
+        ZStack {
+            AppColors.backgroundPrimary
+                .ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppSpacing.xl) {
-                        // Profile header
-                        profileHeader
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppSpacing.xl) {
+                    // Profile header
+                    profileHeader
 
                         GoldDivider()
                             .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -81,32 +80,22 @@ struct AdminProfileView: View {
                             .font(AppTypography.caption)
                             .foregroundColor(AppColors.neutral600)
                             .padding(.bottom, AppSpacing.xxxl)
-                    }
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(AppTypography.closeButton)
-                            .foregroundColor(AppColors.textPrimaryDark)
-                    }
-                }
-                ToolbarItem(placement: .principal) {
-                    Text("Settings")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Profile")
+                    .font(AppTypography.navTitle)
+                    .foregroundColor(AppColors.textPrimaryDark)
             }
-            .alert("Sign Out", isPresented: $showLogoutConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Sign Out", role: .destructive) {
-                    appState.logout()
-                }
-            } message: {
-                Text("You will be signed out of the admin console.")
-            }
+        }
+        .alert("Sign Out", isPresented: $showLogoutConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Sign Out", role: .destructive) { appState.logout() }
+        } message: {
+            Text("You will be signed out of the admin console.")
         }
     }
 

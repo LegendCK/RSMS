@@ -51,47 +51,45 @@ struct ICDashboardView: View {
     // MARK: - Body
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary.ignoresSafeArea()
+        ZStack {
+            AppColors.backgroundPrimary.ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppSpacing.xl) {
-                        greetingHeader
-                        inventoryHealthSection
-                        todayActivitySection
-                        quickActionsSection
-                        if !lowStockItems.isEmpty {
-                            lowStockAlertsSection
-                        }
-                    }
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
-                    .padding(.top, AppSpacing.md)
-                    .padding(.bottom, AppSpacing.xxxl)
-                }
-                .refreshable { await loadDashboard() }
-            }
-            .navigationTitle("Dashboard")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if isLoading {
-                        ProgressView()
-                            .tint(AppColors.accent)
-                            .scaleEffect(0.85)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppSpacing.xl) {
+                    greetingHeader
+                    inventoryHealthSection
+                    todayActivitySection
+                    quickActionsSection
+                    if !lowStockItems.isEmpty {
+                        lowStockAlertsSection
                     }
                 }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.md)
+                .padding(.bottom, AppSpacing.xxxl)
             }
-            .task { await loadDashboard() }
-            .onReceive(NotificationCenter.default.publisher(for: .inventoryStockUpdated)) { _ in
-                Task { await loadDashboard() }
+            .refreshable { await loadDashboard() }
+        }
+        .navigationTitle("Dashboard")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if isLoading {
+                    ProgressView()
+                        .tint(AppColors.accent)
+                        .scaleEffect(0.85)
+                }
             }
-            .navigationDestination(isPresented: $showInventory) {
-                ManagerInventoryView()
-            }
-            .sheet(isPresented: $showAddStock) {
-                InventoryAddStockView()
-            }
+        }
+        .task { await loadDashboard() }
+        .onReceive(NotificationCenter.default.publisher(for: .inventoryStockUpdated)) { _ in
+            Task { await loadDashboard() }
+        }
+        .navigationDestination(isPresented: $showInventory) {
+            ManagerInventoryView()
+        }
+        .sheet(isPresented: $showAddStock) {
+            InventoryAddStockView()
         }
     }
 
