@@ -179,15 +179,35 @@ struct InvStockSubview: View {
 
     private func invRow(_ item: InventoryByLocation) -> some View {
         HStack(spacing: AppSpacing.sm) {
+            // Product image thumbnail
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
                     .fill(AppColors.backgroundTertiary)
-                    .frame(width: 40, height: 40)
-                Image(systemName: "cube.box.fill")
-                    .font(.system(size: 16, weight: .light))
-                    .foregroundColor(AppColors.neutral500)
+                    .frame(width: 48, height: 48)
+
+                if let urlStr = item.imageUrl, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let img):
+                            img.resizable()
+                               .scaledToFill()
+                               .frame(width: 48, height: 48)
+                               .clipped()
+                               .cornerRadius(AppSpacing.radiusSmall)
+                        default:
+                            Image(systemName: "cube.box.fill")
+                                .font(.system(size: 18, weight: .light))
+                                .foregroundColor(AppColors.neutral500)
+                        }
+                    }
+                } else {
+                    Image(systemName: "cube.box.fill")
+                        .font(.system(size: 18, weight: .light))
+                        .foregroundColor(AppColors.neutral500)
+                }
             }
-            VStack(alignment: .leading, spacing: 1) {
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(item.productName)
                     .font(AppTypography.label)
                     .foregroundColor(AppColors.textPrimaryDark)
@@ -195,11 +215,14 @@ struct InvStockSubview: View {
                 Text(item.categoryName)
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
+                Text(item.sku)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(AppColors.neutral500)
             }
             Spacer()
             stockBadge(item.quantity, reorderPoint: item.reorderPoint)
         }
-        .padding(.vertical, AppSpacing.xxs)
+        .padding(.vertical, AppSpacing.xs)
     }
 
     private func stockBadge(_ count: Int, reorderPoint: Int) -> some View {

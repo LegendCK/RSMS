@@ -17,7 +17,9 @@ struct ManagerProfileView: View {
     // Live store data
     @State private var storeDTO: StoreDTO? = nil
     @State private var staffList: [UserDTO] = []
+    @State private var boutiqueManager: UserDTO? = nil
     @State private var isLoadingStore = false
+    @State private var boutiqueExpanded: Bool = false
 
     // MARK: - Computed store display values
 
@@ -39,6 +41,37 @@ struct ManagerProfileView: View {
         if inventory > 0 { parts.append("\(inventory) Inventory") }
         if service   > 0 { parts.append("\(service) Service") }
         return parts.isEmpty ? "No role breakdown available" : parts.joined(separator: ", ")
+    }
+
+    private var managerDisplayName: String {
+        boutiqueManager?.fullName ?? "—"
+    }
+
+    private func roleDisplayName(_ role: String) -> String {
+        switch role.lowercased() {
+        case "boutique_manager":     return "Boutique Manager"
+        case "sales_associate":      return "Sales Associate"
+        case "inventory_controller": return "Inventory Controller"
+        case "service_technician":   return "Service Technician"
+        case "aftersales_specialist": return "After-Sales Specialist"
+        case "corporate_admin":      return "Corporate Admin"
+        default:                     return role.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    private func roleColor(_ role: String) -> Color {
+        switch role.lowercased() {
+        case "boutique_manager":     return AppColors.accent
+        case "sales_associate":      return AppColors.info
+        case "inventory_controller": return AppColors.warning
+        case "service_technician", "aftersales_specialist": return .purple
+        default:                     return AppColors.neutral500
+        }
+    }
+
+    private func staffInitials(_ name: String) -> String {
+        let parts = name.split(separator: " ")
+        return parts.compactMap { $0.first.map(String.init) }.prefix(2).joined().uppercased()
     }
 
     var body: some View {
@@ -66,10 +99,73 @@ struct ManagerProfileView: View {
                                 .padding(.vertical, AppSpacing.md)
                             } else {
                                 infoRow(icon: "building.2", title: storeName, subtitle: storeLocation)
-                                infoRow(icon: "person.2", title: staffCountTitle, subtitle: staffBreakdownSubtitle)
-                                if let manager = storeDTO?.managerName, !manager.isEmpty {
-                                    infoRow(icon: "person.badge.key", title: "Manager", subtitle: manager)
+
+                                // Expandable staff row
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                        boutiqueExpanded.toggle()
+                                    }
+                                }) {
+                                    HStack(spacing: AppSpacing.md) {
+                                        Image(systemName: "person.2")
+                                            .font(AppTypography.menuIcon)
+                                            .foregroundColor(AppColors.accent)
+                                            .frame(width: 28)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(staffCountTitle)
+                                                .font(AppTypography.label)
+                                                .foregroundColor(AppColors.textPrimaryDark)
+                                            Text(staffBreakdownSubtitle)
+                                                .font(AppTypography.caption)
+                                                .foregroundColor(AppColors.textSecondaryDark)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(AppTypography.chevron)
+                                            .foregroundColor(AppColors.neutral600)
+                                            .rotationEffect(.degrees(boutiqueExpanded ? 90 : 0))
+                                    }
+                                    .padding(.vertical, AppSpacing.sm)
                                 }
+                                .buttonStyle(.plain)
+
+                                if boutiqueExpanded && !staffList.isEmpty {
+                                    VStack(spacing: 0) {
+                                        GoldDivider().padding(.leading, 44)
+                                        ForEach(Array(staffList.enumerated()), id: \.element.id) { index, member in
+                                            HStack(spacing: AppSpacing.sm) {
+                                                ZStack {
+                                                    Circle()
+                                                        .fill(roleColor(member.role).opacity(0.15))
+                                                        .frame(width: 36, height: 36)
+                                                    Text(staffInitials(member.fullName))
+                                                        .font(.system(size: 13, weight: .semibold))
+                                                        .foregroundColor(roleColor(member.role))
+                                                }
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text(member.fullName)
+                                                        .font(AppTypography.label)
+                                                        .foregroundColor(AppColors.textPrimaryDark)
+                                                    Text(roleDisplayName(member.role))
+                                                        .font(AppTypography.caption)
+                                                        .foregroundColor(AppColors.textSecondaryDark)
+                                                }
+                                                Spacer()
+                                                Circle()
+                                                    .fill(member.isActive ? AppColors.success : AppColors.neutral400)
+                                                    .frame(width: 8, height: 8)
+                                            }
+                                            .padding(.vertical, AppSpacing.xs)
+                                            .padding(.leading, 44)
+                                            if index < staffList.count - 1 {
+                                                GoldDivider().padding(.leading, 44)
+                                            }
+                                        }
+                                    }
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
+
+                                infoRow(icon: "person.badge.key", title: "Manager", subtitle: managerDisplayName)
                             }
                         }
                         .padding(.horizontal, AppSpacing.sm)
@@ -164,13 +260,23 @@ struct ManagerProfileView: View {
             .eq("store_id", value: storeId.uuidString.lowercased())
             .eq("is_active", value: true)
             .neq("role", value: "boutique_manager")
+            .neq("role", value: "client")
+            .execute()
+            .value
+        async let fetchedManager: [UserDTO] = client
+            .from("users")
+            .select()
+            .eq("store_id", value: storeId.uuidString.lowercased())
+            .eq("role", value: "boutique_manager")
+            .limit(1)
             .execute()
             .value
 
         do {
-            let (store, staff) = try await (fetchedStore, fetchedStaff)
+            let (store, staff, managers) = try await (fetchedStore, fetchedStaff, fetchedManager)
             storeDTO = store
             staffList = staff
+            boutiqueManager = managers.first
         } catch {
             print("[ManagerProfileView] Failed to load store data: \(error)")
         }

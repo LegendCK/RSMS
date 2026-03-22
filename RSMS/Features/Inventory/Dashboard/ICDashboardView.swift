@@ -25,10 +25,9 @@ struct ICDashboardView: View {
     @State private var loadError: String?       = nil
     @State private var lowStockItems: [InventoryByLocation] = []
 
-    // Quick-action navigation
-    @State private var goToScanner: Bool        = false
-    @State private var goToRepairs: Bool        = false
-    @State private var goToInventory: Bool      = false
+    // Sheet/nav state
+    @State private var showInventory: Bool       = false
+    @State private var showAddStock: Bool        = false
 
     // MARK: - Filtered inventory for current store
 
@@ -86,6 +85,12 @@ struct ICDashboardView: View {
             .task { await loadDashboard() }
             .onReceive(NotificationCenter.default.publisher(for: .inventoryStockUpdated)) { _ in
                 Task { await loadDashboard() }
+            }
+            .navigationDestination(isPresented: $showInventory) {
+                ManagerInventoryView()
+            }
+            .sheet(isPresented: $showAddStock) {
+                InventoryAddStockView()
             }
         }
     }
@@ -258,6 +263,28 @@ struct ICDashboardView: View {
 
             VStack(spacing: AppSpacing.xs) {
                 quickActionRow(
+                    icon: "shippingbox.fill",
+                    title: "View Inventory",
+                    subtitle: "Browse all SKUs and stock levels",
+                    color: AppColors.info
+                ) {
+                    showInventory = true
+                }
+
+                GoldDivider()
+
+                quickActionRow(
+                    icon: "plus.square.fill",
+                    title: "Add Stock",
+                    subtitle: "Generate serialized barcodes",
+                    color: AppColors.success
+                ) {
+                    showAddStock = true
+                }
+
+                GoldDivider()
+
+                quickActionRow(
                     icon: "barcode.viewfinder",
                     title: "Start Scan Session",
                     subtitle: "Scan IN / OUT / Audit items",
@@ -272,20 +299,9 @@ struct ICDashboardView: View {
                     icon: "wrench.and.screwdriver.fill",
                     title: "New Repair Ticket",
                     subtitle: "Log a new service intake",
-                    color: AppColors.info
+                    color: AppColors.warning
                 ) {
                     NotificationCenter.default.post(name: Notification.Name("switchToRepairsTab"), object: nil)
-                }
-
-                GoldDivider()
-
-                quickActionRow(
-                    icon: "plus.square.fill",
-                    title: "Add Stock",
-                    subtitle: "Record incoming inventory",
-                    color: AppColors.success
-                ) {
-                    NotificationCenter.default.post(name: Notification.Name("switchToOperationsTab"), object: nil)
                 }
             }
             .padding(AppSpacing.cardPadding)
