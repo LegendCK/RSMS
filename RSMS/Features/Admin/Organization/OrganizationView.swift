@@ -16,47 +16,45 @@ struct OrganizationView: View {
     @State private var showCreateRole = false
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary
-                    .ignoresSafeArea()
+        ZStack {
+            AppColors.backgroundPrimary
+                .ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    Picker("", selection: $selectedSection) {
-                        Text("Boutiques").tag(0)
-                        Text("Staff").tag(1)
-                        Text("Roles").tag(2)
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
-                    .padding(.top, AppSpacing.sm)
-                    .padding(.bottom, AppSpacing.sm)
+            VStack(spacing: 0) {
+                Picker("", selection: $selectedSection) {
+                    Text("Boutiques").tag(0)
+                    Text("Staff").tag(1)
+                    Text("Roles").tag(2)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.sm)
+                .padding(.bottom, AppSpacing.sm)
 
-                    switch selectedSection {
-                    case 0:
-                        OrgBoutiquesSubview(showCreateBoutique: $showCreateBoutique)
-                    case 1:
-                        OrgStaffSubview(showCreateStaff: $showCreateStaff)
-                    case 2:
-                        OrgRolesSubview(showCreateRole: $showCreateRole)
-                    default:
-                        OrgBoutiquesSubview(showCreateBoutique: $showCreateBoutique)
-                    }
+                switch selectedSection {
+                case 0:
+                    OrgBoutiquesSubview(showCreateBoutique: $showCreateBoutique)
+                case 1:
+                    OrgStaffSubview(showCreateStaff: $showCreateStaff)
+                case 2:
+                    OrgRolesSubview(showCreateRole: $showCreateRole)
+                default:
+                    OrgBoutiquesSubview(showCreateBoutique: $showCreateBoutique)
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Organization")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: handleCreateTap) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(AppTypography.toolbarIcon)
-                            .foregroundColor(AppColors.accent)
-                    }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Organization")
+                    .font(AppTypography.navTitle)
+                    .foregroundColor(AppColors.textPrimaryDark)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: handleCreateTap) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(AppTypography.toolbarIcon)
+                        .foregroundColor(AppColors.accent)
                 }
             }
         }

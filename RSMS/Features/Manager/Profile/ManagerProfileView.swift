@@ -75,11 +75,10 @@ struct ManagerProfileView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary.ignoresSafeArea()
+        ZStack {
+            AppColors.backgroundPrimary.ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
+            ScrollView(showsIndicators: false) {
                     VStack(spacing: AppSpacing.xl) {
                         profileHeader
 
@@ -235,7 +234,6 @@ struct ManagerProfileView: View {
                 Text("You will be signed out of the manager console.")
             }
             .task { await loadStoreData() }
-        }
     }
 
     // MARK: - Data Fetching

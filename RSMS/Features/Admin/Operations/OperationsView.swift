@@ -7,10 +7,36 @@
 
 import SwiftUI
 import SwiftData
+import Supabase
+
+private struct ReplenishmentRequest: Identifiable, Decodable {
+    let id: UUID
+    let transferNumber: String
+    let productId: String
+    let quantity: Int
+    let toBoutiqueId: String
+    let status: String
+    let requestedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case transferNumber = "transfer_number"
+        case productId      = "product_id"
+        case quantity
+        case toBoutiqueId   = "to_boutique_id"
+        case status
+        case requestedAt    = "requested_at"
+    }
+}
 
 struct OperationsView: View {
     @Query(sort: \Product.stockCount, order: .forward) private var allProducts: [Product]
     @State private var selectedSection = 0
+
+    // Live replenishment requests from Supabase
+    @State private var replenishmentRequests: [ReplenishmentRequest] = []
+    @State private var isLoadingRequests = false
+    @State private var approvingId: UUID? = nil
 
     private var lowStockProducts: [Product] { allProducts.filter { $0.stockCount <= 3 && $0.stockCount > 0 } }
     private var outOfStockProducts: [Product] { allProducts.filter { $0.stockCount == 0 } }
@@ -263,69 +289,131 @@ struct OperationsView: View {
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 
-    // MARK: - Transfers
+    // MARK: - Replenishment Requests (live from Supabase)
 
     private var transfersSection: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
-                // Pending header
-                VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                    sectionLabel("PENDING TRANSFERS")
+                if isLoadingRequests {
+                    ProgressView("Loading requests…")
+                        .tint(AppColors.accent)
+                        .padding(.top, AppSpacing.xxl)
+                } else {
+                    let pending  = replenishmentRequests.filter { $0.status == "pending_admin_approval" }
+                    let approved = replenishmentRequests.filter { $0.status == "approved" }
 
-                    transferRow(sku: "Classic Flap Bag", qty: 2, from: "NYC", to: "Paris", status: "In Transit", color: AppColors.info)
-                    transferRow(sku: "Pearl Earrings", qty: 3, from: "Milan DC", to: "Tokyo", status: "Packing", color: AppColors.warning)
+                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        sectionLabel("PENDING APPROVAL (\(pending.count))")
+                        if pending.isEmpty {
+                            Text("No pending replenishment requests")
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                                .padding(.vertical, AppSpacing.sm)
+                        } else {
+                            ForEach(pending) { req in replenishmentRow(req) }
+                        }
+                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.top, AppSpacing.sm)
+
+                    if !approved.isEmpty {
+                        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                            sectionLabel("APPROVED")
+                            ForEach(approved) { req in replenishmentRow(req) }
+                        }
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                    }
                 }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
-                .padding(.top, AppSpacing.sm)
-
-                VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                    sectionLabel("COMPLETED")
-
-                    transferRow(sku: "Diamond Pendant", qty: 1, from: "Newark DC", to: "Rodeo Dr.", status: "Delivered", color: AppColors.success)
-                    transferRow(sku: "Silk Scarf", qty: 5, from: "Milan DC", to: "Fifth Ave", status: "Delivered", color: AppColors.success)
-                }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
             }
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .task { await loadReplenishmentRequests() }
+        .refreshable { await loadReplenishmentRequests() }
     }
 
-    private func transferRow(sku: String, qty: Int, from: String, to: String, status: String, color: Color) -> some View {
+    private func replenishmentRow(_ req: ReplenishmentRequest) -> some View {
         HStack(spacing: AppSpacing.sm) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(sku)
-                    .font(AppTypography.label)
+                Text(req.transferNumber)
+                    .font(AppTypography.monoID)
                     .foregroundColor(AppColors.textPrimaryDark)
                     .lineLimit(1)
-                HStack(spacing: 4) {
-                    Text(from)
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.textSecondaryDark)
-                    Image(systemName: "arrow.right")
-                        .font(AppTypography.arrowInline)
-                        .foregroundColor(AppColors.neutral500)
-                    Text(to)
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.textSecondaryDark)
-                }
+                Text("Qty: \(req.quantity) · Store: \(req.toBoutiqueId.prefix(8))…")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
             }
             Spacer()
 
-            Text("×\(qty)")
-                .font(AppTypography.label)
-                .foregroundColor(AppColors.textPrimaryDark)
-
-            Text(status.uppercased())
-                .font(AppTypography.nano)
-                .foregroundColor(color)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(color.opacity(0.12))
-                .cornerRadius(4)
+            if req.status == "pending_admin_approval" {
+                Button {
+                    Task { await approveReplenishment(req) }
+                } label: {
+                    if approvingId == req.id {
+                        ProgressView().tint(.white).scaleEffect(0.75)
+                    } else {
+                        Text("Approve")
+                            .font(AppTypography.nano)
+                            .foregroundColor(.white)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(AppColors.accent)
+                .cornerRadius(6)
+                .disabled(approvingId != nil)
+            } else {
+                Text("APPROVED")
+                    .font(AppTypography.nano)
+                    .foregroundColor(AppColors.success)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(AppColors.success.opacity(0.12))
+                    .cornerRadius(4)
+            }
         }
         .padding(AppSpacing.sm)
         .background(AppColors.backgroundSecondary)
         .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    @MainActor
+    private func loadReplenishmentRequests() async {
+        isLoadingRequests = true
+        defer { isLoadingRequests = false }
+        do {
+            let client = SupabaseManager.shared.client
+            replenishmentRequests = try await client
+                .from("transfers")
+                .select()
+                .in("status", values: ["pending_admin_approval", "approved"])
+                .order("requested_at", ascending: false)
+                .limit(50)
+                .execute()
+                .value
+        } catch {
+            print("[OperationsView] Failed to load replenishment requests: \(error.localizedDescription)")
+        }
+    }
+
+    @MainActor
+    private func approveReplenishment(_ req: ReplenishmentRequest) async {
+        approvingId = req.id
+        defer { approvingId = nil }
+        do {
+            struct StatusPatch: Encodable {
+                let status: String
+                let updated_at: String
+            }
+            let patch = StatusPatch(status: "approved", updated_at: ISO8601DateFormatter().string(from: Date()))
+            try await SupabaseManager.shared.client
+                .from("transfers")
+                .update(patch)
+                .eq("id", value: req.id.uuidString.lowercased())
+                .execute()
+            await loadReplenishmentRequests()
+        } catch {
+            print("[OperationsView] Approval failed: \(error.localizedDescription)")
+        }
     }
 
     private func sectionLabel(_ text: String) -> some View {

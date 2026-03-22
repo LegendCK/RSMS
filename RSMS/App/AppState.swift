@@ -165,23 +165,22 @@ class AppState {
     // MARK: - Logout
 
     func logout() {
-        isAuthenticated    = false
-        isGuest            = false
-        currentUserName    = ""
-        currentUserEmail   = ""
-        currentUserRole    = .customer
-        currentStoreId     = nil
-        currentUserProfile = nil
+        // ⚠️ Set currentFlow FIRST — this removes the tab view from the hierarchy
+        // before any role/auth state changes, preventing SwiftUI from trying to
+        // update tab structure mid-animation (which causes a layout stack overflow).
+        // RootView's .animation modifier handles the transition animation.
+        currentFlow = .authentication
+
+        isAuthenticated      = false
+        isGuest              = false
+        currentUserName      = ""
+        currentUserEmail     = ""
+        currentUserRole      = .customer
+        currentStoreId       = nil
+        currentUserProfile   = nil
         currentClientProfile = nil
 
-        withAnimation(.easeInOut(duration: 0.5)) {
-            currentFlow = .authentication
-        }
-
-        // Sign out from Supabase in background
-        Task {
-            try? await AuthService.shared.signOut()
-        }
+        Task { try? await AuthService.shared.signOut() }
     }
 
     // MARK: - Session Restore (called on app launch after splash)
