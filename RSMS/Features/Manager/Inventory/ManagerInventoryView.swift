@@ -8,10 +8,12 @@
 
 import SwiftUI
 import SwiftData
+import Supabase
 
 struct ManagerInventoryView: View {
     @State private var selectedSection = 0
     @State private var showTransferRequest = false
+    @State private var showStartCount = false
 
     var body: some View {
         NavigationStack {
@@ -50,9 +52,15 @@ struct ManagerInventoryView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
-                        Button(action: { showTransferRequest = true }) { Label("Request Transfer", systemImage: "arrow.left.arrow.right") }
-                        Button(action: {}) { Label("Start Count", systemImage: "checklist") }
-                        Button(action: {}) { Label("Flag Item", systemImage: "exclamationmark.bubble") }
+                        Button(action: { showTransferRequest = true }) {
+                            Label("Request Transfer", systemImage: "arrow.left.arrow.right")
+                        }
+                        Button(action: { showStartCount = true }) {
+                            Label("Start Count", systemImage: "checklist")
+                        }
+                        Button(action: { selectedSection = 3 }) {
+                            Label("View Flagged Items", systemImage: "exclamationmark.bubble")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .font(AppTypography.iconMedium)
@@ -62,6 +70,9 @@ struct ManagerInventoryView: View {
             }
             .sheet(isPresented: $showTransferRequest) {
                 TransferRequestSheet(isPresented: $showTransferRequest)
+            }
+            .sheet(isPresented: $showStartCount) {
+                StartCountSheet()
             }
         }
     }
@@ -161,19 +172,42 @@ struct InvStockSubview: View {
             }
         }
         .task { await syncInventory() }
+        .onReceive(NotificationCenter.default.publisher(for: .inventoryStockUpdated)) { _ in
+            Task { await syncInventory() }
+        }
     }
 
     private func invRow(_ item: InventoryByLocation) -> some View {
         HStack(spacing: AppSpacing.sm) {
+            // Product image thumbnail
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
                     .fill(AppColors.backgroundTertiary)
-                    .frame(width: 40, height: 40)
-                Image(systemName: "cube.box.fill")
-                    .font(.system(size: 16, weight: .light))
-                    .foregroundColor(AppColors.neutral500)
+                    .frame(width: 48, height: 48)
+
+                if let urlStr = item.imageUrl, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let img):
+                            img.resizable()
+                               .scaledToFill()
+                               .frame(width: 48, height: 48)
+                               .clipped()
+                               .cornerRadius(AppSpacing.radiusSmall)
+                        default:
+                            Image(systemName: "cube.box.fill")
+                                .font(.system(size: 18, weight: .light))
+                                .foregroundColor(AppColors.neutral500)
+                        }
+                    }
+                } else {
+                    Image(systemName: "cube.box.fill")
+                        .font(.system(size: 18, weight: .light))
+                        .foregroundColor(AppColors.neutral500)
+                }
             }
-            VStack(alignment: .leading, spacing: 1) {
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(item.productName)
                     .font(AppTypography.label)
                     .foregroundColor(AppColors.textPrimaryDark)
@@ -181,11 +215,14 @@ struct InvStockSubview: View {
                 Text(item.categoryName)
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
+                Text(item.sku)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(AppColors.neutral500)
             }
             Spacer()
             stockBadge(item.quantity, reorderPoint: item.reorderPoint)
         }
-        .padding(.vertical, AppSpacing.xxs)
+        .padding(.vertical, AppSpacing.xs)
     }
 
     private func stockBadge(_ count: Int, reorderPoint: Int) -> some View {
@@ -290,6 +327,9 @@ struct InvAlertsSubview: View {
         }
         .refreshable { await syncInventory() }
         .task { await syncInventory() }
+        .onReceive(NotificationCenter.default.publisher(for: .inventoryStockUpdated)) { _ in
+            Task { await syncInventory() }
+        }
         .sheet(isPresented: $showTransferRequest) {
             TransferRequestSheet(isPresented: $showTransferRequest)
         }
@@ -1818,6 +1858,195 @@ private struct DiscrepancyDetailSheet: View {
             errorMessage = error.localizedDescription
             showError = true
         }
+    }
+}
+
+// MARK: - Start Count Sheet
+
+struct StartCountSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
+
+    @State private var inventory: [InventoryByLocation] = []
+    @State private var counts: [UUID: Int] = [:]         // productId → counted qty
+    @State private var isLoading = true
+    @State private var isSaving = false
+    @State private var saved = false
+    @State private var errorMessage: String? = nil
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppColors.backgroundPrimary.ignoresSafeArea()
+
+                Group {
+                    if isLoading {
+                        VStack(spacing: AppSpacing.md) {
+                            ProgressView().tint(AppColors.accent)
+                            Text("Loading inventory…")
+                                .font(AppTypography.bodySmall)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                        }
+                    } else if inventory.isEmpty {
+                        VStack(spacing: AppSpacing.sm) {
+                            Image(systemName: "cube.box")
+                                .font(.system(size: 36, weight: .light))
+                                .foregroundColor(AppColors.neutral500)
+                            Text("No inventory to count")
+                                .font(AppTypography.heading3)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                        }
+                    } else {
+                        countList
+                    }
+                }
+            }
+            .navigationTitle("Stock Count")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(AppColors.accent)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if isSaving {
+                        ProgressView().tint(AppColors.accent)
+                    } else {
+                        Button("Save") { Task { await saveCount() } }
+                            .foregroundColor(AppColors.accent)
+                            .disabled(counts.isEmpty || saved)
+                    }
+                }
+            }
+            .alert("Error", isPresented: .constant(errorMessage != nil)) {
+                Button("OK") { errorMessage = nil }
+            } message: {
+                Text(errorMessage ?? "")
+            }
+            .task { await loadInventory() }
+        }
+    }
+
+    private var countList: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 0) {
+                if saved {
+                    HStack(spacing: AppSpacing.sm) {
+                        Image(systemName: "checkmark.circle.fill").foregroundColor(AppColors.success)
+                        Text("Count saved — inventory updated").font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                    }
+                    .padding(AppSpacing.md)
+                    .frame(maxWidth: .infinity)
+                    .background(AppColors.success.opacity(0.1))
+                    .cornerRadius(AppSpacing.radiusMedium)
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.bottom, AppSpacing.md)
+                }
+
+                Text("Enter the physical count for each item. Leave blank to keep current value.")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.bottom, AppSpacing.sm)
+
+                ForEach(inventory) { item in
+                    countRow(item)
+                    Divider().padding(.leading, AppSpacing.screenHorizontal)
+                }
+            }
+            .padding(.top, AppSpacing.md)
+            .padding(.bottom, AppSpacing.xxxl)
+        }
+    }
+
+    private func countRow(_ item: InventoryByLocation) -> some View {
+        HStack(spacing: AppSpacing.md) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.productName)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                    .lineLimit(1)
+                Text("System: \(item.quantity)")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+            Spacer()
+            // Stepper for counted quantity
+            HStack(spacing: AppSpacing.sm) {
+                Button {
+                    let current = counts[item.productId] ?? item.quantity
+                    if current > 0 { counts[item.productId] = current - 1 }
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(AppColors.accent)
+                }
+                Text("\(counts[item.productId] ?? item.quantity)")
+                    .font(AppTypography.heading3)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                    .frame(minWidth: 32, alignment: .center)
+                Button {
+                    let current = counts[item.productId] ?? item.quantity
+                    counts[item.productId] = current + 1
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+        }
+        .padding(.horizontal, AppSpacing.screenHorizontal)
+        .padding(.vertical, AppSpacing.sm)
+    }
+
+    private func loadInventory() async {
+        guard let storeId = appState.currentStoreId else { isLoading = false; return }
+        do {
+            try await StoreAndInventorySyncService.shared.syncInventoryToLocal(
+                storeId: storeId, modelContext: modelContext)
+            let desc = FetchDescriptor<InventoryByLocation>(
+                predicate: #Predicate { $0.locationId == storeId },
+                sortBy: [SortDescriptor(\.productName)]
+            )
+            inventory = (try? modelContext.fetch(desc)) ?? []
+            // Pre-fill counts with system values
+            for item in inventory { counts[item.productId] = item.quantity }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    private func saveCount() async {
+        guard let storeId = appState.currentStoreId else { return }
+        isSaving = true
+        let client = SupabaseManager.shared.client
+        do {
+            for item in inventory {
+                let counted = counts[item.productId] ?? item.quantity
+                guard counted != item.quantity else { continue }   // skip unchanged
+                let payload = InventoryUpsertDTO(
+                    storeId:      storeId,
+                    productId:    item.productId,
+                    quantity:     counted,
+                    reorderPoint: item.reorderPoint
+                )
+                try await client
+                    .from("inventory")
+                    .upsert(payload, onConflict: "store_id,product_id")
+                    .execute()
+                item.quantity = counted
+            }
+            try? modelContext.save()
+            NotificationCenter.default.post(name: .inventoryStockUpdated, object: nil)
+            withAnimation { saved = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { dismiss() }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isSaving = false
     }
 }
 

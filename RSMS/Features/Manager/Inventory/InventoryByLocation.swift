@@ -19,6 +19,7 @@ final class InventoryByLocation {
     var quantity: Int
     var reorderPoint: Int
     var updatedAt: Date
+    var imageUrl: String?       // first image from products.image_urls
 
     init(
         locationId: UUID,
@@ -28,7 +29,8 @@ final class InventoryByLocation {
         categoryName: String,
         quantity: Int,
         reorderPoint: Int,
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        imageUrl: String? = nil
     ) {
         self.locationId = locationId
         self.productId = productId
@@ -38,5 +40,6 @@ final class InventoryByLocation {
         self.quantity = quantity
         self.reorderPoint = reorderPoint
         self.updatedAt = updatedAt
+        self.imageUrl = imageUrl
     }
 }
