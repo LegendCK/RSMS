@@ -56,6 +56,9 @@ struct ProfileView: View {
                         NavigationLink(destination: OrdersListView()) {
                             Label("My Orders", systemImage: "bag")
                         }
+                        NavigationLink(destination: MyExchangeRequestsView()) {
+                            Label("My Exchange Requests", systemImage: "arrow.triangle.2.circlepath")
+                        }
                         NavigationLink(destination: PaymentMethodsView()) {
                             Label("Payment Methods", systemImage: "creditcard")
                         }

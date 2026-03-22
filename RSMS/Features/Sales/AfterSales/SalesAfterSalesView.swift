@@ -17,6 +17,9 @@ struct SalesAfterSalesView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: AppSpacing.lg) {
                         requestTypeCard
+                        if vm.requestType == .exchange {
+                            exchangeQueueCard
+                        }
                         lookupCard
 
                         if let result = vm.warrantyResult {
@@ -48,6 +51,12 @@ struct SalesAfterSalesView: View {
                         .font(AppTypography.navTitle)
                         .foregroundColor(AppColors.textPrimaryDark)
                 }
+            }
+            .task {
+                await vm.refreshExchangeQueue(
+                    storeId: appState.currentStoreId,
+                    staffUserId: appState.currentUserProfile?.id
+                )
             }
         }
     }
@@ -142,6 +151,97 @@ private extension SalesAfterSalesView {
         .task {
             await vm.loadProductsIfNeeded()
         }
+    }
+
+    var exchangeQueueCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack {
+                Text("EXCHANGE QUEUE")
+                    .font(AppTypography.overline)
+                    .tracking(1.8)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                Spacer()
+                Button {
+                    Task {
+                        await vm.refreshExchangeQueue(
+                            storeId: appState.currentStoreId,
+                            staffUserId: appState.currentUserProfile?.id
+                        )
+                    }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+
+            if vm.isLoadingExchangeQueue {
+                HStack(spacing: AppSpacing.xs) {
+                    ProgressView()
+                    Text("Loading queue...")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+            }
+
+            if let queueMessage = vm.queueMessage {
+                Text(queueMessage)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+
+            if vm.unassignedExchangeTickets.isEmpty {
+                Text("No unassigned exchange tickets.")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            } else {
+                VStack(spacing: AppSpacing.xs) {
+                    ForEach(vm.unassignedExchangeTickets.prefix(4), id: \.id) { ticket in
+                        HStack(spacing: AppSpacing.sm) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(ticket.displayTicketNumber)
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Text(ticket.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            }
+                            Spacer()
+                            Button {
+                                Task {
+                                    await vm.claimExchangeTicket(
+                                        ticket,
+                                        staffUserId: appState.currentUserProfile?.id,
+                                        staffName: appState.currentUserName.isEmpty ? "Staff" : appState.currentUserName
+                                    )
+                                    await vm.refreshExchangeQueue(
+                                        storeId: appState.currentStoreId,
+                                        staffUserId: appState.currentUserProfile?.id
+                                    )
+                                }
+                            } label: {
+                                if vm.isClaimingTicketId == ticket.id {
+                                    ProgressView()
+                                } else {
+                                    Text("Claim")
+                                }
+                            }
+                            .font(AppTypography.caption)
+                            .buttonStyle(.borderedProminent)
+                            .tint(AppColors.accent)
+                            .disabled(vm.isClaimingTicketId != nil)
+                        }
+                        .padding(.horizontal, AppSpacing.sm)
+                        .padding(.vertical, AppSpacing.xs)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                                .fill(AppColors.backgroundSecondary)
+                        )
+                    }
+                }
+            }
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(cardBackground)
     }
 
     var productPickerSection: some View {

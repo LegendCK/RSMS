@@ -136,7 +136,7 @@ struct ProductDetailView: View {
     }
 
     private var isAdminMode: Bool {
-        mode == .adminCatalog
+        mode == .adminCatalog || appState.currentUserRole == .corporateAdmin
     }
 
     init(product: Product, mode: ProductDetailMode = .storefront) {
@@ -1159,6 +1159,7 @@ struct ProductDetailView: View {
 private struct AdminProductManageSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
 
     let product: Product
     let categories: [Category]
@@ -1172,6 +1173,8 @@ private struct AdminProductManageSheet: View {
     @State private var selectedCollectionId: UUID?
     @State private var isLimitedEdition = false
     @State private var isFeatured = false
+    @State private var warrantyCoverageMonthsText: String = "24"
+    @State private var warrantyEligibleServicesText: String = ""
     @State private var remoteCategories: [CategoryDTO] = []
     @State private var remoteCollections: [BrandCollectionDTO] = []
     @State private var errorMessage: String?
@@ -1236,6 +1239,15 @@ private struct AdminProductManageSheet: View {
                     Toggle("Featured", isOn: $isFeatured)
                         .tint(AppColors.accent)
 
+                    LuxuryTextField(placeholder: "Warranty Coverage (months)", text: $warrantyCoverageMonthsText)
+                        .keyboardType(.numberPad)
+
+                    TextField("Eligible services (comma separated)", text: $warrantyEligibleServicesText, axis: .vertical)
+                        .lineLimit(2...4)
+                        .padding(AppSpacing.sm)
+                        .background(AppColors.backgroundSecondary)
+                        .cornerRadius(AppSpacing.radiusMedium)
+
                     Button(action: saveChanges) {
                         Text("Save Changes")
                             .font(AppTypography.buttonPrimary)
@@ -1275,6 +1287,7 @@ private struct AdminProductManageSheet: View {
                 selectedCategoryName = product.categoryName
                 isLimitedEdition = product.isLimitedEdition
                 isFeatured = product.isFeatured
+                hydrateWarrantyFromLocalAttributes()
             }
             .task { await loadRemoteMetadata() }
         }
@@ -1303,6 +1316,15 @@ private struct AdminProductManageSheet: View {
                     isActive: true
                 )
 
+                let coverageMonths = max(0, Int(warrantyCoverageMonthsText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0)
+                let services = parsedWarrantyServices
+                try await ProductWarrantyPolicyService.shared.upsertPolicy(
+                    productId: product.id,
+                    coverageMonths: coverageMonths,
+                    eligibleServices: services,
+                    updatedBy: appState.currentUserProfile?.id
+                )
+
                 product.name = trimmedName
                 product.brand = trimmedBrand
                 product.price = parsedPrice
@@ -1314,6 +1336,7 @@ private struct AdminProductManageSheet: View {
                 product.productTypeName = selectedCollectionName == "No Collection" ? "" : selectedCollectionName
                 product.isLimitedEdition = isLimitedEdition
                 product.isFeatured = isFeatured
+                product.attributes = updatedWarrantyAttributesJSON
 
                 try? modelContext.save()
                 dismiss()
@@ -1336,18 +1359,54 @@ private struct AdminProductManageSheet: View {
 
     private func loadRemoteMetadata() async {
         do {
+            let productId = product.id
             async let categories = CatalogService.shared.fetchCategories()
             async let collections = CatalogService.shared.fetchCollections()
-            let (loadedCategories, loadedCollections) = try await (categories, collections)
+            async let remotePolicy = ProductWarrantyPolicyService.shared.fetchPolicy(productId: productId)
+            let (loadedCategories, loadedCollections, warrantyPolicy) = try await (categories, collections, remotePolicy)
             remoteCategories = loadedCategories
             remoteCollections = loadedCollections
             if let matchedCollection = loadedCollections.first(where: { $0.name == product.productTypeName }) {
                 selectedCollectionId = matchedCollection.id
+            }
+            if let warrantyPolicy {
+                warrantyCoverageMonthsText = "\(warrantyPolicy.coverageMonths)"
+                warrantyEligibleServicesText = warrantyPolicy.eligibleServices.joined(separator: ", ")
             }
         } catch {
             await MainActor.run {
                 errorMessage = "Unable to load remote catalog metadata."
             }
         }
+    }
+
+    private func hydrateWarrantyFromLocalAttributes() {
+        let attributes = product.parsedAttributes
+        if let months = attributes["warranty_coverage_months"], !months.isEmpty {
+            warrantyCoverageMonthsText = months
+        }
+        if let services = attributes["warranty_eligible_services"], !services.isEmpty {
+            warrantyEligibleServicesText = services
+        }
+    }
+
+    private var parsedWarrantyServices: [String] {
+        warrantyEligibleServicesText
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private var updatedWarrantyAttributesJSON: String {
+        var dict = product.parsedAttributes
+        let months = max(0, Int(warrantyCoverageMonthsText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0)
+        dict["warranty_coverage_months"] = "\(months)"
+        dict["warranty_eligible_services"] = parsedWarrantyServices.joined(separator: ", ")
+
+        guard let data = try? JSONSerialization.data(withJSONObject: dict),
+              let json = String(data: data, encoding: .utf8) else {
+            return product.attributes
+        }
+        return json
     }
 }

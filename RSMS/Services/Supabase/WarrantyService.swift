@@ -144,6 +144,18 @@ private extension WarrantyService {
         let eligibleServices: [String]
     }
 
+    struct WarrantyPolicyRow: Decodable {
+        let productId: UUID
+        let coverageMonths: Int
+        let eligibleServices: [String]
+
+        enum CodingKeys: String, CodingKey {
+            case productId = "product_id"
+            case coverageMonths = "coverage_months"
+            case eligibleServices = "eligible_services"
+        }
+    }
+
     func lookupByProductId(_ query: String) async throws -> WarrantyLookupResult {
         guard let productId = UUID(uuidString: query) else {
             throw WarrantyServiceError.invalidProductId
@@ -185,6 +197,8 @@ private extension WarrantyService {
             )
         }
 
+        let remotePolicy = try await fetchRemotePolicy(productId: row.productId)
+
         return resolveStatus(
             lookupMode: .productId,
             query: query,
@@ -195,7 +209,8 @@ private extension WarrantyService {
             orderNumber: row.orders?.orderNumber,
             clientId: row.orders?.clientId,
             storeId: row.orders?.storeId,
-            purchasedAt: row.orders?.createdAt ?? row.createdAt
+            purchasedAt: row.orders?.createdAt ?? row.createdAt,
+            policyOverride: remotePolicy
         )
     }
 
@@ -266,6 +281,8 @@ private extension WarrantyService {
             )
         }
 
+        let remotePolicy = try await fetchRemotePolicy(productId: item.productId)
+
         return resolveStatus(
             lookupMode: .purchaseRecord,
             query: query,
@@ -276,7 +293,8 @@ private extension WarrantyService {
             orderNumber: order.orderNumber,
             clientId: order.clientId,
             storeId: order.storeId,
-            purchasedAt: order.createdAt
+            purchasedAt: order.createdAt,
+            policyOverride: remotePolicy
         )
     }
 
@@ -290,7 +308,8 @@ private extension WarrantyService {
         orderNumber: String?,
         clientId: UUID?,
         storeId: UUID?,
-        purchasedAt: Date?
+        purchasedAt: Date?,
+        policyOverride: WarrantyPolicy?
     ) -> WarrantyLookupResult {
         guard let purchasedAt else {
             return WarrantyLookupResult(
@@ -311,7 +330,7 @@ private extension WarrantyService {
             )
         }
 
-        let policy = warrantyPolicy(for: productName)
+        let policy = policyOverride ?? warrantyPolicy(for: productName)
         let coverageEnd = Calendar.current.date(byAdding: .month, value: policy.coverageMonths, to: purchasedAt)
 
         let status: WarrantyCoverageStatus
@@ -337,6 +356,24 @@ private extension WarrantyService {
             coverageEnd: coverageEnd,
             eligibleServices: policy.eligibleServices
         )
+    }
+
+    func fetchRemotePolicy(productId: UUID) async throws -> WarrantyPolicy? {
+        do {
+            let rows: [WarrantyPolicyRow] = try await client
+                .from("product_warranty_policies")
+                .select("product_id,coverage_months,eligible_services")
+                .eq("product_id", value: productId.uuidString.lowercased())
+                .limit(1)
+                .execute()
+                .value
+
+            guard let row = rows.first else { return nil }
+            return WarrantyPolicy(coverageMonths: row.coverageMonths, eligibleServices: row.eligibleServices)
+        } catch {
+            // Backward compatibility: if migration isn't applied yet, keep legacy policy behavior.
+            return nil
+        }
     }
 
     func warrantyPolicy(for productName: String?) -> WarrantyPolicy {

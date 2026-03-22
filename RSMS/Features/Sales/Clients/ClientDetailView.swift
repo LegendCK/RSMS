@@ -12,6 +12,8 @@ struct ClientDetailView: View {
     @State private var vm: ClientDetailViewModel
     @State private var selectedTab = 0
     @State private var selectedAppointment: AppointmentDTO?
+    @State private var selectedOrder: OrderDTO?
+    @State private var selectedServiceTicket: ServiceTicketDTO?
     private let tabs = ["Profile", "Purchases", "Appointments", "After-Sales"]
 
     init(client: ClientDTO) {
@@ -66,6 +68,12 @@ struct ClientDetailView: View {
             CreateAppointmentView(appointmentToEdit: appt) { _ in
                 Task { await vm.loadHistory() }
             }
+        }
+        .sheet(item: $selectedOrder) { order in
+            SalesClientOrderDetailSheet(order: order)
+        }
+        .sheet(item: $selectedServiceTicket) { ticket in
+            RepairTicketDetailView(ticket: ticket)
         }
     }
 
@@ -316,7 +324,12 @@ struct ClientDetailView: View {
                     .padding(.top, AppSpacing.sm)
 
                     ForEach(vm.orders) { order in
-                        orderRow(order)
+                        Button {
+                            selectedOrder = order
+                        } label: {
+                            orderRow(order)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 Spacer().frame(height: 30)
@@ -348,6 +361,9 @@ struct ClientDetailView: View {
                     Spacer()
                     Text(order.createdAt.formatted(date: .abbreviated, time: .omitted))
                         .font(AppTypography.micro)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    Image(systemName: "chevron.right")
+                        .font(AppTypography.chevron)
                         .foregroundColor(AppColors.textSecondaryDark)
                 }
             }
@@ -462,7 +478,12 @@ struct ClientDetailView: View {
                     emptyState(icon: "wrench.and.screwdriver", message: "No after-sales tickets on record")
                 } else {
                     ForEach(vm.serviceTickets) { ticket in
-                        serviceTicketRow(ticket)
+                        Button {
+                            selectedServiceTicket = ticket
+                        } label: {
+                            serviceTicketRow(ticket)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 Spacer().frame(height: 30)
@@ -649,5 +670,132 @@ struct ClientDetailView: View {
         case "declined": return AppColors.error
         default: return .blue
         }
+    }
+}
+
+private struct SalesClientOrderDetailSheet: View {
+    let order: OrderDTO
+    @Environment(\.dismiss) private var dismiss
+    @State private var items: [OrderItemWithProduct] = []
+    @State private var isLoadingItems = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppColors.backgroundPrimary.ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: AppSpacing.md) {
+                        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                            HStack {
+                                Text(order.orderNumber ?? String(order.id.uuidString.prefix(8)).uppercased())
+                                    .font(AppTypography.monoID)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Spacer()
+                                Text(order.formattedTotal)
+                                    .font(AppTypography.priceDisplay)
+                                    .foregroundColor(AppColors.accent)
+                            }
+                            Text(order.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                            Text(order.channel.replacingOccurrences(of: "_", with: " ").capitalized)
+                                .font(AppTypography.bodySmall)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                        }
+                        .padding(AppSpacing.cardPadding)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                                .fill(AppColors.backgroundSecondary)
+                        )
+
+                        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                            Text("ITEMS")
+                                .font(AppTypography.overline)
+                                .tracking(2)
+                                .foregroundColor(AppColors.accent)
+
+                            if isLoadingItems {
+                                ProgressView("Loading items...")
+                                    .tint(AppColors.accent)
+                            } else if items.isEmpty {
+                                Text("No item details available.")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            } else {
+                                ForEach(items) { item in
+                                    HStack(spacing: AppSpacing.sm) {
+                                        Group {
+                                            if let image = item.productPrimaryImage, !image.isEmpty {
+                                                ProductArtworkView(imageSource: image, fallbackSymbol: "cube.box.fill", cornerRadius: AppSpacing.radiusSmall)
+                                            } else {
+                                                RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
+                                                    .fill(AppColors.backgroundSecondary)
+                                                    .overlay(
+                                                        Image(systemName: "cube.box.fill")
+                                                            .foregroundColor(AppColors.accent)
+                                                    )
+                                            }
+                                        }
+                                        .frame(width: 44, height: 44)
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(item.productName)
+                                                .font(AppTypography.bodyMedium)
+                                                .foregroundColor(AppColors.textPrimaryDark)
+                                            Text("SKU: \(item.productSku) • Qty: \(item.quantity)")
+                                                .font(AppTypography.caption)
+                                                .foregroundColor(AppColors.textSecondaryDark)
+                                        }
+                                        Spacer()
+                                        Text(formatCurrency(item.line_total, currency: order.currency))
+                                            .font(AppTypography.bodySmall)
+                                            .foregroundColor(AppColors.textPrimaryDark)
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                            }
+                        }
+                        .padding(AppSpacing.cardPadding)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                                .fill(AppColors.backgroundSecondary)
+                        )
+                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.vertical, AppSpacing.md)
+                }
+            }
+            .navigationTitle("Order Snapshot")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close") { dismiss() }
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+            .task {
+                await loadItems()
+            }
+        }
+    }
+
+    @MainActor
+    private func loadItems() async {
+        guard !isLoadingItems else { return }
+        isLoadingItems = true
+        defer { isLoadingItems = false }
+        do {
+            items = try await OrderFulfillmentService.shared.fetchOrderItems(orderId: order.id)
+        } catch {
+            items = []
+        }
+    }
+
+    private func formatCurrency(_ value: Double, currency: String) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        return formatter.string(from: NSNumber(value: value)) ?? "\(currency) \(value)"
     }
 }

@@ -23,12 +23,17 @@ final class SalesAfterSalesViewModel {
     var warrantyResult: WarrantyLookupResult?
     var availableProducts: [ProductDTO] = []
     var selectedLookupProductId: UUID?
+    var unassignedExchangeTickets: [ServiceTicketDTO] = []
+    var myExchangeTickets: [ServiceTicketDTO] = []
     var createdTicket: ServiceTicketDTO?
     var replacementOrderNumber: String?
     var exchangeApproved: Bool = false
     var exchangeCompleted: Bool = false
 
     var errorMessage: String?
+    var queueMessage: String?
+    var isLoadingExchangeQueue: Bool = false
+    var isClaimingTicketId: UUID?
 
     private let warrantyService: WarrantyServiceProtocol
     private let ticketService: ServiceTicketServiceProtocol
@@ -202,7 +207,8 @@ final class SalesAfterSalesViewModel {
                     status: RepairStatus.estimateApproved.rawValue,
                     notes: approvedNotes,
                     estimatedCost: nil,
-                    finalCost: nil
+                    finalCost: nil,
+                    assignedTo: nil
                 )
             )
             exchangeApproved = true
@@ -242,7 +248,8 @@ final class SalesAfterSalesViewModel {
                     status: RepairStatus.inProgress.rawValue,
                     notes: withOrderNotes,
                     estimatedCost: nil,
-                    finalCost: nil
+                    finalCost: nil,
+                    assignedTo: nil
                 )
             )
         } catch {
@@ -270,7 +277,8 @@ final class SalesAfterSalesViewModel {
                     status: RepairStatus.completed.rawValue,
                     notes: completionNotes,
                     estimatedCost: nil,
-                    finalCost: 0
+                    finalCost: 0,
+                    assignedTo: nil
                 )
             )
             exchangeCompleted = true
@@ -279,6 +287,72 @@ final class SalesAfterSalesViewModel {
         }
 
         isCompletingExchange = false
+    }
+
+    func refreshExchangeQueue(storeId: UUID?, staffUserId: UUID?) async {
+        guard requestType == .exchange else { return }
+        guard let storeId else {
+            queueMessage = "Store context unavailable."
+            return
+        }
+
+        isLoadingExchangeQueue = true
+        defer { isLoadingExchangeQueue = false }
+
+        do {
+            let tickets = try await ticketService.fetchTickets(storeId: storeId)
+            let openExchange = tickets.filter { ticket in
+                let notes = (ticket.notes ?? "").lowercased()
+                let isExchangeType = ticket.type == RepairType.warrantyClaim.rawValue || ticket.type == RepairType.repair.rawValue
+                let hasExchangeNote = notes.contains("exchange")
+                let isOpen = ticket.status != RepairStatus.completed.rawValue && ticket.status != RepairStatus.cancelled.rawValue
+                return isOpen && (isExchangeType || hasExchangeNote)
+            }
+
+            unassignedExchangeTickets = openExchange.filter { $0.assignedTo == nil }
+            if let staffUserId {
+                myExchangeTickets = openExchange.filter { $0.assignedTo == staffUserId }
+            } else {
+                myExchangeTickets = []
+            }
+            queueMessage = nil
+        } catch {
+            queueMessage = "Could not load exchange queue: \(error.localizedDescription)"
+        }
+    }
+
+    func claimExchangeTicket(
+        _ ticket: ServiceTicketDTO,
+        staffUserId: UUID?,
+        staffName: String
+    ) async {
+        guard let staffUserId else {
+            queueMessage = "Unable to claim ticket because user context is unavailable."
+            return
+        }
+        guard isClaimingTicketId == nil else { return }
+
+        isClaimingTicketId = ticket.id
+        defer { isClaimingTicketId = nil }
+
+        let claimLine = "Claimed By: \(staffName) • \(Date().formatted(date: .abbreviated, time: .shortened))"
+        let notes = appendNote(base: ticket.notes, line: claimLine)
+
+        do {
+            _ = try await ticketService.updateTicket(
+                ticketId: ticket.id,
+                patch: ServiceTicketUpdatePatch(
+                    status: nil,
+                    notes: notes,
+                    estimatedCost: nil,
+                    finalCost: nil,
+                    assignedTo: staffUserId
+                )
+            )
+            queueMessage = "Ticket \(ticket.displayTicketNumber) assigned to you."
+        } catch {
+            queueMessage = "Could not claim ticket: \(error.localizedDescription)"
+        }
     }
 
     private func resolveReplacementProductId(from text: String, fallback: UUID?) throws -> UUID {
