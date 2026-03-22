@@ -232,11 +232,13 @@ struct AdminDashboardView: View {
             Text(exportErrorMessage)
         }
         .task {
-            // Refresh insights and optionally fetch alerts on appearance
+            // Run sequentially to avoid task-cancellation races when
+            // SwiftData @Query updates cause the view to re-render and
+            // restart the .task modifier (NSURLErrorDomain Code=-999).
             if !hasFetchedAlerts {
-                async let _ = fetchLowStock()
+                await fetchLowStock()
             }
-            async let _ = refreshLiveInsights()
+            await refreshLiveInsights()
         }
     }
 
@@ -1452,20 +1454,18 @@ struct CreateStoreSheet: View {
     enum StoreType: String, CaseIterable {
         case boutique     = "Boutique"
         case distribution = "Distribution Center"
-        case popup        = "Pop-up"
 
         var supabaseType: String {
             switch self {
             case .boutique:     return "boutique"
             case .distribution: return "distribution_center"
-            case .popup:        return "pop_up"
             }
         }
 
         var localType: LocationType {
             switch self {
-            case .boutique, .popup: return .boutique
-            case .distribution:     return .distributionCenter
+            case .boutique:     return .boutique
+            case .distribution: return .distributionCenter
             }
         }
     }
@@ -1640,8 +1640,11 @@ struct CreatePromotionSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) var appState
 
-    @Query private var allProducts: [Product]
-    @Query private var allCategories: [Category]
+    // Products and categories are fetched fresh from Supabase to ensure
+    // UUIDs match the DB (avoids FK constraint violations from stale SwiftData).
+    @State private var remoteProducts: [ProductDTO] = []
+    @State private var remoteCategories: [CategoryDTO] = []
+    @State private var isLoadingTargets = false
 
     @State private var name = ""
     @State private var details = ""
@@ -1659,13 +1662,13 @@ struct CreatePromotionSheet: View {
     @State private var isCreated = false
 
     private var selectedProductName: String {
-        guard let id = selectedProductId else { return "All Products (store-wide)" }
-        return allProducts.first(where: { $0.id == id })?.name ?? "All Products (store-wide)"
+        guard let id = selectedProductId else { return "Select a product…" }
+        return remoteProducts.first(where: { $0.id == id })?.name ?? "Select a product…"
     }
 
     private var selectedCategoryName: String {
-        guard let id = selectedCategoryId else { return "All Categories (store-wide)" }
-        return allCategories.first(where: { $0.id == id })?.name ?? "All Categories (store-wide)"
+        guard let id = selectedCategoryId else { return "Select a category…" }
+        return remoteCategories.first(where: { $0.id == id })?.name ?? "Select a category…"
     }
 
     var body: some View {
@@ -1737,9 +1740,11 @@ struct CreatePromotionSheet: View {
 
                             if scope == .product {
                                 Menu {
-                                    Button("All Products (store-wide)") { selectedProductId = nil }
-                                    if !allProducts.isEmpty { Divider() }
-                                    ForEach(allProducts.sorted { $0.name < $1.name }) { product in
+                                    if remoteProducts.isEmpty {
+                                        Text(isLoadingTargets ? "Loading…" : "No products available")
+                                            .foregroundColor(.secondary)
+                                    }
+                                    ForEach(remoteProducts.sorted { $0.name < $1.name }, id: \.id) { product in
                                         Button(product.name) { selectedProductId = product.id }
                                     }
                                 } label: {
@@ -1751,9 +1756,11 @@ struct CreatePromotionSheet: View {
                                 }
                             } else {
                                 Menu {
-                                    Button("All Categories (store-wide)") { selectedCategoryId = nil }
-                                    if !allCategories.isEmpty { Divider() }
-                                    ForEach(allCategories.sorted { $0.name < $1.name }) { category in
+                                    if remoteCategories.isEmpty {
+                                        Text(isLoadingTargets ? "Loading…" : "No categories available")
+                                            .foregroundColor(.secondary)
+                                    }
+                                    ForEach(remoteCategories.sorted { $0.name < $1.name }, id: \.id) { category in
                                         Button(category.name) { selectedCategoryId = category.id }
                                     }
                                 } label: {
@@ -1880,6 +1887,28 @@ struct CreatePromotionSheet: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                // Fetch products and categories directly from Supabase so UUIDs
+                // are guaranteed to match the DB (avoids FK constraint violations).
+                isLoadingTargets = true
+                async let productsFetch: [ProductDTO] = SupabaseManager.shared.client
+                    .from("products")
+                    .select("id, name, sku, brand, price, is_active, created_at, updated_at")
+                    .eq("is_active", value: true)
+                    .order("name", ascending: true)
+                    .execute()
+                    .value
+                async let categoriesFetch: [CategoryDTO] = SupabaseManager.shared.client
+                    .from("categories")
+                    .select("id, name, is_active, created_at, updated_at")
+                    .eq("is_active", value: true)
+                    .order("name", ascending: true)
+                    .execute()
+                    .value
+                remoteProducts = (try? await productsFetch) ?? []
+                remoteCategories = (try? await categoriesFetch) ?? []
+                isLoadingTargets = false
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { dismiss() }) {
@@ -1949,6 +1978,18 @@ struct CreatePromotionSheet: View {
         }
         guard endsAt > startsAt else {
             errorMessage = "End date must be after the start date."
+            showError = true
+            return
+        }
+        // DB constraint: scope='product' requires target_product_id NOT NULL
+        if scope == .product && selectedProductId == nil {
+            errorMessage = "Please select a specific product for this promotion."
+            showError = true
+            return
+        }
+        // DB constraint: scope='category' requires target_category_id NOT NULL
+        if scope == .category && selectedCategoryId == nil {
+            errorMessage = "Please select a specific category for this promotion."
             showError = true
             return
         }
