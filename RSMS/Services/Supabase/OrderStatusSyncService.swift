@@ -63,8 +63,8 @@ final class OrderStatusSyncService {
         var changed = 0
         for remote in remoteOrders {
             let status = mapSupabaseStatus(remote.status)
-            let createdAt = ISO8601DateFormatter().date(from: remote.createdAt) ?? Date()
-            let updatedAt = ISO8601DateFormatter().date(from: remote.updatedAt ?? "") ?? createdAt
+            let createdAt = parseSupabaseDate(remote.createdAt) ?? Date()
+            let updatedAt = parseSupabaseDate(remote.updatedAt ?? "") ?? createdAt
             let itemsJSON = buildItemsJSON(from: itemsByOrderId[remote.id] ?? [])
             let fulfillment = mapChannel(remote.channel)
 
@@ -75,6 +75,7 @@ final class OrderStatusSyncService {
                 if local.total != remote.grandTotal { local.total = remote.grandTotal; changed += 1 }
                 if !itemsJSON.isEmpty, local.orderItems != itemsJSON { local.orderItems = itemsJSON; changed += 1 }
                 if local.fulfillmentType != fulfillment { local.fulfillmentType = fulfillment; changed += 1 }
+                if local.createdAt != createdAt { local.createdAt = createdAt; changed += 1 }
                 local.updatedAt = updatedAt
             } else {
                 let newOrder = Order(
@@ -126,7 +127,7 @@ final class OrderStatusSyncService {
         let newStatus = mapSupabaseStatus(remote.status)
         if order.status != newStatus {
             order.status = newStatus
-            order.updatedAt = ISO8601DateFormatter().date(from: remote.updated_at ?? "") ?? Date()
+            order.updatedAt = parseSupabaseDate(remote.updated_at ?? "") ?? Date()
             try modelContext.save()
             print("[OrderStatusSyncService] Order \(order.orderNumber) updated to: \(newStatus.rawValue)")
         }
@@ -246,5 +247,15 @@ private extension OrderStatusSyncService {
         default:
             return .standard
         }
+    }
+
+    /// Parses Supabase ISO 8601 timestamps, handling fractional seconds
+    /// (e.g. "2026-03-15T08:30:00.123456+00:00") which the default
+    /// ISO8601DateFormatter fails to parse.
+    func parseSupabaseDate(_ raw: String) -> Date? {
+        let withFractional = ISO8601DateFormatter()
+        withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFractional.date(from: raw) { return date }
+        return ISO8601DateFormatter().date(from: raw)
     }
 }
