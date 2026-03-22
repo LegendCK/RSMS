@@ -38,6 +38,20 @@ enum ActiveAdminSheet: Identifiable {
 
 // MARK: - Main Dashboard View
 
+/// AdminDashboardView is the primary interface for corporate administrators.
+/// 
+/// Key Features:
+/// - Real-time KPI metrics and system health monitoring
+/// - Low stock alerts and inventory management
+/// - Staff performance insights and analytics
+/// - Report generation and data export (PDF, CSV)
+/// - Live data synchronization from Supabase
+/// - Quick action shortcuts for common tasks
+/// - Activity feed for audit trail tracking
+/// - Performance optimized with local/remote data hybrid approach
+///
+/// The view maintains both local SwiftData models and remote Supabase snapshots
+/// to provide instant responsiveness while allowing background sync operations.
 struct AdminDashboardView: View {
     @Environment(AppState.self) var appState
     @Environment(\.modelContext) private var modelContext
