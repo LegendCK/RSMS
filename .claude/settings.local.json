@@ -23,7 +23,8 @@
       "Bash(grep -E \"\\\\.\\(swift|sql\\)$\")",
       "Bash(find /Users/ekanshjindal/Internship/Infosys/RSMS-3/supabase -type f -name *.sql)",
       "Bash(xcodebuild -scheme RSMS -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build)",
-      "Bash(xcodebuild -scheme RSMS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build)"
+      "Bash(xcodebuild -scheme RSMS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build)",
+      "Bash(grep -r \"create table.*users\" /Users/ekanshjindal/Internship/Infosys/RSMS-3/supabase/migrations/*.sql)"
     ]
   }
 }

@@ -6,10 +6,10 @@
 //
 //  Tab layout:
 //    Manager  → Dashboard | Insights | Operations | Staff | Profile
-//    IC       → Operations | Scanner | Repairs | Staff | Profile
+//    IC       → Dashboard | Operations | Scanner | Repairs | Profile
 //
-//  Boutique Managers do NOT have a Scanner tab — they use Insights instead.
-//  Inventory Controllers keep Scanner + Repairs.
+//  Inventory Controllers get their own Dashboard (inventory-focused) and
+//  do NOT see the Staff tab — that is Boutique Manager-only.
 //  Tab tags are computed to stay contiguous regardless of role.
 //
 
@@ -39,9 +39,17 @@ struct ManagerTabView: View {
 
             TabView(selection: $selectedTab) {
 
-                // ── Dashboard (Boutique Manager only) ─────────────────────
+                // ── Dashboard (both roles, different views) ────────────────
                 if showsDashboard {
                     NavigationStack { ManagerDashboardView() }
+                        .tabItem {
+                            Image(systemName: selectedTab == 0
+                                  ? "square.grid.2x2.fill" : "square.grid.2x2")
+                            Text("Dashboard")
+                        }
+                        .tag(0)
+                } else if isIC {
+                    NavigationStack { ICDashboardView() }
                         .tabItem {
                             Image(systemName: selectedTab == 0
                                   ? "square.grid.2x2.fill" : "square.grid.2x2")
@@ -94,14 +102,16 @@ struct ManagerTabView: View {
                     .tag(repairsTag)
                 }
 
-                // ── Staff ─────────────────────────────────────────────────
-                NavigationStack { ManagerStaffView() }
-                    .tabItem {
-                        Image(systemName: selectedTab == staffTag
-                              ? "person.2.fill" : "person.2")
-                        Text("Staff")
-                    }
-                    .tag(staffTag)
+                // ── Staff (Boutique Manager only) ─────────────────────────
+                if showsDashboard {
+                    NavigationStack { ManagerStaffView() }
+                        .tabItem {
+                            Image(systemName: selectedTab == staffTag
+                                  ? "person.2.fill" : "person.2")
+                            Text("Staff")
+                        }
+                        .tag(staffTag)
+                }
 
                 // ── Profile ───────────────────────────────────────────────
                 NavigationStack { ManagerProfileView() }
@@ -117,8 +127,8 @@ struct ManagerTabView: View {
             .toolbarColorScheme(.dark, for: .tabBar)
             .toolbar(removing: .sidebarToggle)
             .modifier(AppleMusicTabBarModifier())
-            .onChange(of: showsDashboard) { _, newValue in
-                if !newValue && selectedTab == 0 { selectedTab = operationsTag }
+            .onChange(of: showsDashboard) { _, _ in
+                selectedTab = 0   // both roles start at Dashboard
             }
             .onReceive(NotificationCenter.default.publisher(
                 for: Notification.Name("switchToScannerTab"))
@@ -130,20 +140,25 @@ struct ManagerTabView: View {
             ) { _ in
                 if isIC { selectedTab = repairsTab }
             }
+            .onReceive(NotificationCenter.default.publisher(
+                for: Notification.Name("switchToOperationsTab"))
+            ) { _ in
+                selectedTab = operationsTag
+            }
         }
     }
 
     // MARK: - Tab Tags
     //
-    // Tags shift based on role. Manager: 0=Dashboard, 1=Insights, 2=Operations, 3=Staff, 4=Profile
-    //                            IC:      0=Operations, 1=Scanner, 2=Repairs, 3=Staff, 4=Profile
+    // Manager: 0=Dashboard, 1=Insights, 2=Operations, 3=Staff, 4=Profile
+    // IC:      0=Dashboard, 1=Operations, 2=Scanner, 3=Repairs, 4=Profile
 
-    private var insightsTag:   Int { 1 }                                      // Manager only
-    private var operationsTag: Int { showsDashboard ? 2 : 0 }
-    private var scannerTag:    Int { isIC ? operationsTag + 1 : operationsTag }  // IC only
-    private var repairsTag:    Int { isIC ? scannerTag + 1 : scannerTag }        // IC only
-    private var staffTag:      Int { isIC ? repairsTag + 1 : operationsTag + 1 }
-    private var profileTag:    Int { staffTag + 1 }
+    private var insightsTag:   Int { 1 }                        // Manager only
+    private var operationsTag: Int { showsDashboard ? 2 : 1 }   // Manager=2, IC=1
+    private var scannerTag:    Int { isIC ? 2 : operationsTag }  // IC only
+    private var repairsTag:    Int { isIC ? 3 : scannerTag }     // IC only
+    private var staffTag:      Int { showsDashboard ? operationsTag + 1 : profileTag }  // Manager only
+    private var profileTag:    Int { isIC ? 4 : staffTag + 1 }
 
     // Alias for notification handler (avoids "repairsTag" being used as a tag expression)
     private var repairsTab: Int { repairsTag }
