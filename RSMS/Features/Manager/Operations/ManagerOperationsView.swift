@@ -303,16 +303,20 @@ struct ManagerOperationsView: View {
     // MARK: - Segment Button Helper
 
     private func segmentButton(_ title: String, tag: Int) -> some View {
-        Button {
+        let isSelected = selectedSection == tag
+        return Button {
             withAnimation(.easeInOut(duration: 0.15)) { selectedSection = tag }
         } label: {
             Text(title)
-                .font(AppTypography.caption)
-                .foregroundColor(selectedSection == tag ? AppColors.textPrimaryLight : AppColors.textPrimaryDark)
-                .padding(.horizontal, 14)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .tracking(0.1)
+                .foregroundColor(isSelected ? .white : AppColors.textPrimaryDark)
+                .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(selectedSection == tag ? AppColors.accent : AppColors.backgroundSecondary)
-                .cornerRadius(AppSpacing.radiusSmall)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? AppColors.accent : Color(uiColor: .secondarySystemFill))
+                )
         }
         .buttonStyle(.plain)
     }
@@ -605,12 +609,20 @@ struct ManagerOperationsView: View {
     // MARK: - Helpers
 
     private func miniStat(value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 4) {
-            Text(value).font(AppTypography.heading2).foregroundColor(color)
-            Text(label).font(AppTypography.micro).foregroundColor(AppColors.textSecondaryDark)
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .foregroundColor(color)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .tracking(0.4)
+                .foregroundColor(Color(uiColor: .secondaryLabel))
         }
-        .frame(maxWidth: .infinity).padding(.vertical, AppSpacing.sm)
-        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppSpacing.sm)
+        .background(Color(uiColor: .systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 1)
     }
 
     private func sLabel(_ t: String) -> some View {

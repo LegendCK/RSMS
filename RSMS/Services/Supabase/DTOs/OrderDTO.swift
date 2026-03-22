@@ -93,6 +93,30 @@ struct OrderItemDTO: Codable, Identifiable {
     }
 }
 
+// MARK: - OrderEventDTO
+
+struct OrderEventDTO: Codable, Identifiable {
+    let id: UUID
+    let orderId: UUID
+    let fromStatus: String?
+    let toStatus: String
+    let actorId: UUID?
+    let actorRole: String?
+    let notes: String?
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case orderId     = "order_id"
+        case fromStatus  = "from_status"
+        case toStatus    = "to_status"
+        case actorId     = "actor_id"
+        case actorRole   = "actor_role"
+        case notes
+        case createdAt   = "created_at"
+    }
+}
+
 // MARK: - Insert Payloads
 
 struct OrderInsertDTO: Codable {

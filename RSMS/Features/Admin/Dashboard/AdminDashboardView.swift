@@ -39,7 +39,7 @@ enum ActiveAdminSheet: Identifiable {
 // MARK: - Main Dashboard View
 
 /// AdminDashboardView is the primary interface for corporate administrators.
-/// 
+///
 /// Key Features:
 /// - Real-time KPI metrics and system health monitoring
 /// - Low stock alerts and inventory management
