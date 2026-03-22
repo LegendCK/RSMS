@@ -13,6 +13,13 @@ struct CartView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query private var allCartItems: [CartItem]
+    @Query private var allProducts: [Product]
+    @Query private var allCategories: [Category]
+    @Query private var allAddresses: [SavedAddress]
+    @Query private var pricingPolicies: [PricingPolicySettings]
+    @Query private var taxRules: [IndianTaxRule]
+    @Query private var regionalPriceRules: [RegionalPriceRule]
+    @Query private var promotionRules: [PromotionRule]
 
     @State private var navigateToCheckout = false
     @State private var showGuestAuthGate  = false
@@ -22,9 +29,41 @@ struct CartView: View {
             .sorted { $0.addedAt > $1.addedAt }
     }
 
-    private var subtotal: Double { cartItems.reduce(0) { $0 + $1.lineTotal } }
-    private var tax:      Double { subtotal * 0.08 }
-    private var shipping: Double { subtotal > 500 ? 0 : 25 }
+    private var policy: PricingPolicySettings {
+        pricingPolicies.first ?? PricingPolicySettings()
+    }
+    private var estimatedBuyerState: String {
+        let addresses = allAddresses.filter { $0.customerEmail == appState.currentUserEmail }
+        let selected = addresses.first(where: { $0.isDefault }) ?? addresses.first
+        return selected?.state ?? policy.businessState
+    }
+    private var pricing: PricingComputation {
+        let lineItems: [TaxableLineItem] = cartItems.map { item in
+            let goodsCategory = allProducts.first(where: { $0.id == item.productId })?.categoryName ?? "Default"
+            let categoryId = allCategories.first(where: { $0.name == goodsCategory })?.id
+            return TaxableLineItem(
+                productId: item.productId,
+                categoryId: categoryId,
+                goodsCategory: goodsCategory,
+                baseUnitPrice: item.unitPrice,
+                quantity: item.quantity
+            )
+        }
+        return IndianPricingEngine.calculate(
+            items: lineItems,
+            buyerState: estimatedBuyerState,
+            policy: policy,
+            regionalPrices: regionalPriceRules,
+            taxRules: taxRules,
+            promotions: promotionRules
+        )
+    }
+
+    private var merchandiseSubtotal: Double { pricing.merchandiseSubtotal }
+    private var subtotal: Double { pricing.subtotal }
+    private var discountTotal: Double { pricing.discountTotal }
+    private var tax:      Double { pricing.taxBreakdown.totalTax }
+    private var shipping: Double { subtotal >= policy.freeShippingThreshold ? 0 : policy.standardShippingFee }
     private var total:    Double { subtotal + tax + shipping }
     private var itemCount: Int   { cartItems.reduce(0) { $0 + $1.quantity } }
 
@@ -68,6 +107,7 @@ struct CartView: View {
             navigateToCheckout = false
             appState.showCart = false
         }
+        .task { await refreshPromotions() }
     }
 
     // MARK: - Guest State
@@ -135,7 +175,7 @@ struct CartView: View {
                     }
 
                     // Free shipping progress
-                    if subtotal < 500 {
+                    if subtotal < policy.freeShippingThreshold {
                         freeShippingBanner
                     }
 
@@ -175,9 +215,25 @@ struct CartView: View {
                     .foregroundColor(AppColors.textPrimaryDark)
                     .lineLimit(2)
 
-                Text(item.formattedLineTotal)
-                    .font(AppTypography.priceSmall)
-                    .foregroundColor(AppColors.textSecondaryDark)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(formatCurrency(lineTotal(for: item)))
+                        .font(AppTypography.priceSmall)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    if let lineItem = lineItem(for: item), lineItem.discountAmount > 0 {
+                        HStack(spacing: 6) {
+                            Text(formatCurrency(lineItem.originalUnitPrice * Double(item.quantity)))
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.neutral500)
+                                .strikethrough()
+                            if let appliedPromotionName = lineItem.appliedPromotionName {
+                                Text(appliedPromotionName.uppercased())
+                                    .font(AppTypography.pico)
+                                    .tracking(1)
+                                    .foregroundColor(AppColors.accent)
+                            }
+                        }
+                    }
+                }
 
                 // Quantity stepper
                 HStack(spacing: AppSpacing.sm) {
@@ -251,8 +307,8 @@ struct CartView: View {
     // MARK: - Free Shipping Banner
 
     private var freeShippingBanner: some View {
-        let remaining = 500.0 - subtotal
-        let progress  = subtotal / 500.0
+        let remaining = policy.freeShippingThreshold - subtotal
+        let progress  = policy.freeShippingThreshold == 0 ? 1 : subtotal / policy.freeShippingThreshold
         return VStack(alignment: .leading, spacing: AppSpacing.xs) {
             HStack {
                 Image(systemName: "shippingbox.fill")
@@ -290,9 +346,23 @@ struct CartView: View {
 
                 GoldDivider()
 
-                summaryRow("Subtotal",          value: formatCurrency(subtotal))
-                summaryRow("Tax (8%)",            value: formatCurrency(tax))
-                summaryRow("Shipping",            value: subtotal > 500 ? "Free" : formatCurrency(shipping))
+                summaryRow("Items", value: formatCurrency(merchandiseSubtotal))
+                if discountTotal > 0 {
+                    summaryRow("Offer", value: "-\(formatCurrency(discountTotal))")
+                }
+                summaryRow("Subtotal", value: formatCurrency(subtotal))
+                summaryRow("CGST", value: formatCurrency(pricing.taxBreakdown.cgst))
+                summaryRow("SGST", value: formatCurrency(pricing.taxBreakdown.sgst))
+                if pricing.taxBreakdown.igst > 0 {
+                    summaryRow("IGST", value: formatCurrency(pricing.taxBreakdown.igst))
+                }
+                if pricing.taxBreakdown.cess > 0 {
+                    summaryRow("Cess", value: formatCurrency(pricing.taxBreakdown.cess))
+                }
+                if pricing.taxBreakdown.additionalLevy > 0 {
+                    summaryRow("Other Tax", value: formatCurrency(pricing.taxBreakdown.additionalLevy))
+                }
+                summaryRow("Shipping", value: shipping == 0 ? "Free" : formatCurrency(shipping))
 
                 GoldDivider()
 
@@ -368,10 +438,22 @@ struct CartView: View {
         }
     }
 
+    private func lineItem(for item: CartItem) -> PricingComputation.ComputedLineItem? {
+        pricing.lineItems.first(where: { $0.productId == item.productId })
+    }
+
+    private func lineTotal(for item: CartItem) -> Double {
+        lineItem(for: item)?.taxableValue ?? item.lineTotal
+    }
+
+    private func refreshPromotions() async {
+        try? await PromotionSyncService.shared.refreshLocalPromotions(modelContext: modelContext)
+    }
+
     private func formatCurrency(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle  = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
+        formatter.currencyCode = policy.currencyCode
+        return formatter.string(from: NSNumber(value: value)) ?? "\(policy.currencyCode) \(value)"
     }
 }

@@ -17,6 +17,7 @@ final class CustomerCatalogSyncService {
     func refreshLocalCatalog(modelContext: ModelContext) async throws {
         let remoteCategories = try await CatalogService.shared.fetchCategories()
         let remoteProducts = try await CatalogService.shared.fetchProducts()
+        let remoteCollections = try await CatalogService.shared.fetchCollections()
 
         // Safety check: If we get 0 categories from remote but have local categories, 
         // it's likely an RLS restriction for a Guest session.
@@ -31,9 +32,15 @@ final class CustomerCatalogSyncService {
 
         let activeCategories = remoteCategories.filter { $0.isActive }
         let activeProducts = remoteProducts.filter { $0.isActive }
+        let activeCollections = remoteCollections.filter(\.isActive)
 
         try syncCategories(activeCategories, modelContext: modelContext)
-        try syncProducts(activeProducts, categories: activeCategories, modelContext: modelContext)
+        try syncProducts(
+            activeProducts,
+            categories: activeCategories,
+            collections: activeCollections,
+            modelContext: modelContext
+        )
         try cleanOrphanedCartItems(modelContext: modelContext)
 
         try modelContext.save()
@@ -81,6 +88,7 @@ final class CustomerCatalogSyncService {
     private func syncProducts(
         _ remote: [ProductDTO],
         categories: [CategoryDTO],
+        collections: [BrandCollectionDTO],
         modelContext: ModelContext
     ) throws {
         let locals = try modelContext.fetch(FetchDescriptor<Product>())
@@ -94,6 +102,7 @@ final class CustomerCatalogSyncService {
         }
         let remoteIDs = Set(remote.map(\.id))
         let categoryNamesByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0.name) })
+        let collectionNamesByID = Dictionary(uniqueKeysWithValues: collections.map { ($0.id, $0.name) })
 
         for local in locals where !remoteIDs.contains(local.id) {
             modelContext.delete(local)
@@ -102,6 +111,7 @@ final class CustomerCatalogSyncService {
 
         for dto in remote {
             let categoryName = dto.categoryId.flatMap { categoryNamesByID[$0] } ?? "Uncategorized"
+            let collectionName = dto.collectionId.flatMap { collectionNamesByID[$0] } ?? ""
             let fallbackIcon = fallbackIcon(forCategory: categoryName)
             let normalizedImages = {
                 let resolved = dto.resolvedImageURLs.map(\.absoluteString)
@@ -122,7 +132,7 @@ final class CustomerCatalogSyncService {
                 local.imageName = resolvedImageSource
                 local.imageNames = serializedImageNames
                 local.sku = dto.sku
-                local.barcode = dto.barcode ?? ""
+                local.productTypeName = collectionName
                 local.stockCount = max(local.stockCount, 1)
                 local.createdAt = dto.createdAt
             } else {
@@ -139,10 +149,9 @@ final class CustomerCatalogSyncService {
                     stockCount: 10,
                     sku: dto.sku,
                     serialNumber: "",
-                    barcode: dto.barcode ?? "",
                     rfidTagID: "",
                     certificateRef: "",
-                    productTypeName: "",
+                    productTypeName: collectionName,
                     attributes: "{}",
                     imageNames: serializedImageNames,
                     material: "",

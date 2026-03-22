@@ -18,48 +18,46 @@ struct OperationsView: View {
     private var totalUnits: Int { allProducts.reduce(0) { $0 + $1.stockCount } }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary
-                    .ignoresSafeArea()
+        ZStack {
+            AppColors.backgroundPrimary
+                .ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    // Segment
-                    Picker("", selection: $selectedSection) {
-                        Text("Inventory").tag(0)
-                        Text("Distribution").tag(1)
-                        Text("Transfers").tag(2)
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
-                    .padding(.top, AppSpacing.sm)
-                    .padding(.bottom, AppSpacing.sm)
+            VStack(spacing: 0) {
+                // Segment
+                Picker("", selection: $selectedSection) {
+                    Text("Inventory").tag(0)
+                    Text("Distribution").tag(1)
+                    Text("Transfers").tag(2)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.sm)
+                .padding(.bottom, AppSpacing.sm)
 
-                    switch selectedSection {
-                    case 0: inventorySection
-                    case 1: distributionSection
-                    case 2: transfersSection
-                    default: inventorySection
-                    }
+                switch selectedSection {
+                case 0: inventorySection
+                case 1: distributionSection
+                case 2: transfersSection
+                default: inventorySection
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Operations")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button(action: {}) { Label("New Transfer", systemImage: "arrow.left.arrow.right") }
-                        Button(action: {}) { Label("Reorder Stock", systemImage: "cart.badge.plus") }
-                        Button(action: {}) { Label("Export Inventory", systemImage: "square.and.arrow.up") }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(AppTypography.iconMedium)
-                            .foregroundColor(AppColors.accent)
-                    }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Operations")
+                    .font(AppTypography.navTitle)
+                    .foregroundColor(AppColors.textPrimaryDark)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button(action: {}) { Label("New Transfer", systemImage: "arrow.left.arrow.right") }
+                    Button(action: {}) { Label("Reorder Stock", systemImage: "cart.badge.plus") }
+                    Button(action: {}) { Label("Export Inventory", systemImage: "square.and.arrow.up") }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(AppTypography.iconMedium)
+                        .foregroundColor(AppColors.accent)
                 }
             }
         }
@@ -182,6 +180,7 @@ struct OperationsView: View {
             stockBadge(product.stockCount)
         }
         .padding(.vertical, AppSpacing.xxs)
+        .contentShape(Rectangle())
     }
 
     private func stockBadge(_ count: Int) -> some View {

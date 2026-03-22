@@ -8,12 +8,29 @@
 
 import SwiftUI
 import SwiftData
+import Supabase
+
+enum ProductDetailMode {
+    case storefront
+    case adminCatalog
+}
 
 struct ProductDetailView: View {
     @Bindable var product: Product
+    let mode: ProductDetailMode
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Query private var allCartItems: [CartItem]
+    @Query(sort: \Category.displayOrder) private var allCategories: [Category]
+    @Query private var allReservations: [ReservationItem]
+    
+    private var hasActiveReservation: Bool {
+        allReservations.contains {
+            $0.customerEmail == appState.currentUserEmail &&
+            $0.productId == product.id &&
+            !$0.isExpired
+        }
+    }
 
     // Image gallery
     @State private var currentImageIndex = 0
@@ -22,6 +39,7 @@ struct ProductDetailView: View {
     // Bag/buy state
     @State private var addedToBag  = false
     @State private var showBuyNow  = false
+    @State private var showReserveSheet = false
     @State private var navigateToCart = false
 
     // Variant selection
@@ -34,6 +52,17 @@ struct ProductDetailView: View {
 
     // Add-to-bag animation
     @State private var bagIconScale: CGFloat = 1.0
+
+    // Inventory Items
+    @State private var remoteItems: [ProductItemDTO] = []
+    @State private var isFetchingItems = false
+    @State private var selectedBarcodeItem: ProductItemDTO?
+    @State private var isExportingAll = false
+    @State private var exportAllPDFURL: URL?
+    @State private var showAdminManageSheet = false
+    @State private var isCheckingWarranty = false
+    @State private var warrantyResult: WarrantyLookupResult?
+    @State private var warrantyError: String?
 
     // MARK: - Variant data
 
@@ -60,6 +89,11 @@ struct ProductDetailView: View {
         return sizeable.contains { product.categoryName.lowercased().contains($0) }
     }
 
+    private var canViewInventory: Bool {
+        let role = appState.currentUserRole
+        return role == .inventoryController || role == .boutiqueManager || role == .corporateAdmin
+    }
+
     private var variantStockCount: Int {
         guard product.stockCount > 0 else { return 0 }
         let sizeIdx   = selectedSizeIndex ?? 0
@@ -74,13 +108,15 @@ struct ProductDetailView: View {
     }
 
     private var stockLabel: String {
-        variantStockCount > 5  ? "In Stock" :
+        if hasActiveReservation { return "Reserved" }
+        return variantStockCount > 5  ? "In Stock" :
         variantStockCount > 0  ? "Only \(variantStockCount) left" :
                                  "Out of Stock"
     }
 
     private var stockColor: Color {
-        variantStockCount > 5  ? AppColors.success :
+        if hasActiveReservation { return AppColors.accent }
+        return variantStockCount > 5  ? AppColors.success :
         variantStockCount > 0  ? AppColors.warning :
                                  AppColors.error
     }
@@ -99,11 +135,25 @@ struct ProductDetailView: View {
         return [product.imageName]
     }
 
+    private var isAdminMode: Bool {
+        mode == .adminCatalog
+    }
+
+    init(product: Product, mode: ProductDetailMode = .storefront) {
+        self.product = product
+        self.mode = mode
+    }
+
     // MARK: - Body
 
     var body: some View {
         ZStack {
-            Color.white.ignoresSafeArea()
+            LinearGradient(
+                colors: [AppColors.backgroundWarmWhite, AppColors.backgroundPrimary],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -116,50 +166,98 @@ struct ProductDetailView: View {
 
                         headerSection
                         priceStockRow
-                        colorPickerSection
-                        if needsSizeSelector { sizePickerSection }
+                        if !isAdminMode {
+                            colorPickerSection
+                            if needsSizeSelector { sizePickerSection }
+                            inlineActionSection
+                        }
 
-                        Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
+                        sectionDivider
                         descriptionSection
-                        Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
+                        sectionDivider
                         detailsSection
 
+                        if !isAdminMode {
+                            sectionDivider
+                            warrantySection
+                        }
+
                         if !product.parsedAttributes.isEmpty {
-                            Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
+                            sectionDivider
                             specificationsSection
+                        }
+
+                        if canViewInventory {
+                            sectionDivider
+                            inventorySection
                         }
 
                         Spacer().frame(height: 28)
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
                     .padding(.top, AppSpacing.xl)
+                    .padding(.bottom, AppSpacing.md)
+                    .background(
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            .fill(Color.white.opacity(0.94))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                    .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                            )
+                            .shadow(color: .black.opacity(0.08), radius: 16, y: 6)
+                    )
+                    .padding(.horizontal, 12)
+                    .offset(y: -24)
                 }
             }
+        }
+        .task {
+            await fetchInventoryItems()
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 16) {
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3)) {
-                            product.isWishlisted.toggle()
-                            try? modelContext.save()
+                if isAdminMode {
+                    Button(action: { showAdminManageSheet = true }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "slider.horizontal.3")
+                            Text("Manage")
+                                .font(AppTypography.caption)
                         }
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    }) {
-                        Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
-                            .font(.system(size: 16, weight: .light))
-                            .foregroundColor(product.isWishlisted ? AppColors.accent : .black)
+                        .foregroundColor(AppColors.accent)
                     }
-                    CartShortcutButton()
+                } else {
+                    HStack(spacing: 16) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3)) {
+                                product.isWishlisted.toggle()
+                                try? modelContext.save()
+                            }
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }) {
+                            Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
+                                .font(.system(size: 16, weight: .light))
+                                .foregroundColor(product.isWishlisted ? AppColors.accent : AppColors.textPrimaryDark)
+                                .frame(width: 34, height: 34)
+                                .background(.ultraThinMaterial, in: Circle())
+                        }
+                        CartShortcutButton()
+                    }
                 }
             }
         }
+        .if(!isAdminMode) { view in
+            view.toolbar(.hidden, for: .tabBar)
+        }
         .safeAreaInset(edge: .bottom) {
-            bottomActionBar
+            if isAdminMode {
+                adminManageBar
+            }
         }
         .navigationDestination(isPresented: $navigateToCart) {
-            CartView()
+            if !isAdminMode {
+                CartView()
+            }
         }
         .fullScreenCover(isPresented: $showGallery) {
             ProductImageGalleryView(
@@ -168,15 +266,40 @@ struct ProductDetailView: View {
             )
         }
         .sheet(isPresented: $showBuyNow) {
-            BuyNowSheetView(
+            if !isAdminMode {
+                BuyNowSheetView(
+                    product: product,
+                    selectedColor: colorVariants[selectedColorIndex],
+                    selectedSize: selectedSizeIndex.map { sizeVariants[$0] }
+                )
+            }
+        }
+        .sheet(isPresented: $showReserveSheet) {
+            ReserveSheetView(
                 product: product,
                 selectedColor: colorVariants[selectedColorIndex],
                 selectedSize: selectedSizeIndex.map { sizeVariants[$0] }
             )
+            .presentationDetents([.fraction(0.85), .large])
         }
         .sheet(isPresented: $showGuestGate) {
-            GuestAuthGateView(pendingAction: guestGateAction)
-                .presentationDetents([.large])
+            if !isAdminMode {
+                GuestAuthGateView(pendingAction: guestGateAction)
+                    .presentationDetents([.large])
+            }
+        }
+        .sheet(isPresented: $showAdminManageSheet) {
+            if isAdminMode {
+                AdminProductManageSheet(product: product, categories: allCategories)
+            }
+        }
+        .sheet(item: $selectedBarcodeItem) { item in
+            BarcodeCardView(item: item, productName: product.name, brand: product.brand)
+        }
+        .sheet(isPresented: $isExportingAll, onDismiss: { exportAllPDFURL = nil }) {
+            if let url = exportAllPDFURL {
+                ShareSheet(activityItems: [url])
+            }
         }
     }
 
@@ -480,6 +603,66 @@ struct ProductDetailView: View {
         }
     }
 
+    // MARK: - Warranty
+
+    private var warrantySection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("WARRANTY")
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.accent)
+
+            Text("Check coverage for this product based on purchase history.")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+
+            Button {
+                Task { await checkWarrantyFromProductDetail() }
+            } label: {
+                HStack(spacing: AppSpacing.xs) {
+                    if isCheckingWarranty {
+                        ProgressView().tint(.white)
+                        Text("Checking...")
+                    } else {
+                        Image(systemName: "checkmark.shield")
+                        Text("Check Warranty")
+                    }
+                }
+                .font(AppTypography.buttonSecondary)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: AppSpacing.touchTarget)
+                .background(AppColors.accent)
+                .cornerRadius(AppSpacing.radiusMedium)
+            }
+            .disabled(isCheckingWarranty)
+            .opacity(isCheckingWarranty ? 0.75 : 1)
+
+            if let result = warrantyResult {
+                HStack(spacing: AppSpacing.xs) {
+                    Circle()
+                        .fill(warrantyStatusColor(result.status))
+                        .frame(width: 8, height: 8)
+                    Text("Status: \(result.status.rawValue)")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
+
+                detailRow(label: "Coverage", value: result.coveragePeriodText)
+                detailRow(
+                    label: "Eligible Services",
+                    value: result.eligibleServices.isEmpty ? "None" : result.eligibleServices.joined(separator: ", ")
+                )
+            }
+
+            if let warrantyError, !warrantyError.isEmpty {
+                Text(warrantyError)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.error)
+            }
+        }
+    }
+
     // MARK: - Specifications
 
     private var specificationsSection: some View {
@@ -498,66 +681,140 @@ struct ProductDetailView: View {
         }
     }
 
+    // MARK: - Inventory Items
+
+    private var inventorySection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack {
+                Text("INVENTORY ITEMS")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+                Spacer()
+                if !remoteItems.isEmpty {
+                    Button("Export All Barcodes") {
+                        handleExportAll()
+                    }
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.accent)
+                }
+            }
+
+            if isFetchingItems {
+                ProgressView().tint(AppColors.accent)
+            } else if remoteItems.isEmpty {
+                Text("No inventory yet. Add stock.")
+                    .font(AppTypography.bodyMedium)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .padding(.top, 4)
+            } else {
+                LazyVStack(spacing: AppSpacing.sm) {
+                    ForEach(remoteItems) { item in
+                        Button(action: {
+                            selectedBarcodeItem = item
+                        }) {
+                            inventoryRow(for: item)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    private func inventoryRow(for item: ProductItemDTO) -> some View {
+        HStack(spacing: AppSpacing.sm) {
+            Image(systemName: "barcode")
+                .font(.system(size: 14))
+                .foregroundColor(AppColors.accent.opacity(0.7))
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.barcode)
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundColor(AppColors.textPrimaryDark)
+                
+                Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(AppTypography.nano)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+            
+            Spacer()
+            
+            Text(item.itemStatus.displayName.uppercased())
+                .font(AppTypography.nano)
+                .tracking(1)
+                .foregroundColor(statusColor(for: item.itemStatus))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(statusColor(for: item.itemStatus).opacity(0.12))
+                .cornerRadius(4)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                        .stroke(Color.black.opacity(0.04), lineWidth: 1)
+                )
+        )
+    }
+
+    private func statusColor(for status: ProductItemStatus) -> Color {
+        switch status {
+        case .inStock: return AppColors.success
+        case .sold: return AppColors.error
+        case .reserved: return AppColors.warning
+        case .damaged: return AppColors.error
+        case .returned: return Color.purple
+        }
+    }
+
+    private func warrantyStatusColor(_ status: WarrantyCoverageStatus) -> Color {
+        switch status {
+        case .valid: return AppColors.success
+        case .expired: return AppColors.warning
+        case .notFound: return AppColors.error
+        }
+    }
+
+    @MainActor
+    private func checkWarrantyFromProductDetail() async {
+        guard !isCheckingWarranty else { return }
+        isCheckingWarranty = true
+        warrantyError = nil
+
+        do {
+            warrantyResult = try await WarrantyService.shared.lookupWarranty(
+                mode: .productId,
+                query: product.id.uuidString
+            )
+        } catch {
+            warrantyResult = nil
+            warrantyError = error.localizedDescription
+        }
+
+        isCheckingWarranty = false
+    }
+
     // MARK: - Bottom Action Bar
 
-    private var bottomActionBar: some View {
+    private var adminManageBar: some View {
         VStack(spacing: 0) {
-            // Stock + cart indicator
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(stockColor)
-                    .frame(width: 6, height: 6)
-                Text(stockLabel)
-                    .font(.system(size: 11, weight: .light))
-                    .foregroundColor(.black.opacity(0.55))
-                Spacer()
-                if cartItemQuantity > 0 {
-                    Button(action: { navigateToCart = true }) {
-                        Text("\(cartItemQuantity) in bag — View")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(AppColors.accent)
-                    }
+            HStack(spacing: 10) {
+                Button(action: { showAdminManageSheet = true }) {
+                    Label("Manage Product", systemImage: "slider.horizontal.3")
+                        .font(AppTypography.buttonPrimary)
+                        .foregroundColor(AppColors.textPrimaryLight)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(AppColors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
-            .padding(.bottom, 10)
-
-            HStack(spacing: 10) {
-                // Add to Bag — primary maroon
-                Button(action: { handleAddToBag() }) {
-                    Text(
-                        variantStockCount > 0
-                        ? (addedToBag ? "Added" : (cartItemQuantity > 0 ? "Add Another" : "Add to Bag"))
-                        : "Out of Stock"
-                    )
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(addedToBag ? AppColors.success : AppColors.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .animation(.spring(response: 0.3), value: addedToBag)
-                    .scaleEffect(bagIconScale)
-                }
-                .opacity(variantStockCount > 0 ? 1.0 : 0.4)
-                .disabled(variantStockCount == 0 && !appState.isGuest)
-
-                // Buy Now — maroon outlined
-                Button(action: { handleBuyNow() }) {
-                    Text("Buy Now")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(variantStockCount > 0 ? AppColors.accent : AppColors.accent.opacity(0.3))
-                        .frame(width: 118)
-                        .frame(height: 52)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(variantStockCount > 0 ? AppColors.accent : AppColors.accent.opacity(0.3), lineWidth: 1.5)
-                        )
-                }
-                .disabled(variantStockCount == 0 && !appState.isGuest)
-            }
-            .padding(.horizontal, 20)
             .padding(.bottom, 12)
         }
         .background(
@@ -565,6 +822,181 @@ struct ProductDetailView: View {
                 .shadow(color: .black.opacity(0.06), radius: 12, y: -4)
                 .ignoresSafeArea(edges: .bottom)
         )
+    }
+
+    private var bottomActionBar: some View {
+        VStack(spacing: AppSpacing.sm) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(stockColor)
+                    .frame(width: 7, height: 7)
+                Text(stockLabel)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                Spacer()
+                if cartItemQuantity > 0 {
+                    Button(action: { navigateToCart = true }) {
+                        Text("Bag (\(cartItemQuantity))")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.accent)
+                    }
+                }
+            }
+
+            Button(action: { handleAddToBag() }) {
+                Text(
+                    (variantStockCount > 0 || hasActiveReservation)
+                    ? (addedToBag ? "Added To Bag" : (cartItemQuantity > 0 ? "Add Another To Bag" : "Add To Bag"))
+                    : "Out of Stock"
+                )
+                .font(AppTypography.buttonPrimary)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(addedToBag ? AppColors.success : AppColors.accent)
+                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .animation(.spring(response: 0.3), value: addedToBag)
+                .scaleEffect(bagIconScale)
+            }
+            .opacity((variantStockCount > 0 || hasActiveReservation) ? 1 : 0.45)
+            .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
+
+            HStack(spacing: 10) {
+                Button(action: { handleBuyNow() }) {
+                    Text(hasActiveReservation ? "Buy Reserved" : "Buy Now")
+                        .font(AppTypography.buttonPrimary)
+                        .foregroundColor((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .fill(AppColors.backgroundPrimary)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .stroke((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3), lineWidth: 1.5)
+                        )
+                }
+                .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
+
+                Button(action: { handleReserve() }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: hasActiveReservation ? "checkmark.seal.fill" : "building.2")
+                            .font(.system(size: 13, weight: .medium))
+                        Text(hasActiveReservation ? "Already Reserved" : "Reserve")
+                            .font(AppTypography.buttonSecondary)
+                    }
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(AppColors.backgroundSecondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+                .disabled((variantStockCount == 0 || hasActiveReservation) && !appState.isGuest)
+                .opacity((variantStockCount > 0 && !hasActiveReservation) ? 1 : 0.45)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.65), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.1), radius: 14, y: 6)
+        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+
+    private var inlineActionSection: some View {
+        VStack(spacing: AppSpacing.sm) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(stockColor)
+                    .frame(width: 7, height: 7)
+                Text(stockLabel)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                Spacer()
+                if cartItemQuantity > 0 {
+                    Button(action: { navigateToCart = true }) {
+                        Text("Bag (\(cartItemQuantity))")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.accent)
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button(action: { handleAddToBag() }) {
+                    Text(
+                        (variantStockCount > 0 || hasActiveReservation)
+                        ? (addedToBag ? "Added To Bag" : (cartItemQuantity > 0 ? "Add Another To Bag" : "Add To Bag"))
+                        : "Out of Stock"
+                    )
+                    .font(AppTypography.buttonPrimary)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(addedToBag ? AppColors.success : AppColors.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .animation(.spring(response: 0.3), value: addedToBag)
+                    .scaleEffect(bagIconScale)
+                }
+                .opacity((variantStockCount > 0 || hasActiveReservation) ? 1 : 0.45)
+                .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
+
+                Button(action: { handleBuyNow() }) {
+                    Text(hasActiveReservation ? "Buy Reserved" : "Buy Now")
+                        .font(AppTypography.buttonPrimary)
+                        .foregroundColor((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3))
+                        .frame(width: 126)
+                        .frame(height: 48)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3), lineWidth: 1.5)
+                        )
+                }
+                .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
+            }
+
+            Button(action: { handleReserve() }) {
+                Text(hasActiveReservation ? "Already Reserved" : "Reserve In Boutique")
+                    .font(AppTypography.buttonSecondary)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 42)
+                    .background(AppColors.backgroundSecondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .disabled((variantStockCount == 0 || hasActiveReservation) && !appState.isGuest)
+            .opacity((variantStockCount > 0 && !hasActiveReservation) ? 1 : 0.45)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(AppColors.accent.opacity(0.15), lineWidth: 1)
+                )
+        )
+    }
+
+    private var sectionDivider: some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: [Color.clear, AppColors.accent.opacity(0.32), Color.clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(height: 1)
     }
 
     // MARK: - Variant Chips
@@ -640,6 +1072,18 @@ struct ProductDetailView: View {
         showBuyNow = true
     }
 
+    private func handleReserve() {
+        guard !hasActiveReservation else { return }
+        
+        if appState.isGuest {
+            guestGateAction = "Reserve"
+            showGuestGate   = true
+            return
+        }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        showReserveSheet = true
+    }
+
     private func addProductToCart() {
         let email = appState.currentUserEmail
         if let existing = allCartItems.first(where: { $0.customerEmail == email && $0.productId == product.id }) {
@@ -677,6 +1121,233 @@ struct ProductDetailView: View {
             Text(value)
                 .font(AppTypography.bodyMedium)
                 .foregroundColor(AppColors.textPrimaryDark)
+        }
+    }
+
+    private func fetchInventoryItems() async {
+        isFetchingItems = true
+        defer { isFetchingItems = false }
+        do {
+            let items: [ProductItemDTO] = try await SupabaseManager.shared.client
+                .from("product_items")
+                .select("id, product_id, barcode, serial_number, status, store_id, created_at, products(*)")
+                .eq("product_id", value: product.id.uuidString)
+                .order("created_at", ascending: false)
+                .limit(50)
+                .execute()
+                .value
+            remoteItems = items
+        } catch {
+            print("[ProductDetailView] Failed to fetch items:", error)
+        }
+    }
+    
+    private func handleExportAll() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        let url = BarcodePDFService.shared.generatePDF(
+            items: remoteItems,
+            productName: product.name,
+            brand: product.brand
+        )
+        if let output = url {
+            exportAllPDFURL = output
+            isExportingAll = true
+        }
+    }
+}
+
+private struct AdminProductManageSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    let product: Product
+    let categories: [Category]
+
+    @State private var name: String = ""
+    @State private var brand: String = ""
+    @State private var priceText: String = ""
+    @State private var stockText: String = ""
+    @State private var descriptionText: String = ""
+    @State private var selectedCategoryName: String = ""
+    @State private var selectedCollectionId: UUID?
+    @State private var isLimitedEdition = false
+    @State private var isFeatured = false
+    @State private var remoteCategories: [CategoryDTO] = []
+    @State private var remoteCollections: [BrandCollectionDTO] = []
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppSpacing.lg) {
+                    LuxuryTextField(placeholder: "Product Name", text: $name)
+                    LuxuryTextField(placeholder: "Brand", text: $brand)
+                    LuxuryTextField(placeholder: "Price (INR)", text: $priceText)
+                        .keyboardType(.decimalPad)
+                    LuxuryTextField(placeholder: "Stock Count", text: $stockText)
+                        .keyboardType(.numberPad)
+
+                    Menu {
+                        ForEach(categories) { category in
+                            Button(category.name) { selectedCategoryName = category.name }
+                        }
+                    } label: {
+                        HStack {
+                            Text(selectedCategoryName.isEmpty ? "Select Category" : selectedCategoryName)
+                                .foregroundColor(selectedCategoryName.isEmpty ? AppColors.neutral500 : AppColors.textPrimaryDark)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .foregroundColor(AppColors.neutral500)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(AppColors.backgroundSecondary)
+                        .cornerRadius(AppSpacing.radiusMedium)
+                    }
+
+                    Menu {
+                        Button("No Collection") { selectedCollectionId = nil }
+                        Divider()
+                        ForEach(remoteCollections.filter(\.isActive)) { collection in
+                            Button(collection.name) { selectedCollectionId = collection.id }
+                        }
+                    } label: {
+                        HStack {
+                            Text(selectedCollectionName)
+                                .foregroundColor(selectedCollectionId == nil ? AppColors.neutral500 : AppColors.textPrimaryDark)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .foregroundColor(AppColors.neutral500)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(AppColors.backgroundSecondary)
+                        .cornerRadius(AppSpacing.radiusMedium)
+                    }
+
+                    TextField("Description", text: $descriptionText, axis: .vertical)
+                        .lineLimit(4...8)
+                        .padding(AppSpacing.sm)
+                        .background(AppColors.backgroundSecondary)
+                        .cornerRadius(AppSpacing.radiusMedium)
+
+                    Toggle("Limited Edition", isOn: $isLimitedEdition)
+                        .tint(AppColors.accent)
+                    Toggle("Featured", isOn: $isFeatured)
+                        .tint(AppColors.accent)
+
+                    Button(action: saveChanges) {
+                        Text("Save Changes")
+                            .font(AppTypography.buttonPrimary)
+                            .foregroundColor(AppColors.textPrimaryLight)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, AppSpacing.md)
+                            .background(AppColors.accent)
+                            .cornerRadius(AppSpacing.radiusMedium)
+                    }
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.error)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.md)
+                .padding(.bottom, AppSpacing.xxxl)
+            }
+            .background(AppColors.backgroundPrimary.ignoresSafeArea())
+            .navigationTitle("Manage Product")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+            .onAppear {
+                name = product.name
+                brand = product.brand
+                priceText = String(format: "%.2f", product.price)
+                stockText = "\(product.stockCount)"
+                descriptionText = product.productDescription
+                selectedCategoryName = product.categoryName
+                isLimitedEdition = product.isLimitedEdition
+                isFeatured = product.isFeatured
+            }
+            .task { await loadRemoteMetadata() }
+        }
+    }
+
+    private func saveChanges() {
+        let parsedPrice = Double(priceText.replacingOccurrences(of: ",", with: ".")) ?? product.price
+        let parsedStock = Int(stockText) ?? product.stockCount
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBrand = brand.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDescription = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        Task {
+            do {
+                _ = try await CatalogService.shared.updateProduct(
+                    id: product.id,
+                    sku: product.sku,
+                    name: trimmedName,
+                    brand: trimmedBrand,
+                    categoryId: mappedCategoryId,
+                    collectionId: selectedCollectionId,
+                    price: parsedPrice,
+                    costPrice: nil,
+                    description: trimmedDescription,
+                    barcode: nil,
+                    isActive: true
+                )
+
+                product.name = trimmedName
+                product.brand = trimmedBrand
+                product.price = parsedPrice
+                product.stockCount = max(parsedStock, 0)
+                product.productDescription = trimmedDescription
+                if !selectedCategoryName.isEmpty {
+                    product.categoryName = selectedCategoryName
+                }
+                product.productTypeName = selectedCollectionName == "No Collection" ? "" : selectedCollectionName
+                product.isLimitedEdition = isLimitedEdition
+                product.isFeatured = isFeatured
+
+                try? modelContext.save()
+                dismiss()
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Sync failed: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    private var mappedCategoryId: UUID? {
+        remoteCategories.first(where: { $0.name == selectedCategoryName })?.id
+    }
+
+    private var selectedCollectionName: String {
+        guard let selectedCollectionId else { return "No Collection" }
+        return remoteCollections.first(where: { $0.id == selectedCollectionId })?.name ?? "No Collection"
+    }
+
+    private func loadRemoteMetadata() async {
+        do {
+            async let categories = CatalogService.shared.fetchCategories()
+            async let collections = CatalogService.shared.fetchCollections()
+            let (loadedCategories, loadedCollections) = try await (categories, collections)
+            remoteCategories = loadedCategories
+            remoteCollections = loadedCollections
+            if let matchedCollection = loadedCollections.first(where: { $0.name == product.productTypeName }) {
+                selectedCollectionId = matchedCollection.id
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = "Unable to load remote catalog metadata."
+            }
         }
     }
 }

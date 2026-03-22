@@ -10,9 +10,11 @@ import SwiftData
 
 struct OrdersListView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Order.createdAt, order: .reverse) private var allOrders: [Order]
 
     @State private var selectedFilter: OrderFilter = .all
+    @State private var isSyncing = false
 
     enum OrderFilter: String, CaseIterable {
         case all = "All"
@@ -21,7 +23,10 @@ struct OrdersListView: View {
     }
 
     private var customerOrders: [Order] {
-        allOrders.filter { $0.customerEmail == appState.currentUserEmail }
+        let email = appState.currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return allOrders.filter {
+            $0.customerEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == email
+        }
     }
 
     private var filteredOrders: [Order] {
@@ -73,6 +78,26 @@ struct OrdersListView: View {
         }
         .navigationTitle("My Orders")
         .navigationBarTitleDisplayMode(.large)
+        .refreshable { await syncOrderStatuses() }
+        .task { await syncOrderStatuses() }
+    }
+
+    // MARK: - Sync
+
+    @MainActor
+    private func syncOrderStatuses() async {
+        guard !appState.isGuest, !appState.currentUserEmail.isEmpty else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        do {
+            try await OrderStatusSyncService.shared.syncOrderStatuses(
+                customerEmail: appState.currentUserEmail,
+                clientId: appState.currentUserProfile?.id ?? appState.currentClientProfile?.id,
+                modelContext: modelContext
+            )
+        } catch {
+            print("[OrdersListView] Status sync failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Empty State

@@ -265,8 +265,11 @@ struct CreateUserSheet: View {
     @State private var phone = ""
     @State private var password = ""
     @State private var selectedRole: UserRole = .boutiqueManager
+    @State private var isCreating = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var showSuccess = false
+    @State private var createdName = ""
 
     private let creatableRoles: [UserRole] = [
         .boutiqueManager,
@@ -308,12 +311,18 @@ struct CreateUserSheet: View {
                                         Button(action: { selectedRole = role }) {
                                             Text(role.rawValue)
                                                 .font(AppTypography.caption)
-                                                .foregroundColor(selectedRole == role ? AppColors.primary : AppColors.textSecondaryDark)
+                                                .fontWeight(selectedRole == role ? .semibold : .regular)
+                                                .foregroundColor(selectedRole == role ? .white : AppColors.textSecondaryDark)
                                                 .padding(.horizontal, AppSpacing.md)
                                                 .padding(.vertical, AppSpacing.xs)
                                                 .background(selectedRole == role ? AppColors.accent : AppColors.backgroundTertiary)
-                                                .cornerRadius(AppSpacing.radiusSmall)
+                                                .clipShape(Capsule())
+                                                .overlay(
+                                                    Capsule()
+                                                        .stroke(selectedRole == role ? Color.clear : AppColors.divider, lineWidth: 0.75)
+                                                )
                                         }
+                                        .buttonStyle(.plain)
                                     }
                                 }
                                 .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -330,11 +339,13 @@ struct CreateUserSheet: View {
                         .padding(.horizontal, AppSpacing.screenHorizontal)
 
                         // Create button
-                        PrimaryButton(title: "Create Account") {
-                            createUser()
+                        PrimaryButton(title: isCreating ? "Creating…" : "Create Account") {
+                            Task { await createUser() }
                         }
+                        .disabled(isCreating)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
                         .padding(.top, AppSpacing.md)
+                        .padding(.bottom, AppSpacing.xxxl)
                     }
                 }
             }
@@ -346,6 +357,7 @@ struct CreateUserSheet: View {
                             .font(AppTypography.closeButton)
                             .foregroundColor(AppColors.textPrimaryDark)
                     }
+                    .disabled(isCreating)
                 }
             }
             .alert("Error", isPresented: $showError) {
@@ -353,29 +365,61 @@ struct CreateUserSheet: View {
             } message: {
                 Text(errorMessage)
             }
+            .alert("Account Created", isPresented: $showSuccess) {
+                Button("Done") { dismiss() }
+            } message: {
+                Text("\(createdName)'s account has been provisioned. Share the temporary password so they can log in.")
+            }
         }
     }
 
-    private func createUser() {
-        guard !name.trimmingCharacters(in: .whitespaces).isEmpty,
-              !email.trimmingCharacters(in: .whitespaces).isEmpty,
+    @MainActor
+    private func createUser() async {
+        let trimmedName  = name.trimmingCharacters(in: .whitespaces)
+        let trimmedEmail = email.trimmingCharacters(in: .whitespaces).lowercased()
+        let trimmedPhone = phone.trimmingCharacters(in: .whitespaces)
+
+        guard !trimmedName.isEmpty, !trimmedEmail.isEmpty,
               !password.isEmpty, password.count >= 6 else {
             errorMessage = "Please fill in all fields. Password must be at least 6 characters."
             showError = true
             return
         }
 
-        let newUser = User(
-            name: name.trimmingCharacters(in: .whitespaces),
-            email: email.trimmingCharacters(in: .whitespaces).lowercased(),
-            phone: phone.trimmingCharacters(in: .whitespaces),
-            passwordHash: password,
-            role: selectedRole
-        )
+        isCreating = true
+        defer { isCreating = false }
 
-        modelContext.insert(newUser)
-        try? modelContext.save()
-        dismiss()
+        do {
+            // 1 — Create in Supabase Auth + users table
+            let dto = try await StaffSyncService.shared.createStaffWithAuth(
+                name: trimmedName,
+                email: trimmedEmail,
+                phone: trimmedPhone,
+                password: password,
+                role: selectedRole
+            )
+
+            // 2 — Mirror into local SwiftData so UserManagementView refreshes instantly
+            let local = User(
+                name: dto.fullName,
+                email: dto.email,
+                phone: dto.phone ?? "",
+                passwordHash: "",
+                storeId: dto.storeId,
+                role: dto.userRole,
+                isActive: dto.isActive
+            )
+            local.id = dto.id
+            local.createdAt = dto.createdAt
+            modelContext.insert(local)
+            try? modelContext.save()
+
+            createdName = dto.fullName
+            showSuccess = true
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
     }
 }
 

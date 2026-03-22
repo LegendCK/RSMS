@@ -16,6 +16,7 @@ struct ManagerDashboardView: View {
 
     @State private var snapshot: ManagerDashboardSnapshot?
     @State private var showProfile = false
+    @State private var showSalesAnalytics = false
     @State private var isShowingCachedData = false
     @State private var statusMessage: String?
     @State private var upcomingAppointments: [AppointmentDTO] = []
@@ -70,6 +71,15 @@ struct ManagerDashboardView: View {
         }
         .sheet(isPresented: $showProfile) {
             ManagerProfileView()
+        }
+        .sheet(isPresented: $showSalesAnalytics) {
+            if let snapshot, let storeId = appState.currentStoreId {
+                SalesAnalyticsSheet(
+                    snapshot: snapshot,
+                    storeId: storeId,
+                    storeName: currentStoreName
+                )
+            }
         }
         .task(id: appState.currentStoreId) {
             await loadDashboard()
@@ -173,53 +183,65 @@ struct ManagerDashboardView: View {
 
     private func heroMetrics(_ snapshot: ManagerDashboardSnapshot) -> some View {
         LazyVGrid(columns: heroMetricColumns, spacing: AppSpacing.md) {
-            dashboardCard(
-                content: {
-                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                        HStack {
-                            sectionTitle("SALES VS TARGET")
-                            Spacer()
-                            performanceBadge(progress: snapshot.sales.targetProgress)
-                        }
+            Button(action: { showSalesAnalytics = true }) {
+                dashboardCard(
+                    content: {
+                        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                            HStack {
+                                sectionTitle("SALES VS TARGET")
+                                Spacer()
+                                performanceBadge(progress: snapshot.sales.targetProgress)
+                            }
 
-                        HStack(alignment: .lastTextBaseline) {
-                            Text(currency(snapshot.sales.actualRevenue))
-                                .font(AppTypography.displaySmall)
-                                .foregroundColor(AppColors.textPrimaryDark)
+                            HStack(alignment: .lastTextBaseline) {
+                                Text(currency(snapshot.sales.actualRevenue))
+                                    .font(AppTypography.displaySmall)
+                                    .foregroundColor(AppColors.textPrimaryDark)
 
-                            Spacer()
+                                Spacer()
 
-                            VStack(alignment: .trailing, spacing: 4) {
-                                Text("Target")
+                                VStack(alignment: .trailing, spacing: 4) {
+                                    Text("Target")
+                                        .font(AppTypography.caption)
+                                        .foregroundColor(AppColors.textSecondaryDark)
+                                    Text(currency(snapshot.sales.targetRevenue))
+                                        .font(AppTypography.label)
+                                        .foregroundColor(AppColors.textPrimaryDark)
+                                }
+                            }
+
+                            ProgressView(value: min(max(snapshot.sales.targetProgress, 0), 1.25))
+                                .tint(progressColor(progress: snapshot.sales.targetProgress))
+
+                            HStack {
+                                Text("Gap")
                                     .font(AppTypography.caption)
                                     .foregroundColor(AppColors.textSecondaryDark)
-                                Text(currency(snapshot.sales.targetRevenue))
+                                Spacer()
+                                Text(snapshot.sales.revenueGap > 0 ? currency(snapshot.sales.revenueGap) : "Ahead by \(currency(abs(snapshot.sales.revenueGap)))")
                                     .font(AppTypography.label)
-                                    .foregroundColor(AppColors.textPrimaryDark)
+                                    .foregroundColor(progressColor(progress: snapshot.sales.targetProgress))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
                             }
-                        }
 
-                        ProgressView(value: min(max(snapshot.sales.targetProgress, 0), 1.25))
-                            .tint(progressColor(progress: snapshot.sales.targetProgress))
-
-                        HStack {
-                            Text("Gap")
-                                .font(AppTypography.caption)
-                                .foregroundColor(AppColors.textSecondaryDark)
-                            Spacer()
-                            Text(snapshot.sales.revenueGap > 0 ? currency(snapshot.sales.revenueGap) : "Ahead by \(currency(abs(snapshot.sales.revenueGap)))")
-                                .font(AppTypography.label)
-                                .foregroundColor(progressColor(progress: snapshot.sales.targetProgress))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
+                            HStack(spacing: 4) {
+                                Image(systemName: "chart.bar.xaxis")
+                                    .font(.system(size: 9, weight: .medium))
+                                Text("Tap for detailed analytics")
+                                    .font(.system(size: 9, weight: .medium))
+                            }
+                            .foregroundColor(AppColors.accent.opacity(0.6))
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                         }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .frame(minHeight: 164, alignment: .topLeading)
-                },
-                glassConfig: .thin,
-                padding: AppSpacing.md
-            )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .frame(minHeight: 164, alignment: .topLeading)
+                    },
+                    glassConfig: .thin,
+                    padding: AppSpacing.md
+                )
+            }
+            .buttonStyle(.plain)
 
             dashboardCard(
                 content: {

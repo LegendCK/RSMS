@@ -25,7 +25,8 @@ class CartViewModel {
 
     var itemCount: Int { cartItems.reduce(0) { $0 + $1.quantity } }
     var subtotal: Double { cartItems.reduce(0) { $0 + $1.lineTotal } }
-    var taxRate: Double { 0.08 }
+    /// Tax rate fetched from Supabase via TaxService (no hardcoded fallback).
+    var taxRate: Double { TaxService.shared.rate() }
     var tax: Double { subtotal * taxRate }
     var total: Double { subtotal + tax }
     var isEmpty: Bool { cartItems.isEmpty }

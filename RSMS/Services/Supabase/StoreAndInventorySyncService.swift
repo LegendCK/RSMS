@@ -25,8 +25,8 @@ final class StoreAndInventorySyncService {
 
         let stores = try JSONDecoder().decode([SupabaseStore].self, from: response.data)
         return stores.map { supabaseStore in
-            StoreLocation(
-                code: supabaseStore.code ?? supabaseStore.id.prefix(4).uppercased(),
+            let location = StoreLocation(
+                code: supabaseStore.code ?? String(supabaseStore.id.prefix(4)).uppercased(),
                 name: supabaseStore.name,
                 type: .boutique,
                 addressLine1: supabaseStore.address ?? "",
@@ -39,6 +39,11 @@ final class StoreAndInventorySyncService {
                 capacityUnits: 0,
                 isOperational: supabaseStore.is_active ?? true
             )
+            // Preserve the Supabase UUID so ID-based lookups (e.g. currentStoreId match) work correctly
+            if let uuid = UUID(uuidString: supabaseStore.id) {
+                location.id = uuid
+            }
+            return location
         }
     }
 
@@ -49,16 +54,16 @@ final class StoreAndInventorySyncService {
 
         let response = try await SupabaseManager.shared.client
             .from("inventory")
-            .select("id, store_id, product_id, quantity, reorder_point, updated_at, products(sku, name, categories(name))")
+            .select("id, store_id, product_id, quantity, reorder_point, updated_at, products(sku, name, image_urls, categories(name))")
             .eq("store_id", value: storeUuid)
             .execute()
 
         let records = try JSONDecoder().decode([SupabaseInventoryWithProduct].self, from: response.data)
-        
+
         return records.compactMap { record -> InventoryByLocation? in
             guard let product = record.products else { return nil }
             guard let category = product.categories else { return nil }
-            
+
             return InventoryByLocation(
                 locationId: storeId,
                 productId: UUID(uuidString: record.product_id) ?? UUID(),
@@ -67,7 +72,8 @@ final class StoreAndInventorySyncService {
                 categoryName: category.name ?? "Uncategorized",
                 quantity: record.quantity,
                 reorderPoint: record.reorder_point ?? 0,
-                updatedAt: ISO8601DateFormatter().date(from: record.updated_at ?? "") ?? Date()
+                updatedAt: ISO8601DateFormatter().date(from: record.updated_at ?? "") ?? Date(),
+                imageUrl: product.image_urls?.first
             )
         }
     }
@@ -100,6 +106,7 @@ final class StoreAndInventorySyncService {
             if let existing = localInventory.first(where: { $0.productId == remote.productId }) {
                 existing.quantity = remote.quantity
                 existing.reorderPoint = remote.reorderPoint
+                if let url = remote.imageUrl { existing.imageUrl = url }
             } else {
                 modelContext.insert(remote)
             }
@@ -157,6 +164,7 @@ struct SupabaseInventoryWithProduct: Codable {
 struct SupabaseProduct: Codable {
     let sku: String?
     let name: String?
+    let image_urls: [String]?
     let categories: SupabaseCategory?
 }
 

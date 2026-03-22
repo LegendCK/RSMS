@@ -32,8 +32,15 @@ struct OrderDTO: Codable, Identifiable {
     let currency: String            // ISO 4217, e.g. "USD"
     let isTaxFree: Bool
     let notes: String?
+    let eventId: UUID?             // Link to boutique events
     let createdAt: Date
-    let updatedAt: Date
+    var updatedAt: Date
+
+    // Enrichment properties (not in Supabase)
+    var itemCount: Int?
+    var totalQuantity: Int?
+    var customerName: String?
+    var customerEmail: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -49,6 +56,7 @@ struct OrderDTO: Codable, Identifiable {
         case currency
         case isTaxFree    = "is_tax_free"
         case notes
+        case eventId      = "event_id"
         case createdAt    = "created_at"
         case updatedAt    = "updated_at"
     }
@@ -102,6 +110,7 @@ struct OrderInsertDTO: Codable {
     let currency: String
     let isTaxFree: Bool
     let notes: String?
+    let eventId: UUID?
 
     enum CodingKeys: String, CodingKey {
         case orderNumber = "order_number"
@@ -109,6 +118,7 @@ struct OrderInsertDTO: Codable {
         case storeId     = "store_id"
         case associateId = "associate_id"
         case channel, status, subtotal, currency, notes
+        case eventId = "event_id"
         case taxTotal    = "tax_total"
         case grandTotal  = "grand_total"
         case isTaxFree   = "is_tax_free"

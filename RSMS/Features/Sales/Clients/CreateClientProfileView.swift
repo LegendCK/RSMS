@@ -5,8 +5,6 @@
 
 import SwiftUI
 
-import SwiftUI
-
 struct CreateClientProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
@@ -43,61 +41,63 @@ struct CreateClientProfileView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary.ignoresSafeArea()
-                
-                if vm.currentStep == 1 {
-                    stepOneView
-                        .transition(.asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .leading)))
-                } else {
-                    stepTwoView
-                        .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .trailing)))
-                }
+        ZStack {
+            AppColors.backgroundPrimary.ignoresSafeArea()
+
+            if vm.currentStep == 1 {
+                stepOneView
+                    .transition(.asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .leading)))
+            } else {
+                stepTwoView
+                    .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .trailing)))
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("NEW CLIENT (\(vm.currentStep)/2)")
-                        .font(AppTypography.overline)
-                        .tracking(2)
-                        .foregroundColor(AppColors.accent)
-                }
-                ToolbarItem(placement: .navigationBarLeading) {
+        }
+        .navigationBarBackButtonHidden(true)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("NEW CLIENT (\(vm.currentStep)/2)")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+            }
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
                     if vm.currentStep == 2 {
-                        Button {
-                            withAnimation { vm.currentStep = 1 }
-                        } label: {
-                            Image(systemName: "chevron.left")
-                                .foregroundColor(AppColors.textPrimaryDark)
-                        }
+                        withAnimation { vm.currentStep = 1 }
+                    } else {
+                        dismiss()
                     }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") { dismiss() }
-                        .font(AppTypography.buttonSecondary)
+                } label: {
+                    Image(systemName: "chevron.left")
                         .foregroundColor(AppColors.textPrimaryDark)
                 }
             }
-            .alert("Validation Error", isPresented: $vm.showError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(vm.errorMessage)
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Cancel") { dismiss() }
+                    .font(AppTypography.buttonSecondary)
+                    .foregroundColor(AppColors.textPrimaryDark)
             }
-            // Show temporary password to the associate so they can hand it to the client
-            .alert("Client Account Created", isPresented: $vm.showTempPasswordAlert) {
-                Button("Copy & Done") {
-                    UIPasteboard.general.string = vm.temporaryPassword
-                    onSave?()
-                    dismiss()
-                }
-                Button("Done", role: .cancel) {
-                    onSave?()
-                    dismiss()
-                }
-            } message: {
-                Text("The client account was created successfully.\n\nShare this temporary password with the client so they can log in:\n\n\(vm.temporaryPassword)\n\nThey can log in with their email and change the password later.")
+        }
+        .task { await vm.loadCategories() }
+        .alert("Validation Error", isPresented: $vm.showError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(vm.errorMessage)
+        }
+        // Show temporary password to the associate so they can hand it to the client
+        .alert("Client Account Created", isPresented: $vm.showTempPasswordAlert) {
+            Button("Copy & Done") {
+                UIPasteboard.general.string = vm.temporaryPassword
+                onSave?()
+                dismiss()
             }
+            Button("Done", role: .cancel) {
+                onSave?()
+                dismiss()
+            }
+        } message: {
+            Text("The client account was created successfully.\n\nShare this temporary password with the client so they can log in:\n\n\(vm.temporaryPassword)\n\nThey can log in with their email and change the password later.")
         }
     }
     
@@ -105,6 +105,7 @@ struct CreateClientProfileView: View {
     private var stepOneView: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.xl) {
+                stepProgress
                 // Header
                 formHeader(title: "Personal Details", subtitle: "Please provide the client's core contact information.")
                 
@@ -164,6 +165,7 @@ struct CreateClientProfileView: View {
     private var stepTwoView: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.xl) {
+                stepProgress
                 // Header
                 formHeader(title: "Preferences & Sizes", subtitle: "Customize the profile for personalized service.")
                 
@@ -407,6 +409,34 @@ struct CreateClientProfileView: View {
             .foregroundColor(AppColors.accent)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, AppSpacing.md)
+    }
+
+    private var stepProgress: some View {
+        HStack(spacing: AppSpacing.xs) {
+            progressPill(index: 1, title: "Details")
+            progressPill(index: 2, title: "Preferences")
+        }
+        .padding(.top, AppSpacing.sm)
+    }
+
+    private func progressPill(index: Int, title: String) -> some View {
+        let active = vm.currentStep == index
+        let completed = vm.currentStep > index
+        return HStack(spacing: 6) {
+            Image(systemName: completed ? "checkmark.circle.fill" : "\(index).circle.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(active || completed ? AppColors.accent : AppColors.neutral500)
+            Text(title)
+                .font(AppTypography.caption)
+                .foregroundColor(active || completed ? AppColors.textPrimaryDark : AppColors.textSecondaryDark)
+        }
+        .padding(.horizontal, AppSpacing.sm)
+        .padding(.vertical, AppSpacing.xs)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
+                .fill(active ? AppColors.accent.opacity(0.1) : AppColors.backgroundSecondary)
+        )
     }
 }
 

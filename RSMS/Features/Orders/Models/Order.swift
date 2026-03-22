@@ -94,7 +94,7 @@ final class Order {
     var formattedTotal: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: total)) ?? "$\(total)"
+        formatter.currencyCode = "INR"
+        return formatter.string(from: NSNumber(value: total)) ?? "INR \(total)"
     }
 }

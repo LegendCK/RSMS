@@ -71,6 +71,16 @@ struct AddressManagerView: View {
             .sheet(item: $editAddress) { addr in
                 AddressEditView(address: addr)
             }
+            .task {
+                guard !appState.isGuest,
+                      let clientId = appState.currentUserProfile?.id ?? appState.currentClientProfile?.id
+                else { return }
+                await AddressSyncService.shared.hydrateLocalAddressesIfNeeded(
+                    customerEmail: appState.currentUserEmail,
+                    clientId: clientId,
+                    modelContext: modelContext
+                )
+            }
         }
     }
 
@@ -122,10 +132,7 @@ struct AddressManagerView: View {
                     if !address.isDefault {
                         Button("Set Default") {
                             withAnimation {
-                                // Clear all defaults first
-                                addresses.forEach { $0.isDefault = false }
-                                address.isDefault = true
-                                try? modelContext.save()
+                                setDefaultAddress(address)
                             }
                         }
                         .font(AppTypography.caption)
@@ -137,8 +144,7 @@ struct AddressManagerView: View {
 
                     Button("Remove") {
                         withAnimation {
-                            modelContext.delete(address)
-                            try? modelContext.save()
+                            removeAddress(address)
                         }
                     }
                     .font(AppTypography.caption)
@@ -215,6 +221,33 @@ struct AddressManagerView: View {
         case "Home": return "house.fill"
         case "Work": return "briefcase.fill"
         default:     return "mappin.circle.fill"
+        }
+    }
+
+    private func setDefaultAddress(_ target: SavedAddress) {
+        for addr in addresses {
+            addr.isDefault = (addr.id == target.id)
+        }
+        try? modelContext.save()
+
+        guard !appState.isGuest,
+              let clientId = appState.currentUserProfile?.id ?? appState.currentClientProfile?.id
+        else { return }
+
+        Task {
+            await AddressSyncService.shared.syncDefaultAddressToClient(address: target, clientId: clientId)
+        }
+    }
+
+    private func removeAddress(_ address: SavedAddress) {
+        let wasDefault = address.isDefault
+        modelContext.delete(address)
+        try? modelContext.save()
+
+        guard wasDefault else { return }
+        let remaining = addresses.filter { $0.id != address.id }
+        if let first = remaining.first {
+            setDefaultAddress(first)
         }
     }
 }

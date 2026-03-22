@@ -16,7 +16,18 @@
       "Bash(supabase functions:*)",
       "Bash(supabase login:*)",
       "mcp__273c6a24-6e97-47d4-a398-ca6fa25e45e6__deploy_edge_function",
-      "mcp__273c6a24-6e97-47d4-a398-ca6fa25e45e6__apply_migration"
+      "mcp__273c6a24-6e97-47d4-a398-ca6fa25e45e6__apply_migration",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(find /Users/ekanshjindal/Internship/Infosys/RSMS-3 -type f -name *admin* -o -name *corporate*)",
+      "Bash(grep -E \"\\\\.\\(swift|sql\\)$\")",
+      "Bash(find /Users/ekanshjindal/Internship/Infosys/RSMS-3/supabase -type f -name *.sql)",
+      "Bash(xcodebuild -scheme RSMS -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build)",
+      "Bash(xcodebuild -scheme RSMS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build)",
+      "Bash(grep -r \"create table.*users\" /Users/ekanshjindal/Internship/Infosys/RSMS-3/supabase/migrations/*.sql)",
+      "Bash(git fetch:*)",
+      "Bash(git rebase:*)",
+      "Bash(grep -l \"import Supabase\" /Users/ekanshjindal/Internship/Infosys/RSMS-3/RSMS/Features/Manager/Operations/*.swift)"
     ]
   }
 }

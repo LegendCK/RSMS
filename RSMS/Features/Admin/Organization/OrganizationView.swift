@@ -716,6 +716,7 @@ struct OrgStaffSubview: View {
     @Environment(\.modelContext) private var modelContext
     @State private var selectedRoleFilter: UserRole? = nil
     @State private var searchText = ""
+  //  @State private var selectedProduct: Product?
     @State private var editingUser: User?
     @State private var isSyncing = false
     @State private var syncMessage: String?

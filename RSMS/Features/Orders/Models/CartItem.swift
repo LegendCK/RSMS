@@ -47,7 +47,7 @@ final class CartItem {
     var formattedLineTotal: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: lineTotal)) ?? "$\(lineTotal)"
+        formatter.currencyCode = "INR"
+        return formatter.string(from: NSNumber(value: lineTotal)) ?? "INR \(lineTotal)"
     }
 }
