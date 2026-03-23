@@ -84,9 +84,9 @@ struct HomeView: View {
                 }
             }
         }
-        .navigationDestination(isPresented: $showAllCategories) { CategoriesView() }
-        .navigationDestination(isPresented: $showAllFeatured) { ProductListView(categoryFilter: nil) }
-        .navigationDestination(isPresented: $showAllArrivals) { ProductListView(categoryFilter: nil) }
+        .navigationDestination(isPresented: $showAllCategories) { CategoriesView(showsTabBar: false) }
+        .navigationDestination(isPresented: $showAllFeatured) { ProductListView(categoryFilter: nil, showsTabBar: false) }
+        .navigationDestination(isPresented: $showAllArrivals) { ProductListView(categoryFilter: nil, showsTabBar: false) }
         .navigationDestination(isPresented: $state.showCart) {
             CartView()
         }

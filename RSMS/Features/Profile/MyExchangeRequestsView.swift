@@ -61,6 +61,7 @@ struct MyExchangeRequestsView: View {
             }
         }
         .navigationTitle("My Exchange Requests")
+        .toolbar(.hidden, for: .tabBar)
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadTickets() }
         .task { await startPolling() }
