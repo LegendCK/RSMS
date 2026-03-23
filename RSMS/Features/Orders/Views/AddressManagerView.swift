@@ -47,16 +47,12 @@ struct AddressManagerView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .tabBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("Saved Addresses")
                         .font(AppTypography.navTitle)
                         .foregroundColor(AppColors.textPrimaryDark)
-                }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Done") { dismiss() }
-                        .font(AppTypography.bodyMedium)
-                        .foregroundColor(AppColors.accent)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showAddNew = true }) {
@@ -64,6 +60,19 @@ struct AddressManagerView: View {
                             .foregroundColor(AppColors.accent)
                     }
                 }
+            }
+            .safeAreaInset(edge: .bottom) {
+                Button { dismiss() } label: {
+                    Text("Done")
+                        .frame(maxWidth: .infinity)
+                }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .buttonBorderShape(.roundedRectangle)
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.top, AppSpacing.xs)
+                    .padding(.bottom, AppSpacing.xs)
+                    .background(.bar)
             }
             .sheet(isPresented: $showAddNew) {
                 AddressEditView()

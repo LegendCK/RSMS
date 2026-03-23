@@ -43,6 +43,7 @@ struct PaymentMethodsView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("Payment Methods")

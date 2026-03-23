@@ -25,6 +25,7 @@ struct CustomerBookAppointmentView: View {
             }
         }
         .navigationTitle("Book Appointment")
+        .toolbar(.hidden, for: .tabBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {

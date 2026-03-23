@@ -199,15 +199,14 @@ struct ProductDetailView: View {
                     .padding(.bottom, AppSpacing.md)
                     .background(
                         RoundedRectangle(cornerRadius: 30, style: .continuous)
-                            .fill(Color.white.opacity(0.94))
+                            .fill(AppColors.backgroundPrimary)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                    .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                                    .stroke(AppColors.border.opacity(0.25), lineWidth: 1)
                             )
                             .shadow(color: .black.opacity(0.08), radius: 16, y: 6)
                     )
                     .padding(.horizontal, 12)
-                    .offset(y: -24)
                 }
             }
         }
@@ -466,7 +465,7 @@ struct ProductDetailView: View {
 
             Text(product.name)
                 .font(.system(size: 26, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(AppColors.textPrimaryDark)
 
             HStack(spacing: 4) {
                 ForEach(0..<5) { i in
@@ -476,7 +475,7 @@ struct ProductDetailView: View {
                 }
                 Text(String(format: "%.1f", product.rating))
                     .font(.system(size: 11, weight: .light))
-                    .foregroundColor(.black.opacity(0.5))
+                    .foregroundColor(AppColors.textSecondaryDark)
             }
         }
     }
