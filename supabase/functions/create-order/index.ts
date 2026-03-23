@@ -116,23 +116,21 @@ serve(async (req: Request) => {
       return json({ error: "Missing Authorization header" }, 401);
     }
 
-    // User-scoped client — used only to validate the token
-    const supabaseUser = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
-    if (userError || !user) {
-      return json({ error: "Unauthorized: " + (userError?.message ?? "no user") }, 401);
-    }
+    const jwt = authHeader.replace(/^Bearer\s+/i, "");
 
     // ── 2. Admin client — bypasses RLS ─────────────────────────────────────────
+    // Use admin.auth.getUser(jwt) — the recommended Supabase edge function pattern.
+    // This avoids creating a throwaway user-scoped client and is more reliable.
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    const { data: { user }, error: userError } = await admin.auth.getUser(jwt);
+    if (userError || !user) {
+      console.error("[create-order] JWT validation failed:", userError?.message);
+      return json({ error: "Unauthorized: " + (userError?.message ?? "no user") }, 401);
+    }
 
     // ── 3. Resolve client_id ───────────────────────────────────────────────────
     // Pass 1: clients.id == auth.uid (self-registered customers)
@@ -180,6 +178,9 @@ serve(async (req: Request) => {
     const discountTotal = payload.discountTotal ?? 0;
 
     // ── 6. Insert order header ─────────────────────────────────────────────────
+    // Status starts as "pending" — the store must acknowledge it before processing.
+    // Store routing is always server-determined (city → state/region → fallback).
+    // The client-supplied storeId hint is ignored; geo-routing is authoritative.
     const { data: order, error: orderError } = await admin
       .from("orders")
       .insert({
@@ -188,7 +189,7 @@ serve(async (req: Request) => {
         store_id: store.id,
         associate_id: null,
         channel: payload.channel,
-        status: "confirmed",
+        status: "pending",
         subtotal: payload.subtotal,
         discount_total: discountTotal,
         tax_total: payload.taxTotal,
@@ -205,9 +206,19 @@ serve(async (req: Request) => {
       return json({ error: "Failed to create order: " + orderError?.message }, 500);
     }
 
-    console.log(`[create-order] Order created: ${order.order_number} (${order.id}) → store: ${store.name}`);
+    console.log(`[create-order] Order created: ${order.order_number} (${order.id}) → store: ${store.name} [pending]`);
 
-    // ── 7. Insert order_items (best-effort) ────────────────────────────────────
+    // ── 7. Write initial audit event ──────────────────────────────────────────
+    await admin.from("order_events").insert({
+      order_id:    order.id,
+      from_status: null,
+      to_status:   "pending",
+      actor_id:    user.id,
+      actor_role:  "customer",
+      notes:       `Order placed via ${payload.channel}`,
+    });
+
+    // ── 8. Insert order_items (best-effort) ────────────────────────────────────
     let itemsInserted = 0;
     if (payload.cartItems && payload.cartItems.length > 0) {
       const taxRate = payload.subtotal > 0 ? payload.taxTotal / payload.subtotal : 0.08;
@@ -237,7 +248,7 @@ serve(async (req: Request) => {
       }
     }
 
-    // ── 8. Return success ──────────────────────────────────────────────────────
+    // ── 9. Return success ──────────────────────────────────────────────────────
     return json({
       success: true,
       orderId: order.id,
