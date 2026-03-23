@@ -18,13 +18,20 @@ struct BuyNowSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @Query private var allAddresses: [SavedAddress]
+    @Query private var allStores: [StoreLocation]
     @Query private var allCategories: [Category]
     @Query private var pricingPolicies: [PricingPolicySettings]
     @Query private var taxRules: [IndianTaxRule]
     @Query private var regionalPriceRules: [RegionalPriceRule]
     @Query private var promotionRules: [PromotionRule]
 
-    @State private var currentStep = 0            // 0 = address, 1 = payment, 2 = review
+    @State private var currentStep = 0            // 0 = delivery, 1 = payment, 2 = review
+
+    // Fulfillment
+    @State private var selectedFulfillment: FulfillmentType = .standard
+    @State private var selectedPickupStore: StoreLocation?  = nil
+    @State private var showStorePicker = false
+
     @State private var selectedAddress: SavedAddress? = nil
     @State private var showAddressManager = false
     @State private var showAddNewAddress  = false
@@ -151,6 +158,19 @@ struct BuyNowSheetView: View {
                         }
                     }
             }
+            .sheet(isPresented: $showStorePicker) {
+                BOPISStorePickerSheet(
+                    stores: allStores.filter { $0.isOperational },
+                    selected: selectedPickupStore
+                ) { store in
+                    selectedPickupStore = store
+                }
+            }
+            .onChange(of: selectedFulfillment) { _, newValue in
+                if newValue == .bopis && selectedPickupStore == nil {
+                    showStorePicker = true
+                }
+            }
             .navigationDestination(isPresented: $showConfirmation) {
                 if let order = placedOrder {
                     OrderConfirmationView(order: order)
@@ -188,7 +208,7 @@ struct BuyNowSheetView: View {
     // MARK: - Step Bar
 
     private var stepBar: some View {
-        let steps = ["Address", "Payment", "Review"]
+        let steps = ["Delivery", "Payment", "Review"]
         return HStack(spacing: AppSpacing.xs) {
             ForEach(steps.indices, id: \.self) { idx in
                 stepPill(index: idx, title: steps[idx])
@@ -284,47 +304,128 @@ struct BuyNowSheetView: View {
             .cornerRadius(20)
     }
 
-    // MARK: - Step 0: Address
+    // MARK: - Step 0: Delivery
 
     private var addressStep: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
-            sectionHeader("SHIPPING ADDRESS")
+            sectionHeader("FULFILLMENT")
 
-            if savedAddresses.isEmpty {
-                // No saved addresses — show inline entry form so user can proceed immediately
-                LuxuryCardView(useGlass: false, cornerRadius: AppSpacing.radiusMedium) {
-                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                        LuxuryTextField(placeholder: "Address Line 1*", text: $inlineAddressLine1)
-                        LuxuryTextField(placeholder: "Address Line 2 (optional)", text: $inlineAddressLine2)
-                        HStack(spacing: AppSpacing.sm) {
-                            LuxuryTextField(placeholder: "City*", text: $inlineCity)
-                            LuxuryTextField(placeholder: "State*", text: $inlineAddrState)
-                                .frame(maxWidth: 96)
+            VStack(spacing: AppSpacing.sm) {
+                fulfillmentOption(.standard, title: "Standard Delivery",
+                                  subtitle: "Free · 5–7 days", icon: "shippingbox.fill")
+                fulfillmentOption(.bopis,    title: "Pick Up In Store",
+                                  subtitle: "Free · Ready in 2 hours", icon: "building.2.fill")
+            }
+
+            if selectedFulfillment == .standard {
+                sectionHeader("SHIPPING ADDRESS")
+
+                if savedAddresses.isEmpty {
+                    LuxuryCardView(useGlass: false, cornerRadius: AppSpacing.radiusMedium) {
+                        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                            LuxuryTextField(placeholder: "Address Line 1*", text: $inlineAddressLine1)
+                            LuxuryTextField(placeholder: "Address Line 2 (optional)", text: $inlineAddressLine2)
+                            HStack(spacing: AppSpacing.sm) {
+                                LuxuryTextField(placeholder: "City*", text: $inlineCity)
+                                LuxuryTextField(placeholder: "State*", text: $inlineAddrState)
+                                    .frame(maxWidth: 96)
+                            }
+                            LuxuryTextField(placeholder: "PIN*", text: $inlineZip)
+                                .keyboardType(.numberPad)
+                            saveAddressCheckboxRow
                         }
-                        LuxuryTextField(placeholder: "PIN*", text: $inlineZip)
-                            .keyboardType(.numberPad)
+                        .padding(AppSpacing.cardPadding)
+                    }
+                } else {
+                    ForEach(savedAddresses.prefix(3)) { addr in
+                        savedAddressRow(addr)
+                    }
+                    HStack(spacing: AppSpacing.lg) {
+                        Button("Manage Addresses") { showAddressManager = true }
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.accent)
+                        Button("+ Add New") { showAddNewAddress = true }
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.accent)
+                    }
+                    .padding(.top, 4)
+                }
+            }
 
-                        saveAddressCheckboxRow
+            if selectedFulfillment == .bopis {
+                LuxuryCardView {
+                    HStack(spacing: AppSpacing.md) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(AppColors.accent)
+                        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                            if let store = selectedPickupStore {
+                                Text(store.name)
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Text("\(store.addressLine1), \(store.city), \(store.country)")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                                Text("Ready within 2 hours")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.success)
+                            } else {
+                                Text("Select a boutique")
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Text("Tap to choose your pickup location")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            }
+                        }
+                        Spacer()
+                        Button {
+                            showStorePicker = true
+                        } label: {
+                            Text(selectedPickupStore == nil ? "Select" : "Change")
+                                .font(AppTypography.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.accent)
+                        }
                     }
                     .padding(AppSpacing.cardPadding)
                 }
-            } else {
-                // Show saved addresses as a selectable list (max 3 shown)
-                ForEach(savedAddresses.prefix(3)) { addr in
-                    savedAddressRow(addr)
-                }
-                // Manage all / add new
-                HStack(spacing: AppSpacing.lg) {
-                    Button("Manage Addresses") { showAddressManager = true }
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.accent)
-                    Button("+ Add New") { showAddNewAddress = true }
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.accent)
-                }
-                .padding(.top, 4)
             }
         }
+    }
+
+    private func fulfillmentOption(_ type: FulfillmentType, title: String, subtitle: String, icon: String) -> some View {
+        Button { selectedFulfillment = type } label: {
+            HStack(spacing: AppSpacing.md) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(selectedFulfillment == type ? AppColors.accent.opacity(0.1) : AppColors.backgroundSecondary)
+                        .frame(width: 44, height: 44)
+                    Image(systemName: icon)
+                        .font(.system(size: 20))
+                        .foregroundColor(selectedFulfillment == type ? AppColors.accent : AppColors.neutral600)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(subtitle)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                Spacer()
+                Image(systemName: selectedFulfillment == type ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(selectedFulfillment == type ? AppColors.accent : AppColors.neutral600)
+            }
+            .padding(AppSpacing.cardPadding)
+            .background(AppColors.backgroundSecondary)
+            .cornerRadius(AppSpacing.radiusMedium)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                    .stroke(selectedFulfillment == type ? AppColors.accent : Color.clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var saveAddressCheckboxRow: some View {
@@ -477,10 +578,15 @@ struct BuyNowSheetView: View {
 
             LuxuryCardView {
                 VStack(spacing: AppSpacing.sm) {
-                    // Deliver to
-                    if let addr = selectedAddress {
+                    // Delivery method
+                    if selectedFulfillment == .bopis, let store = selectedPickupStore {
+                        reviewRow(icon: "building.2.fill", title: "Pick Up At", value: store.name)
+                        GoldDivider()
+                        reviewRow(icon: "clock.fill", title: "Ready In", value: "2 hours")
+                    } else if let addr = selectedAddress {
                         reviewRow(icon: "mappin.circle.fill", title: "Deliver to", value: addr.shortSummary)
                         GoldDivider()
+                        reviewRow(icon: "shippingbox.fill", title: "Delivery", value: "5–7 business days · Free")
                     } else if !inlineAddressLine1.isEmpty {
                         reviewRow(
                             icon: "mappin.circle.fill",
@@ -488,10 +594,10 @@ struct BuyNowSheetView: View {
                             value: "\(inlineAddressLine1), \(inlineCity), \(inlineAddrState) \(inlineZip)"
                         )
                         GoldDivider()
+                        reviewRow(icon: "shippingbox.fill", title: "Delivery", value: "5–7 business days · Free")
                     }
-                    reviewRow(icon: paymentIcon, title: "Payment", value: selectedPayment.title)
                     GoldDivider()
-                    reviewRow(icon: "shippingbox.fill", title: "Delivery", value: "5–7 business days · Free")
+                    reviewRow(icon: paymentIcon, title: "Payment", value: selectedPayment.title)
                 }
                 .padding(AppSpacing.cardPadding)
             }
@@ -625,6 +731,7 @@ struct BuyNowSheetView: View {
     private var canContinue: Bool {
         switch currentStep {
         case 0:
+            if selectedFulfillment == .bopis { return selectedPickupStore != nil }
             // Either a saved address is selected, or the inline form has the required fields
             if selectedAddress != nil { return true }
             if !savedAddresses.isEmpty { return false }
@@ -754,6 +861,10 @@ struct BuyNowSheetView: View {
         let df = DateFormatter(); df.dateFormat = "yyyy"
         let orderNum = "ML-ORD-\(df.string(from: Date()))-\(String(format: "%04d", Int.random(in: 1000...9999)))"
 
+        // Determine channel and storeId from fulfillment type
+        let channel: String = selectedFulfillment == .bopis ? "bopis" : "online"
+        let storeId: UUID? = selectedPickupStore?.id
+
         // 1. Save locally (always — source of truth for customer order history UI)
         let order = Order(
             orderNumber: orderNum,
@@ -765,8 +876,9 @@ struct BuyNowSheetView: View {
             discount: discountTotal,
             total: total,
             shippingAddress: addrJSON,
-            fulfillmentType: .standard,
-            paymentMethod: selectedPayment.title
+            fulfillmentType: selectedFulfillment,
+            paymentMethod: selectedPayment.title,
+            boutiqueId: selectedPickupStore?.code ?? ""
         )
         modelContext.insert(order)
         try? modelContext.save()
@@ -774,7 +886,7 @@ struct BuyNowSheetView: View {
         // 2. Sync to Supabase so sales associates can see this purchase in client history.
         let resolvedClientId: UUID? = appState.currentUserProfile?.id ?? appState.currentClientProfile?.id
         if let clientId = resolvedClientId {
-            print("[BuyNowSheetView] Starting Supabase sync for clientId: \(clientId), order: \(orderNum)")
+            print("[BuyNowSheetView] Starting Supabase sync for clientId: \(clientId), order: \(orderNum), channel: \(channel)")
             do {
                 try await OrderService.shared.syncOrder(
                     clientId: clientId,
@@ -789,7 +901,8 @@ struct BuyNowSheetView: View {
                     discountTotal: discountTotal,
                     taxTotal: tax,
                     grandTotal: total,
-                    channel: "online"
+                    channel: channel,
+                    storeId: storeId
                 )
                 print("[BuyNowSheetView] ✅ Supabase sync succeeded for order: \(orderNum)")
             } catch {

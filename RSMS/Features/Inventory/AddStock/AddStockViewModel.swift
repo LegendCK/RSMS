@@ -62,8 +62,8 @@ final class AddStockViewModel {
         state = .loading
 
         do {
-            // 1. Create serialized product_items rows via RPC
-            let items = try await service.createStock(productId: product.id, quantity: quantity)
+            // 1. Create serialized product_items rows via RPC, stamped with the IC's store
+            let items = try await service.createStock(productId: product.id, quantity: quantity, storeId: storeId)
 
             // 2. Increment the aggregated `inventory` table so stock counts update instantly
             if let sid = storeId {

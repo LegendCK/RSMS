@@ -63,42 +63,37 @@ struct OrderFulfillmentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Stats bar
-            HStack(spacing: AppSpacing.sm) {
-                statPill(value: "\(pendingCount)",    label: "New",        color: AppColors.warning)
-                statPill(value: "\(processingCount)", label: "Processing", color: AppColors.accent)
-                statPill(value: "\(shippedCount)",    label: "Shipped",    color: AppColors.success)
+            // ── Stats bar ──────────────────────────────────────────────
+            HStack(spacing: 0) {
+                statCell(value: "\(pendingCount)",    label: "New",        color: AppColors.warning)
+                statDivider()
+                statCell(value: "\(processingCount)", label: "Processing", color: AppColors.accent)
+                statDivider()
+                statCell(value: "\(shippedCount)",    label: "Shipped",    color: AppColors.success)
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.sm)
+            .padding(.bottom, AppSpacing.xs)
 
-            // Filter
-            Picker("", selection: $selectedFilter) {
-                ForEach(FulfillFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, AppSpacing.screenHorizontal)
-            .padding(.vertical, AppSpacing.sm)
+            // ── Filter pill row ────────────────────────────────────────
+            filterRow
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.vertical, AppSpacing.sm)
 
-            // Content
+            // ── Thin separator ─────────────────────────────────────────
+            Rectangle()
+                .fill(Color(uiColor: .separator).opacity(0.4))
+                .frame(height: 0.5)
+
+            // ── Content ────────────────────────────────────────────────
             if isLoading {
                 Spacer()
-                ProgressView("Loading orders…").tint(AppColors.accent)
+                ProgressView()
+                    .tint(AppColors.accent)
+                    .scaleEffect(1.1)
                 Spacer()
             } else if filteredOrders.isEmpty {
-                Spacer()
-                VStack(spacing: AppSpacing.md) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 40, weight: .light))
-                        .foregroundColor(AppColors.success)
-                    Text("All Caught Up")
-                        .font(AppTypography.heading3)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                    Text("No \(selectedFilter.rawValue.lowercased()) orders to process")
-                        .font(AppTypography.bodySmall)
-                        .foregroundColor(AppColors.textSecondaryDark)
-                }
-                Spacer()
+                emptyState
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: AppSpacing.sm) {
@@ -111,6 +106,7 @@ struct OrderFulfillmentView: View {
                         }
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.top, AppSpacing.md)
                     .padding(.bottom, AppSpacing.xxxl)
                 }
                 .refreshable { await loadOrders() }
@@ -121,6 +117,76 @@ struct OrderFulfillmentView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage)
+        }
+    }
+
+    // MARK: - Sub-views
+
+    private var filterRow: some View {
+        HStack(spacing: AppSpacing.xs) {
+            ForEach(FulfillFilter.allCases, id: \.self) { filter in
+                filterPill(filter)
+            }
+        }
+    }
+
+    private func filterPill(_ filter: FulfillFilter) -> some View {
+        let isSelected = selectedFilter == filter
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) { selectedFilter = filter }
+        } label: {
+            Text(filter.rawValue)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .tracking(0.2)
+                .foregroundColor(isSelected ? .white : AppColors.textPrimaryDark)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? AppColors.accent : Color(uiColor: .secondarySystemFill))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func statCell(value: String, label: String, color: Color) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .foregroundColor(color)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .tracking(0.5)
+                .foregroundColor(Color(uiColor: .secondaryLabel))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppSpacing.sm)
+    }
+
+    private func statDivider() -> some View {
+        Rectangle()
+            .fill(Color(uiColor: .separator).opacity(0.5))
+            .frame(width: 0.5, height: 36)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: AppSpacing.md) {
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(AppColors.success.opacity(0.1))
+                    .frame(width: 64, height: 64)
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundColor(AppColors.success)
+            }
+            Text("All Caught Up")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(AppColors.textPrimaryDark)
+            Text("No \(selectedFilter.rawValue.lowercased()) orders to process")
+                .font(.system(size: 14))
+                .foregroundColor(Color(uiColor: .secondaryLabel))
+            Spacer()
         }
     }
 
@@ -138,18 +204,6 @@ struct OrderFulfillmentView: View {
             showError = true
         }
     }
-
-    // MARK: - Helpers
-
-    private func statPill(value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 2) {
-            Text(value).font(AppTypography.heading3).foregroundColor(color)
-            Text(label).font(AppTypography.micro).foregroundColor(AppColors.textSecondaryDark)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, AppSpacing.sm)
-        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
-    }
 }
 
 // MARK: - Order Fulfillment Card
@@ -165,11 +219,9 @@ struct OrderFulfillmentCard: View {
     @State private var isLoadingItems   = false
     @State private var isCheckingStock  = false
 
-    // Stock-check result
     @State private var availability: [InventoryAvailability] = []
     @State private var stockChecked    = false
 
-    // Sheets / alerts
     @State private var showStockSheet  = false
     @State private var errorMessage    = ""
     @State private var showError       = false
@@ -186,36 +238,33 @@ struct OrderFulfillmentCard: View {
         availability.filter { !$0.isSufficient }
     }
 
-    /// True once stock has been checked, items loaded, and everything is available.
     private var stockOK: Bool {
         stockChecked && !orderItems.isEmpty && insufficientItems.isEmpty
     }
 
     private var statusColor: Color {
         switch canonicalStatus {
-        case "pending", "confirmed": return AppColors.warning
-        case "processing":          return AppColors.accent
-        case "shipped", "ready_for_pickup": return AppColors.success
-        default:                    return AppColors.neutral600
+        case "pending", "confirmed":            return Color(hex: "B8860B") // dark gold
+        case "processing":                      return AppColors.accent
+        case "shipped", "ready_for_pickup":     return AppColors.success
+        default:                                return Color(uiColor: .tertiaryLabel)
         }
     }
 
     private var statusLabel: String {
         switch canonicalStatus {
-        case "pending":          return "PENDING"
-        case "confirmed":        return "CONFIRMED"
-        case "processing":       return "PROCESSING"
-        case "shipped":          return "SHIPPED"
-        case "ready_for_pickup": return "READY FOR PICKUP"
-        default:                 return order.status.uppercased()
+        case "pending":          return "Pending"
+        case "confirmed":        return "Confirmed"
+        case "processing":       return "Processing"
+        case "shipped":          return "Shipped"
+        case "ready_for_pickup": return "Ready for Pickup"
+        default:                 return order.status.capitalized
         }
     }
 
-    /// Primary action button spec — nil when no action available.
     private var nextAction: (label: String, status: String, icon: String)? {
         switch canonicalStatus {
         case "pending", "confirmed":
-            // Online delivery: single-step "Confirm & Dispatch" → ships directly
             if isOnlineDelivery {
                 return ("Confirm & Dispatch", "shipped", "shippingbox.fill")
             }
@@ -236,205 +285,135 @@ struct OrderFulfillmentCard: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+        VStack(alignment: .leading, spacing: 0) {
 
-            // ── Header row ──────────────────────────────────────────
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: AppSpacing.xs) {
-                        Text(order.orderNumber ?? "—")
-                            .font(AppTypography.monoID)
-                            .foregroundColor(AppColors.textPrimaryDark)
-                        // Channel badge
-                        Text(channelLabel)
-                            .font(AppTypography.pico)
-                            .tracking(0.8)
-                            .foregroundColor(AppColors.textSecondaryDark)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(AppColors.backgroundTertiary)
-                            .cornerRadius(4)
-                    }
-                    Text(order.createdAt.formatted(date: .abbreviated, time: .shortened))
-                        .font(AppTypography.micro)
-                        .foregroundColor(AppColors.textSecondaryDark)
-                    Text(order.customerName)
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                        .lineLimit(1)
-                    if let email = order.customerEmail, !email.isEmpty {
-                        Text(email)
-                            .font(AppTypography.micro)
-                            .foregroundColor(AppColors.textSecondaryDark)
-                            .lineLimit(1)
-                    }
+            // ── Top meta row: order number · channel · status ──────────
+            HStack(alignment: .center) {
+                HStack(spacing: 6) {
+                    Text(order.orderNumber ?? "—")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(Color(uiColor: .secondaryLabel))
+                    Text("·")
+                        .foregroundColor(Color(uiColor: .tertiaryLabel))
+                    Text(channelLabel)
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(0.6)
+                        .foregroundColor(Color(uiColor: .tertiaryLabel))
                 }
                 Spacer()
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(statusLabel)
-                        .font(AppTypography.pico)
-                        .tracking(1)
-                        .foregroundColor(statusColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(statusColor.opacity(0.12))
-                        .cornerRadius(4)
-                    // Stock status badge (shown after check)
-                    if stockChecked {
-                        stockBadge
-                    }
+                statusBadge
+            }
+            .padding(.horizontal, AppSpacing.md)
+            .padding(.top, AppSpacing.md)
+            .padding(.bottom, AppSpacing.xs)
+
+            // ── Customer (hero) + date ─────────────────────────────────
+            VStack(alignment: .leading, spacing: 2) {
+                Text(order.customerName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(AppColors.textPrimaryDark)
+                    .lineLimit(1)
+                if let email = order.customerEmail, !email.isEmpty {
+                    Text(email)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(uiColor: .secondaryLabel))
+                        .lineLimit(1)
                 }
             }
+            .padding(.horizontal, AppSpacing.md)
+            .padding(.bottom, AppSpacing.sm)
 
-            // ── Total + item count ───────────────────────────────────
-            HStack {
-                HStack(spacing: 4) {
-                    Image(systemName: channelIcon)
+            // ── Thin separator ─────────────────────────────────────────
+            Rectangle()
+                .fill(Color(uiColor: .separator).opacity(0.5))
+                .frame(height: 0.5)
+                .padding(.horizontal, AppSpacing.md)
+
+            // ── Amount + metadata row ──────────────────────────────────
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(order.createdAt.formatted(date: .abbreviated, time: .shortened))
                         .font(.system(size: 12))
-                        .foregroundColor(AppColors.neutral500)
-                    Text(order.channel.replacingOccurrences(of: "_", with: " ").capitalized)
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.textSecondaryDark)
+                        .foregroundColor(Color(uiColor: .secondaryLabel))
+                    HStack(spacing: 6) {
+                        Image(systemName: channelIcon)
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(uiColor: .tertiaryLabel))
+                        Text(order.channel.replacingOccurrences(of: "_", with: " ").capitalized)
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(uiColor: .secondaryLabel))
+                        Text("·")
+                            .foregroundColor(Color(uiColor: .tertiaryLabel))
+                        Text("\(max(order.itemCount, 0)) item\(order.itemCount == 1 ? "" : "s") · Qty \(max(order.totalQuantity, 0))")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(uiColor: .secondaryLabel))
+                    }
                 }
                 Spacer()
                 Text(order.formattedTotal)
-                    .font(AppTypography.priceSmall)
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundColor(AppColors.accent)
             }
+            .padding(.horizontal, AppSpacing.md)
+            .padding(.vertical, AppSpacing.sm)
 
-            HStack(spacing: 4) {
-                Image(systemName: "bag")
-                    .font(.system(size: 12))
-                    .foregroundColor(AppColors.neutral500)
-                Text("\(max(order.itemCount, 0)) item\(order.itemCount == 1 ? "" : "s") · Qty \(max(order.totalQuantity, 0))")
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.textSecondaryDark)
-                Spacer()
-            }
-
-            // ── Expand items ─────────────────────────────────────────
+            // ── Expand items disclosure ────────────────────────────────
             Button {
                 withAnimation(.spring(response: 0.3)) { isExpanded.toggle() }
                 if isExpanded && orderItems.isEmpty { Task { await loadItems() } }
             } label: {
                 HStack(spacing: 4) {
                     Text(isExpanded ? "Hide Items" : "View Items")
-                        .font(AppTypography.caption)
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundColor(AppColors.accent)
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(AppColors.accent)
+                    if stockChecked {
+                        Spacer()
+                        stockBadge
+                    }
                 }
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.bottom, isExpanded ? AppSpacing.xs : AppSpacing.sm)
             }
 
+            // ── Expanded items ─────────────────────────────────────────
             if isExpanded {
                 expandedItemsSection
+                    .padding(.horizontal, AppSpacing.md)
+                    .padding(.bottom, AppSpacing.sm)
             }
 
-            // ── Action area ───────────────────────────────────────────
+            // ── Action area ────────────────────────────────────────────
             if let action = nextAction {
                 VStack(spacing: AppSpacing.xs) {
-                    // For online delivery: "Check Stock" helper before dispatching
-                    if isOnlineDelivery && ["pending", "confirmed"].contains(canonicalStatus) && !stockChecked {
-                        Button {
-                            Task { await checkStock() }
-                        } label: {
-                            HStack(spacing: 6) {
-                                if isCheckingStock {
-                                    ProgressView().tint(AppColors.accent).scaleEffect(0.8)
-                                } else {
-                                    Image(systemName: "checklist")
-                                        .font(.system(size: 14, weight: .semibold))
-                                }
-                                Text(isCheckingStock ? "Checking…" : "Check Stock Availability")
-                                    .font(AppTypography.buttonPrimary)
-                            }
-                            .foregroundColor(AppColors.accent)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 44)
-                            .background(AppColors.accent.opacity(0.1))
-                            .cornerRadius(AppSpacing.radiusMedium)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                                    .stroke(AppColors.accent.opacity(0.4), lineWidth: 1)
-                            )
-                        }
-                        .disabled(isCheckingStock)
-                    }
+                    Rectangle()
+                        .fill(Color(uiColor: .separator).opacity(0.5))
+                        .frame(height: 0.5)
 
-                    // Primary action button
-                    Button {
-                        Task { await performStatusUpdate(newStatus: action.status) }
-                    } label: {
-                        HStack(spacing: 6) {
-                            if isUpdating {
-                                ProgressView().tint(.white).scaleEffect(0.8)
-                            } else {
-                                Image(systemName: action.icon)
-                                    .font(.system(size: 14, weight: .semibold))
-                            }
-                            Text(isUpdating ? "Updating…" : action.label)
-                                .font(AppTypography.buttonPrimary)
+                    VStack(spacing: AppSpacing.xs) {
+                        if isOnlineDelivery && ["pending", "confirmed"].contains(canonicalStatus) && !stockChecked {
+                            checkStockButton
                         }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(
-                            // Dim if stock was checked and is insufficient
-                            (stockChecked && !insufficientItems.isEmpty) ? AppColors.neutral500 : statusColor
-                        )
-                        .cornerRadius(AppSpacing.radiusMedium)
-                    }
-                    .disabled(isUpdating)
+                        primaryActionButton(action: action)
 
-                    // Items not synced — request admin to investigate
-                    if stockChecked && orderItems.isEmpty {
-                        Button { showStockSheet = true } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "person.badge.shield.checkmark")
-                                    .font(.system(size: 13, weight: .semibold))
-                                Text("Request Admin Review")
-                                    .font(AppTypography.buttonPrimary)
-                            }
-                            .foregroundColor(AppColors.warning)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 44)
-                            .background(AppColors.warning.opacity(0.1))
-                            .cornerRadius(AppSpacing.radiusMedium)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                                    .stroke(AppColors.warning.opacity(0.4), lineWidth: 1)
-                            )
+                        if stockChecked && orderItems.isEmpty {
+                            adminReviewButton
+                        }
+                        if stockChecked && !orderItems.isEmpty && !insufficientItems.isEmpty {
+                            replenishmentButton
                         }
                     }
-
-                    // Show "Request Replenishment" when stock is clearly short
-                    if stockChecked && !orderItems.isEmpty && !insufficientItems.isEmpty {
-                        Button {
-                            showStockSheet = true
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                    .font(.system(size: 13, weight: .semibold))
-                                Text("Request Stock Replenishment")
-                                    .font(AppTypography.buttonPrimary)
-                            }
-                            .foregroundColor(AppColors.warning)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 44)
-                            .background(AppColors.warning.opacity(0.1))
-                            .cornerRadius(AppSpacing.radiusMedium)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                                    .stroke(AppColors.warning.opacity(0.4), lineWidth: 1)
-                            )
-                        }
-                    }
+                    .padding(.horizontal, AppSpacing.md)
+                    .padding(.vertical, AppSpacing.sm)
                 }
             }
         }
-        .padding(AppSpacing.md)
-        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
+        .background(Color(uiColor: .systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge))
+        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -453,115 +432,235 @@ struct OrderFulfillmentCard: View {
         }
     }
 
+    // MARK: - Action Buttons
+
+    private var checkStockButton: some View {
+        Button {
+            Task { await checkStock() }
+        } label: {
+            HStack(spacing: 8) {
+                if isCheckingStock {
+                    ProgressView().tint(AppColors.accent).scaleEffect(0.8)
+                        .frame(width: 16, height: 16)
+                } else {
+                    Image(systemName: "checklist")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                Text(isCheckingStock ? "Checking…" : "Check Stock Availability")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundColor(AppColors.accent)
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .background(AppColors.accent.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                    .strokeBorder(AppColors.accent.opacity(0.25), lineWidth: 1)
+            )
+        }
+        .disabled(isCheckingStock)
+    }
+
+    private func primaryActionButton(action: (label: String, status: String, icon: String)) -> some View {
+        let isInsufficient = stockChecked && !insufficientItems.isEmpty
+        return Button {
+            Task { await performStatusUpdate(newStatus: action.status) }
+        } label: {
+            HStack(spacing: 8) {
+                if isUpdating {
+                    ProgressView().tint(.white).scaleEffect(0.8)
+                        .frame(width: 16, height: 16)
+                } else {
+                    Image(systemName: action.icon)
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                Text(isUpdating ? "Updating…" : action.label)
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(
+                isInsufficient ? Color(uiColor: .systemGray3) : AppColors.accent
+            )
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        }
+        .disabled(isUpdating)
+    }
+
+    private var adminReviewButton: some View {
+        Button { showStockSheet = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "person.badge.shield.checkmark")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Request Admin Review")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundColor(AppColors.warning)
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .background(AppColors.warning.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                    .strokeBorder(AppColors.warning.opacity(0.25), lineWidth: 1)
+            )
+        }
+    }
+
+    private var replenishmentButton: some View {
+        Button { showStockSheet = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Request Stock Replenishment")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundColor(AppColors.warning)
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .background(AppColors.warning.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                    .strokeBorder(AppColors.warning.opacity(0.25), lineWidth: 1)
+            )
+        }
+    }
+
+    // MARK: - Status Badge
+
+    private var statusBadge: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 6, height: 6)
+            Text(statusLabel)
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.3)
+                .foregroundColor(statusColor)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(statusColor.opacity(0.1))
+        .clipShape(Capsule())
+    }
+
+    // MARK: - Stock Badge
+
+    private var stockBadge: some View {
+        HStack(spacing: 4) {
+            if orderItems.isEmpty {
+                Circle().fill(AppColors.warning).frame(width: 5, height: 5)
+                Text("Items Unsynced")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppColors.warning)
+            } else if insufficientItems.isEmpty {
+                Circle().fill(AppColors.success).frame(width: 5, height: 5)
+                Text("Stock OK")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppColors.success)
+            } else {
+                Circle().fill(AppColors.error).frame(width: 5, height: 5)
+                Text("\(insufficientItems.count) item\(insufficientItems.count == 1 ? "" : "s") short")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppColors.error)
+            }
+        }
+    }
+
     // MARK: - Expanded Items
 
     @ViewBuilder
     private var expandedItemsSection: some View {
         if isLoadingItems {
-            HStack {
+            HStack(spacing: 8) {
                 ProgressView().tint(AppColors.accent)
                 Text("Loading items…")
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.textSecondaryDark)
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(uiColor: .secondaryLabel))
             }
             .padding(.vertical, AppSpacing.xs)
         } else if orderItems.isEmpty {
-            VStack(spacing: AppSpacing.xs) {
-                HStack(spacing: AppSpacing.xs) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 12))
-                        .foregroundColor(AppColors.warning)
-                    Text("Items not synced from database")
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.warning)
-                }
-                Text("Run the SQL fix in Supabase or request admin to check this order.")
-                    .font(AppTypography.micro)
-                    .foregroundColor(AppColors.textSecondaryDark)
-                    .multilineTextAlignment(.center)
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppColors.warning)
+                Text("Items not synced from database")
+                    .font(.system(size: 13))
+                    .foregroundColor(AppColors.warning)
             }
             .padding(.vertical, AppSpacing.xs)
         } else {
-            VStack(spacing: AppSpacing.xs) {
-                ForEach(orderItems) { item in
-                    let avail = availability.first(where: { $0.productId.uuidString.lowercased() == item.product_id.lowercased() })
-                    HStack(spacing: AppSpacing.sm) {
-                        Group {
-                            if let image = item.productPrimaryImage, !image.isEmpty {
-                                ProductArtworkView(
-                                    imageSource: image,
-                                    fallbackSymbol: "cube.box.fill",
-                                    cornerRadius: AppSpacing.radiusSmall
-                                )
-                            } else {
-                                RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
-                                    .fill(AppColors.backgroundSecondary)
-                                    .overlay(
-                                        Image(systemName: "cube.box.fill")
-                                            .font(.system(size: 14))
-                                            .foregroundColor(AppColors.accent)
-                                    )
-                            }
-                        }
-                        .frame(width: 40, height: 40)
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(item.productName)
-                                .font(AppTypography.label)
-                                .foregroundColor(AppColors.textPrimaryDark)
-                                .lineLimit(1)
-                            Text("SKU: \(item.productSku) · Need: \(item.quantity)")
-                                .font(AppTypography.micro)
-                                .foregroundColor(AppColors.textSecondaryDark)
-                            // Stock availability inline
-                            if let avail {
-                                HStack(spacing: 3) {
-                                    Circle()
-                                        .fill(avail.isSufficient ? AppColors.success : AppColors.error)
-                                        .frame(width: 6, height: 6)
-                                    Text(avail.isSufficient
-                                         ? "In stock (\(avail.available) avail.)"
-                                         : "Low stock (\(avail.available)/\(avail.required) needed)")
-                                        .font(AppTypography.micro)
-                                        .foregroundColor(avail.isSufficient ? AppColors.success : AppColors.error)
-                                }
-                            }
-                        }
-                        Spacer()
-                        Text(formatCurrency(item.line_total))
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.textPrimaryDark)
+            VStack(spacing: 0) {
+                ForEach(Array(orderItems.enumerated()), id: \.element.id) { idx, item in
+                    let avail = availability.first(where: {
+                        $0.productId.uuidString.lowercased() == item.product_id.lowercased()
+                    })
+                    itemRow(item: item, avail: avail)
+                    if idx < orderItems.count - 1 {
+                        Rectangle()
+                            .fill(Color(uiColor: .separator).opacity(0.4))
+                            .frame(height: 0.5)
+                            .padding(.leading, 52)
                     }
-                    .padding(.vertical, 4)
                 }
             }
-            .padding(AppSpacing.sm)
-            .background(AppColors.backgroundTertiary.opacity(0.5))
-            .cornerRadius(AppSpacing.radiusSmall)
+            .background(Color(uiColor: .secondarySystemFill))
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
         }
     }
 
-    // MARK: - Stock badge
-
-    private var stockBadge: some View {
-        HStack(spacing: 4) {
-            if orderItems.isEmpty {
-                Circle().fill(AppColors.warning).frame(width: 6, height: 6)
-                Text("Items Unsynced")
-                    .font(AppTypography.micro)
-                    .foregroundColor(AppColors.warning)
-            } else if insufficientItems.isEmpty {
-                Circle().fill(AppColors.success).frame(width: 6, height: 6)
-                Text("Stock OK")
-                    .font(AppTypography.micro)
-                    .foregroundColor(AppColors.success)
-            } else {
-                Circle().fill(AppColors.error).frame(width: 6, height: 6)
-                Text("\(insufficientItems.count) item\(insufficientItems.count == 1 ? "" : "s") short")
-                    .font(AppTypography.micro)
-                    .foregroundColor(AppColors.error)
+    private func itemRow(item: OrderItemWithProduct, avail: InventoryAvailability?) -> some View {
+        HStack(spacing: AppSpacing.sm) {
+            Group {
+                if let image = item.productPrimaryImage, !image.isEmpty {
+                    ProductArtworkView(
+                        imageSource: image,
+                        fallbackSymbol: "cube.box.fill",
+                        cornerRadius: AppSpacing.radiusSmall
+                    )
+                } else {
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
+                        .fill(Color(uiColor: .tertiarySystemFill))
+                        .overlay(
+                            Image(systemName: "cube.box.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppColors.accent.opacity(0.6))
+                        )
+                }
             }
+            .frame(width: 40, height: 40)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.productName)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(AppColors.textPrimaryDark)
+                    .lineLimit(1)
+                Text("SKU: \(item.productSku) · Need: \(item.quantity)")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(uiColor: .secondaryLabel))
+                if let avail {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(avail.isSufficient ? AppColors.success : AppColors.error)
+                            .frame(width: 5, height: 5)
+                        Text(avail.isSufficient
+                             ? "In stock (\(avail.available) avail.)"
+                             : "Low stock (\(avail.available)/\(avail.required) needed)")
+                            .font(.system(size: 11))
+                            .foregroundColor(avail.isSufficient ? AppColors.success : AppColors.error)
+                    }
+                }
+            }
+            Spacer()
+            Text(formatCurrency(item.line_total))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(AppColors.textPrimaryDark)
         }
+        .padding(.horizontal, AppSpacing.sm)
+        .padding(.vertical, AppSpacing.sm)
     }
 
     // MARK: - Actions
@@ -579,7 +678,6 @@ struct OrderFulfillmentCard: View {
                 storeId: sid
             )
             stockChecked = true
-            // Auto-expand so IC can see per-item stock inline
             withAnimation(.spring(response: 0.3)) { isExpanded = true }
         } catch {
             errorMessage = "Stock check failed: \(error.localizedDescription)"
@@ -596,24 +694,20 @@ struct OrderFulfillmentCard: View {
             let targetCanonical = OrderStatusMapper.canonical(newStatus)
             let currentCanonical = OrderStatusMapper.canonical(order.status)
 
-            // For transitions that move items off the shelf, decrement inventory
             let needsDecrement = ["processing", "shipped"].contains(targetCanonical)
             if needsDecrement {
                 if orderItems.isEmpty { await loadItems() }
                 if let sid = storeId {
-                    // If stock check hasn't run yet, run it now silently
                     if !stockChecked {
                         availability = (try? await OrderFulfillmentService.shared.checkInventoryAvailability(
                             items: orderItems, storeId: sid)) ?? []
                         stockChecked = true
                     }
-                    // If insufficient, show the sheet instead of proceeding
                     if !insufficientItems.isEmpty {
                         isUpdating = false
                         showStockSheet = true
                         return
                     }
-                    // Decrement inventory for each item
                     for item in orderItems {
                         if let productId = UUID(uuidString: item.product_id) {
                             try await OrderFulfillmentService.shared.decrementInventory(
@@ -626,10 +720,6 @@ struct OrderFulfillmentCard: View {
                 }
             }
 
-            // Server state machine requires sequential transitions.
-            // If order is still "pending" and target skips "confirmed"
-            // (e.g. "Confirm & Dispatch" → shipped), advance to confirmed first
-            // so the audit trail shows both steps.
             if currentCanonical == "pending" && !["confirmed", "cancelled"].contains(targetCanonical) {
                 try await OrderFulfillmentService.shared.updateOrderStatus(
                     orderId: order.id,
@@ -712,7 +802,6 @@ struct InsufficientStockSheet: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: AppSpacing.xl) {
 
-                        // Warning icon
                         ZStack {
                             Circle()
                                 .fill(AppColors.warning.opacity(0.12))
@@ -736,42 +825,40 @@ struct InsufficientStockSheet: View {
                         }
                         .padding(.horizontal, AppSpacing.lg)
 
-                        // Understocked items list (only when we have specific items)
                         if !insufficientItems.isEmpty {
-                        VStack(spacing: 0) {
-                            ForEach(Array(insufficientItems.enumerated()), id: \.offset) { idx, item in
-                                HStack(spacing: AppSpacing.sm) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(AppColors.error.opacity(0.12))
-                                            .frame(width: 36, height: 36)
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(AppColors.error)
+                            VStack(spacing: 0) {
+                                ForEach(Array(insufficientItems.enumerated()), id: \.offset) { idx, item in
+                                    HStack(spacing: AppSpacing.sm) {
+                                        ZStack {
+                                            Circle()
+                                                .fill(AppColors.error.opacity(0.12))
+                                                .frame(width: 36, height: 36)
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundColor(AppColors.error)
+                                        }
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(item.productName)
+                                                .font(AppTypography.label)
+                                                .foregroundColor(AppColors.textPrimaryDark)
+                                                .lineLimit(2)
+                                            Text("Need \(item.required) · Have \(item.available) · Short by \(item.shortfall)")
+                                                .font(AppTypography.caption)
+                                                .foregroundColor(AppColors.error)
+                                        }
+                                        Spacer()
                                     }
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.productName)
-                                            .font(AppTypography.label)
-                                            .foregroundColor(AppColors.textPrimaryDark)
-                                            .lineLimit(2)
-                                        Text("Need \(item.required) · Have \(item.available) · Short by \(item.shortfall)")
-                                            .font(AppTypography.caption)
-                                            .foregroundColor(AppColors.error)
+                                    .padding(.vertical, AppSpacing.sm)
+                                    if idx < insufficientItems.count - 1 {
+                                        GoldDivider().padding(.leading, 52)
                                     }
-                                    Spacer()
-                                }
-                                .padding(.vertical, AppSpacing.sm)
-                                if idx < insufficientItems.count - 1 {
-                                    GoldDivider().padding(.leading, 52)
                                 }
                             }
+                            .padding(.horizontal, AppSpacing.sm)
+                            .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
+                            .padding(.horizontal, AppSpacing.screenHorizontal)
                         }
-                        .padding(.horizontal, AppSpacing.sm)
-                        .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-                        } // end if !insufficientItems.isEmpty
 
-                        // Info note
                         HStack(spacing: AppSpacing.xs) {
                             Image(systemName: "info.circle")
                                 .font(.system(size: 13))
@@ -787,7 +874,6 @@ struct InsufficientStockSheet: View {
                         .cornerRadius(AppSpacing.radiusMedium)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
 
-                        // Actions
                         VStack(spacing: AppSpacing.sm) {
                             if requestDone {
                                 HStack(spacing: AppSpacing.xs) {
@@ -866,13 +952,10 @@ struct InsufficientStockSheet: View {
         defer { isRequesting = false }
 
         if insufficientItems.isEmpty {
-            // No-items case: admin is notified via the Fulfillment tab.
-            // No transfer record needed — just mark done.
             requestDone = true
             return
         }
 
-        // Create one transfer record per understocked product
         for item in insufficientItems {
             await OrderFulfillmentService.shared.requestReplenishment(
                 productId: item.productId,

@@ -25,8 +25,9 @@ interface CreateOrderPayload {
   discountTotal?: number;
   taxTotal: number;
   grandTotal: number;
-  channel: string;   // "online" | "bopis" | "in_store" | "ship_from_store"
-  currency?: string; // defaults to "USD"
+  channel: string;    // "online" | "bopis" | "in_store" | "ship_from_store"
+  currency?: string;  // defaults to "INR"
+  storeId?: string;   // client-resolved store UUID — used directly when present, geo-routing only as fallback
 }
 
 interface StoreRow {
@@ -164,23 +165,36 @@ serve(async (req: Request) => {
       console.log(`[create-order] Resolved client by id: ${clientId}`);
     }
 
-    // ── 4. Resolve store (city → state/region → fallback) ─────────────────────
-    let store: StoreRow;
-    try {
-      store = await resolveStore(admin, clientId);
-    } catch (e) {
-      return json({ error: String(e) }, 400);
-    }
-
-    // ── 5. Parse payload ───────────────────────────────────────────────────────
+    // ── 4. Parse payload ───────────────────────────────────────────────────────
     const payload: CreateOrderPayload = await req.json();
-    const currency = payload.currency ?? "USD";
+    const currency = payload.currency ?? "INR";
     const discountTotal = payload.discountTotal ?? 0;
 
+    // ── 5. Resolve store ───────────────────────────────────────────────────────
+    // Priority:
+    //   1. Client-provided storeId (iOS already ran StoreAssignmentService on the shipping address)
+    //   2. Server geo-routing: clients.city → region → fallback
+    let store: StoreRow;
+    if (payload.storeId) {
+      const { data: storeById } = await admin
+        .from("stores")
+        .select("id, name, city, region")
+        .eq("id", payload.storeId)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (storeById) {
+        store = storeById as StoreRow;
+        console.log(`[create-order] ✅ Store from client hint: ${store.name} (${store.id})`);
+      } else {
+        console.warn(`[create-order] ⚠️ Client storeId ${payload.storeId} not found — falling back to geo-routing`);
+        try { store = await resolveStore(admin, clientId); } catch (e) { return json({ error: String(e) }, 400); }
+      }
+    } else {
+      try { store = await resolveStore(admin, clientId); } catch (e) { return json({ error: String(e) }, 400); }
+    }
+
     // ── 6. Insert order header ─────────────────────────────────────────────────
-    // Status starts as "pending" — the store must acknowledge it before processing.
-    // Store routing is always server-determined (city → state/region → fallback).
-    // The client-supplied storeId hint is ignored; geo-routing is authoritative.
     const { data: order, error: orderError } = await admin
       .from("orders")
       .insert({
