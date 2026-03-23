@@ -34,7 +34,6 @@ struct ManagerOperationsView: View {
     @State private var liveOrders: [OrderDTO] = []
     @State private var isLoadingOrders = false
     @State private var orderToTag: OrderDTO? = nil       // drives Tag to Event sheet
-    @State private var showTagEventSheet = false
 
     var body: some View {
         ZStack {
@@ -153,13 +152,11 @@ struct ManagerOperationsView: View {
         .sheet(isPresented: $showAddStock) {
             InventoryAddStockView()
         }
-        .sheet(isPresented: $showTagEventSheet) {
-            if let order = orderToTag {
-                TagOrderToEventSheet(order: order, events: liveEvents) {
-                    Task {
-                        await loadLiveOrders()
-                        await loadLiveEvents()
-                    }
+        .sheet(item: $orderToTag) { order in
+            TagOrderToEventSheet(order: order, events: liveEvents) {
+                Task {
+                    await loadLiveOrders()
+                    await loadLiveEvents()
                 }
             }
         }
@@ -231,7 +228,6 @@ struct ManagerOperationsView: View {
                 } else if !liveEvents.isEmpty {
                     Button {
                         orderToTag = order
-                        showTagEventSheet = true
                     } label: {
                         Label("Tag Event", systemImage: "star")
                             .font(AppTypography.nano)

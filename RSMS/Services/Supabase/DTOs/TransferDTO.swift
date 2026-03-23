@@ -76,65 +76,105 @@ struct TransferUpsertDTO: Codable {
     }
 }
 
-struct TransferMinimalUpsertDTO: Codable {
+/// Conservative payload aligned with the currently-used `transfers` schema
+/// (based on fields read by `SupabaseTransfer`).
+struct TransferSchemaSafeUpsertDTO: Codable {
     let id: UUID
     let transferNumber: String
+    let productId: UUID
     let fromBoutiqueId: String
     let toBoutiqueId: String
     let quantity: Int
-    let receivedQuantity: Int
     let status: String
-    let notes: String
+    let requestedAt: Date
     let updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
         case id
         case transferNumber = "transfer_number"
+        case productId = "product_id"
         case fromBoutiqueId = "from_boutique_id"
         case toBoutiqueId = "to_boutique_id"
         case quantity
-        case receivedQuantity = "received_quantity"
         case status
-        case notes
+        case requestedAt = "requested_at"
         case updatedAt = "updated_at"
     }
 
     init(transfer: Transfer) {
         id = transfer.id
         transferNumber = transfer.transferNumber
+        productId = transfer.productId
         fromBoutiqueId = transfer.fromBoutiqueId
         toBoutiqueId = transfer.toBoutiqueId
         quantity = transfer.quantity
-        receivedQuantity = transfer.receivedQuantity
         status = transfer.status.rawValue
-        notes = transfer.notes
+        requestedAt = transfer.requestedAt
         updatedAt = transfer.updatedAt
     }
 }
 
 struct TransferReceiptPatchDTO: Codable {
     let status: String
-    let receivedQuantity: Int
-    let receivedByEmail: String
-    let lastReceivedAt: Date?
-    let notes: String
     let updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
         case status
-        case receivedQuantity = "received_quantity"
-        case receivedByEmail = "received_by_email"
-        case lastReceivedAt = "last_received_at"
-        case notes
         case updatedAt = "updated_at"
     }
 
     init(transfer: Transfer) {
         status = transfer.status.rawValue
-        receivedQuantity = transfer.receivedQuantity
-        receivedByEmail = transfer.receivedByEmail
-        lastReceivedAt = transfer.lastReceivedAt
-        notes = transfer.notes
+        updatedAt = transfer.updatedAt
+    }
+}
+
+struct TransferStatusPatchDTO: Codable {
+    let status: String
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case updatedAt = "updated_at"
+    }
+
+    init(transfer: Transfer) {
+        status = transfer.status.rawValue
+        updatedAt = transfer.updatedAt
+    }
+}
+
+/// Legacy-safe payload known to match minimal `transfers` schema used by
+/// replenishment requests.
+struct TransferLegacyUpsertDTO: Codable {
+    let id: UUID
+    let transferNumber: String
+    let productId: UUID
+    let quantity: Int
+    let toBoutiqueId: String
+    let status: String
+    let requestedAt: Date
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case transferNumber = "transfer_number"
+        case productId = "product_id"
+        case quantity
+        case toBoutiqueId = "to_boutique_id"
+        case status
+        case requestedAt = "requested_at"
+        case updatedAt = "updated_at"
+    }
+
+    init(transfer: Transfer) {
+        id = transfer.id
+        transferNumber = transfer.transferNumber
+        productId = transfer.productId
+        quantity = transfer.quantity
+        toBoutiqueId = transfer.toBoutiqueId
+        status = transfer.status.rawValue
+        requestedAt = transfer.requestedAt
         updatedAt = transfer.updatedAt
     }
 }

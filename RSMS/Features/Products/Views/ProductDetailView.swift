@@ -1178,6 +1178,8 @@ private struct AdminProductManageSheet: View {
     @State private var remoteCategories: [CategoryDTO] = []
     @State private var remoteCollections: [BrandCollectionDTO] = []
     @State private var errorMessage: String?
+    @State private var showDeleteConfirm = false
+    @State private var isDeleting = false
 
     var body: some View {
         NavigationStack {
@@ -1256,6 +1258,35 @@ private struct AdminProductManageSheet: View {
                             .padding(.vertical, AppSpacing.md)
                             .background(AppColors.accent)
                             .cornerRadius(AppSpacing.radiusMedium)
+                    }
+
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Group {
+                            if isDeleting {
+                                ProgressView().tint(.white)
+                            } else {
+                                Label("Delete Product", systemImage: "trash")
+                                    .font(AppTypography.buttonPrimary)
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppSpacing.md)
+                        .background(AppColors.error)
+                        .cornerRadius(AppSpacing.radiusMedium)
+                    }
+                    .disabled(isDeleting)
+                    .confirmationDialog(
+                        "Delete \"\(product.name)\"?",
+                        isPresented: $showDeleteConfirm,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete Product", role: .destructive) { deleteProduct() }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("This will remove the product from the catalog. Existing orders will not be affected.")
                     }
 
                     if let errorMessage {
@@ -1343,6 +1374,23 @@ private struct AdminProductManageSheet: View {
             } catch {
                 await MainActor.run {
                     errorMessage = "Sync failed: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    private func deleteProduct() {
+        isDeleting = true
+        Task {
+            do {
+                try await CatalogService.shared.deleteProduct(id: product.id)
+                modelContext.delete(product)
+                try? modelContext.save()
+                dismiss()
+            } catch {
+                await MainActor.run {
+                    isDeleting = false
+                    errorMessage = "Delete failed: \(error.localizedDescription)"
                 }
             }
         }

@@ -1045,7 +1045,7 @@ private struct DashboardSalesInsightsSheet: View {
             ZStack {
                 Color(.systemGroupedBackground).ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 14) {
+                    VStack(spacing: AppSpacing.lg) {
                         trendCard(
                             title: "Sales Trend (6 Months)",
                             subtitle: "Revenue trajectory",
@@ -1060,8 +1060,8 @@ private struct DashboardSalesInsightsSheet: View {
                         insightCard(title: "Stocks to Sale Ratio", value: String(format: "%.2f", stocksToSaleRatio), tone: AppColors.info)
                         detailedGraphCard
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 14)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, AppSpacing.lg)
                 }
             }
             .navigationTitle("Sales Insights")
@@ -1069,7 +1069,12 @@ private struct DashboardSalesInsightsSheet: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Close") { dismiss() }
+                        .font(AppTypography.closeButton)
                         .foregroundColor(AppColors.accent)
+                        .padding(.horizontal, AppSpacing.md)
+                        .padding(.vertical, AppSpacing.xs)
+                        .background(AppColors.backgroundSecondary)
+                        .clipShape(Capsule())
                 }
             }
         }
@@ -1086,15 +1091,15 @@ private struct DashboardSalesInsightsSheet: View {
     }
 
     private var detailedGraphCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             Text("Store & Date Specific")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.primary)
+                .font(AppTypography.heading3)
+                .foregroundColor(AppColors.textPrimaryDark)
 
             if snapshot == nil {
                 Text("Run live sync to enable per-store detailed graph.")
-                    .font(.system(size: 11, weight: .light))
-                    .foregroundColor(.secondary)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
             } else {
                 storePicker
                 rangePicker
@@ -1110,10 +1115,14 @@ private struct DashboardSalesInsightsSheet: View {
                 )
             }
         }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+        .padding(18)
+        .background(AppColors.backgroundSecondary)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(AppColors.textPrimaryDark.opacity(0.08), lineWidth: 0.8)
+        )
+        .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 6)
     }
 
     private var storePicker: some View {
@@ -1125,17 +1134,17 @@ private struct DashboardSalesInsightsSheet: View {
         } label: {
             HStack {
                 Text(selectedStoreLabel)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.primary)
+                    .font(AppTypography.bodySmall)
+                    .foregroundColor(AppColors.textPrimaryDark)
                 Spacer()
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.textSecondaryDark)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.horizontal, AppSpacing.sm)
+            .padding(.vertical, AppSpacing.sm)
+            .background(AppColors.backgroundPrimary)
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
         }
     }
 
@@ -1146,6 +1155,9 @@ private struct DashboardSalesInsightsSheet: View {
             }
         }
         .pickerStyle(.segmented)
+        .padding(4)
+        .background(AppColors.backgroundTertiary.opacity(0.65))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var customDatePickers: some View {
@@ -1155,6 +1167,9 @@ private struct DashboardSalesInsightsSheet: View {
             DatePicker("To", selection: $customEnd, displayedComponents: .date)
                 .labelsHidden()
         }
+        .padding(AppSpacing.xs)
+        .background(AppColors.backgroundPrimary)
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
     }
 
     private var selectedStoreLabel: String {
@@ -1388,54 +1403,90 @@ private struct DashboardInventoryInsightsSheet: View {
 }
 
 private func trendCard(title: String, subtitle: String, values: [Double], accent: Color) -> some View {
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(alignment: .leading, spacing: AppSpacing.sm) {
         Text(title)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundColor(.primary)
+            .font(AppTypography.heading3)
+            .foregroundColor(AppColors.textPrimaryDark)
         Text(subtitle)
-            .font(.system(size: 11, weight: .light))
-            .foregroundColor(.secondary)
+            .font(AppTypography.caption)
+            .foregroundColor(AppColors.textSecondaryDark)
 
         HStack(alignment: .bottom, spacing: 8) {
             ForEach(Array(values.enumerated()), id: \.offset) { _, value in
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(accent.opacity(0.8))
+                    .fill(
+                        LinearGradient(
+                            colors: [accent.opacity(0.95), accent.opacity(0.70)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                     .frame(maxWidth: .infinity)
-                    .frame(height: max(16, CGFloat(value) * 80))
+                    .frame(height: max(20, CGFloat(value) * 86))
             }
         }
-        .frame(height: 88, alignment: .bottom)
+        .frame(height: 96, alignment: .bottom)
+        .padding(.top, 2)
     }
-    .padding(14)
-    .background(Color(.secondarySystemGroupedBackground))
-    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-    .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+    .padding(18)
+    .background(
+        LinearGradient(
+            colors: [AppColors.backgroundSecondary, AppColors.backgroundSecondary.opacity(0.98)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    )
+    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    .overlay(
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .stroke(AppColors.textPrimaryDark.opacity(0.08), lineWidth: 0.8)
+    )
+    .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 6)
 }
 
 private func insightCard(title: String, value: String, tone: Color) -> some View {
     HStack {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.primary)
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
                 .lineLimit(2)
             Text(value)
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.primary)
+                .font(.system(size: 42, weight: .semibold, design: .default))
+                .minimumScaleFactor(0.55)
+                .lineLimit(1)
+                .foregroundColor(AppColors.textPrimaryDark)
         }
         Spacer()
-        Circle()
-            .fill(tone.opacity(0.14))
-            .frame(width: 30, height: 30)
-            .overlay(
-                Circle()
-                    .stroke(tone.opacity(0.5), lineWidth: 1)
-            )
+        ZStack {
+            Circle()
+                .fill(tone.opacity(0.13))
+                .frame(width: 38, height: 38)
+            Circle()
+                .stroke(tone.opacity(0.45), lineWidth: 1.1)
+                .frame(width: 38, height: 38)
+            Circle()
+                .fill(tone.opacity(0.95))
+                .frame(width: 9, height: 9)
+        }
     }
-    .padding(14)
-    .background(Color(.secondarySystemGroupedBackground))
-    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-    .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+    .padding(18)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(AppColors.backgroundSecondary)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppColors.textPrimaryDark.opacity(0.08), lineWidth: 0.8)
+            )
+    )
+    .overlay(alignment: .leading) {
+        RoundedRectangle(cornerRadius: 3, style: .continuous)
+            .fill(tone.opacity(0.75))
+            .frame(width: 4, height: 54)
+            .padding(.leading, 6)
+    }
+    .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 6)
 }
 
 // MARK: - Liquid Press Button Style

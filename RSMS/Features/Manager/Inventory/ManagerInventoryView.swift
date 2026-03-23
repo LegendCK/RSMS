@@ -269,6 +269,7 @@ struct InvAlertsSubview: View {
     @Query private var allInventory: [InventoryByLocation]
 
     @State private var showTransferRequest = false
+    @State private var prefilledProductId: UUID? = nil
     @State private var isSyncing = false
 
     // Only this store's inventory
@@ -331,7 +332,11 @@ struct InvAlertsSubview: View {
             Task { await syncInventory() }
         }
         .sheet(isPresented: $showTransferRequest) {
-            TransferRequestSheet(isPresented: $showTransferRequest)
+            TransferRequestSheet(
+                isPresented: $showTransferRequest,
+                initialProductId: prefilledProductId,
+                initialQuantity: 1
+            )
         }
     }
 
@@ -375,7 +380,10 @@ struct InvAlertsSubview: View {
                 .background((item.quantity == 0 ? AppColors.error : AppColors.warning).opacity(0.12))
                 .cornerRadius(4)
 
-            Button(action: { showTransferRequest = true }) {
+            Button(action: {
+                prefilledProductId = item.productId
+                showTransferRequest = true
+            }) {
                 Text("Request")
                     .font(AppTypography.actionLink)
                     .foregroundColor(AppColors.accent)
@@ -403,6 +411,7 @@ struct InvAlertsSubview: View {
 
 struct InvTransfersSubview: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
 
     @Query(sort: \Transfer.updatedAt, order: .reverse) private var allTransfers: [Transfer]
     @Query(sort: \StoreLocation.name) private var allStores: [StoreLocation]
@@ -410,10 +419,18 @@ struct InvTransfersSubview: View {
     @State private var transferToMatch: Transfer?
     @State private var resultMessage = ""
     @State private var showResultMessage = false
+    @State private var isSyncingTransfers = false
+    @State private var actingTransferId: UUID? = nil
+    @State private var transferActionError = ""
+    @State private var showTransferActionError = false
 
     private var currentStoreCode: String? {
         guard let storeId = appState.currentStoreId else { return nil }
         return allStores.first(where: { $0.id == storeId })?.code
+    }
+
+    private var canApproveRequests: Bool {
+        appState.currentUserRole == .boutiqueManager
     }
 
     private var outboundTransfers: [Transfer] {
@@ -442,6 +459,12 @@ struct InvTransfersSubview: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
+                if isSyncingTransfers {
+                    ProgressView("Syncing transfers…")
+                        .tint(AppColors.accent)
+                        .padding(.top, AppSpacing.sm)
+                }
+
                 sLabel("REQUESTS FROM OTHER STORES")
                 if outboundTransfers.isEmpty {
                     emptyState(
@@ -476,6 +499,8 @@ struct InvTransfersSubview: View {
             .padding(.top, AppSpacing.sm)
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .refreshable { await syncTransfersFromBackend() }
+        .task { await syncTransfersFromBackend() }
         .sheet(item: $transferToMatch) { transfer in
             ShipmentMatchSheet(transfer: transfer) { result in
                 var lines: [String] = []
@@ -496,6 +521,7 @@ struct InvTransfersSubview: View {
 
                 resultMessage = lines.joined(separator: "\n")
                 showResultMessage = true
+                Task { await syncTransfersFromBackend() }
             }
         }
         .alert("Shipment Matching", isPresented: $showResultMessage) {
@@ -503,36 +529,354 @@ struct InvTransfersSubview: View {
         } message: {
             Text(resultMessage)
         }
+        .alert("Transfer Update", isPresented: $showTransferActionError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(transferActionError)
+        }
     }
 
     private func outboundTransferCard(_ transfer: Transfer) -> some View {
-        HStack(spacing: AppSpacing.sm) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(transfer.productName.isEmpty ? "Unmapped Product" : transfer.productName)
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack(spacing: AppSpacing.sm) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(transfer.productName.isEmpty ? "Unmapped Product" : transfer.productName)
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+
+                    HStack(spacing: 4) {
+                        Text(getStoreName(for: transfer.fromBoutiqueId))
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                        Image(systemName: "arrow.right")
+                            .font(AppTypography.arrowInline)
+                            .foregroundColor(AppColors.neutral500)
+                        Text(getStoreName(for: transfer.toBoutiqueId))
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                }
+                Spacer()
+                Text("×\(transfer.expectedQuantity)")
                     .font(AppTypography.label)
                     .foregroundColor(AppColors.textPrimaryDark)
+                statusPill(transfer.status)
+            }
 
-                HStack(spacing: 4) {
-                    Text(getStoreName(for: transfer.fromBoutiqueId))
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.textSecondaryDark)
-                    Image(systemName: "arrow.right")
-                        .font(AppTypography.arrowInline)
-                        .foregroundColor(AppColors.neutral500)
-                    Text(getStoreName(for: transfer.toBoutiqueId))
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.textSecondaryDark)
+            if transfer.status == .requested {
+                HStack(spacing: AppSpacing.xs) {
+                    Spacer()
+                    if canApproveRequests {
+                        Button {
+                            Task { await applyManagerDecision(for: transfer, approve: false) }
+                        } label: {
+                            Text("Reject")
+                                .font(AppTypography.actionSmall)
+                                .foregroundColor(AppColors.error)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(AppColors.error.opacity(0.10))
+                                .cornerRadius(6)
+                        }
+                        .disabled(actingTransferId != nil)
+
+                        Button {
+                            Task { await applyManagerDecision(for: transfer, approve: true) }
+                        } label: {
+                            if actingTransferId == transfer.id {
+                                ProgressView().tint(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                            } else {
+                                Text("Approve")
+                                    .font(AppTypography.actionSmall)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                            }
+                        }
+                        .background(AppColors.accent)
+                        .cornerRadius(6)
+                        .disabled(actingTransferId != nil)
+                    } else {
+                        Text("Pending source-store manager approval")
+                            .font(AppTypography.micro)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
                 }
             }
-            Spacer()
-            Text("×\(transfer.expectedQuantity)")
-                .font(AppTypography.label)
-                .foregroundColor(AppColors.textPrimaryDark)
-            statusPill(transfer.status)
         }
         .padding(AppSpacing.sm)
         .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
         .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    @MainActor
+    private func applyManagerDecision(for transfer: Transfer, approve: Bool) async {
+        guard canApproveRequests else { return }
+
+        let oldStatus = transfer.status
+        let oldUpdatedAt = transfer.updatedAt
+        let oldApprovedBy = transfer.approvedByEmail
+
+        actingTransferId = transfer.id
+        defer { actingTransferId = nil }
+
+        transfer.status = approve ? .approved : .cancelled
+        transfer.updatedAt = Date()
+        if approve {
+            transfer.approvedByEmail = appState.currentUserEmail
+        }
+
+        do {
+            if approve {
+                try await reserveSourceInventoryForTransfer(transfer)
+            }
+            try modelContext.save()
+            try await TransferSyncService.shared.syncReceipt(for: transfer)
+            await syncTransfersFromBackend()
+        } catch {
+            transfer.status = oldStatus
+            transfer.updatedAt = oldUpdatedAt
+            transfer.approvedByEmail = oldApprovedBy
+            try? modelContext.save()
+            transferActionError = "Could not \(approve ? "approve" : "reject") request. Backend sync failed: \(error.localizedDescription)"
+            showTransferActionError = true
+        }
+    }
+
+    @MainActor
+    private func reserveSourceInventoryForTransfer(_ transfer: Transfer) async throws {
+        guard let sourceStoreId = resolveStoreIdForTransferEndpoint(transfer.fromBoutiqueId) else {
+            throw NSError(
+                domain: "TransferApproval",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Could not resolve source store for this transfer."]
+            )
+        }
+
+        struct InventoryRow: Decodable {
+            let id: UUID
+            let quantity: Int
+            let product_id: String?
+            let products: ProductRow?
+        }
+        struct ProductRow: Decodable {
+            let name: String?
+        }
+        struct InventoryPatch: Encodable {
+            let quantity: Int
+            let updated_at: String
+        }
+
+        // First, try exact store+product match. If local product id is stale,
+        // fallback to store-wide lookup and match by product name.
+        var rows: [InventoryRow] = try await SupabaseManager.shared.client
+            .from("inventory")
+            .select("id, quantity, product_id")
+            .eq("store_id", value: sourceStoreId.uuidString.lowercased())
+            .eq("product_id", value: transfer.productId.uuidString.lowercased())
+            .limit(1)
+            .execute()
+            .value
+
+        if rows.isEmpty {
+            let fallbackRows: [InventoryRow] = try await SupabaseManager.shared.client
+                .from("inventory")
+                .select("id, quantity, product_id, products(name)")
+                .eq("store_id", value: sourceStoreId.uuidString.lowercased())
+                .limit(200)
+                .execute()
+                .value
+
+            let transferProductName = transfer.productName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !transferProductName.isEmpty {
+                rows = fallbackRows.filter {
+                    ($0.products?.name ?? "").caseInsensitiveCompare(transferProductName) == .orderedSame
+                }
+            }
+        }
+
+        // If no inventory row exists in Supabase for this store+product, skip the
+        // decrement and proceed with approval. The IC already validated stock at
+        // transfer creation time; inventory will reconcile on the next sync/audit.
+        guard let row = rows.first else {
+            print("[TransferApproval] No inventory row in Supabase for \(transfer.productName) at \(sourceStoreId.uuidString) — skipping decrement, approving transfer.")
+            return
+        }
+
+        var resolvedProductId = transfer.productId
+        if let remoteProductId = row.product_id, let parsed = UUID(uuidString: remoteProductId) {
+            resolvedProductId = parsed
+            transfer.productId = parsed
+        }
+
+        let newQty = row.quantity - transfer.quantity
+        guard newQty >= 0 else {
+            throw NSError(
+                domain: "TransferApproval",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "Insufficient source inventory for approval."]
+            )
+        }
+
+        let now = ISO8601DateFormatter().string(from: Date())
+        try await SupabaseManager.shared.client
+            .from("inventory")
+            .update(InventoryPatch(quantity: newQty, updated_at: now))
+            .eq("id", value: row.id.uuidString.lowercased())
+            .execute()
+
+        let inventoryRows = (try? modelContext.fetch(FetchDescriptor<InventoryByLocation>())) ?? []
+        if let localRow = inventoryRows.first(where: {
+            $0.locationId == sourceStoreId && $0.productId == resolvedProductId
+        }) {
+            localRow.quantity = max(0, localRow.quantity - transfer.quantity)
+            localRow.updatedAt = Date()
+        }
+    }
+
+    @MainActor
+    private func syncTransfersFromBackend() async {
+        isSyncingTransfers = true
+        defer { isSyncingTransfers = false }
+
+        do {
+            let remote = try await StoreAndInventorySyncService.shared.fetchTransfers()
+            let currentStoreId = appState.currentStoreId?.uuidString.lowercased()
+            let currentStoreCode = self.currentStoreCode?.lowercased()
+
+            let relevant = remote.filter { row in
+                let from = (row.from_boutique_id ?? "").lowercased()
+                let to = (row.to_boutique_id ?? "").lowercased()
+                let idMatches = (currentStoreId != nil) && (from == currentStoreId || to == currentStoreId)
+                let codeMatches = (currentStoreCode != nil) && (from == currentStoreCode || to == currentStoreCode)
+                return idMatches || codeMatches
+            }
+
+            let existing = (try? modelContext.fetch(FetchDescriptor<Transfer>())) ?? []
+            let existingById = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+            let localProducts = (try? modelContext.fetch(FetchDescriptor<Product>())) ?? []
+
+            for row in relevant {
+                guard let rid = UUID(uuidString: row.id) else { continue }
+                let status = mapTransferStatus(row.status)
+                let quantity = max(row.quantity, 0)
+                let received = max(row.received_quantity ?? 0, 0)
+                let transferNumber = row.transfer_number ?? "TRF-\(row.id.prefix(8).uppercased())"
+                let asnNumber = row.asn_number ?? "ASN-\(transferNumber)"
+                let productName = row.product_name ?? ""
+                let fromId = row.from_boutique_id ?? ""
+                let toId = row.to_boutique_id ?? ""
+                let requestedAt = parseBackendDate(row.requested_at) ?? Date()
+                let updatedAt = parseBackendDate(row.updated_at) ?? Date()
+
+                if let local = existingById[rid] {
+                    local.transferNumber = transferNumber
+                    local.asnNumber = asnNumber
+                    if !productName.isEmpty { local.productName = productName }
+                    if let serial = row.serial_number, !serial.isEmpty { local.serialNumber = serial }
+                    if let requester = row.requested_by_email, !requester.isEmpty { local.requestedByEmail = requester }
+                    if let approver = row.approved_by_email, !approver.isEmpty { local.approvedByEmail = approver }
+                    if let notes = row.notes, !notes.isEmpty { local.notes = notes }
+                    if let productId = row.product_id, let parsed = UUID(uuidString: productId) {
+                        local.productId = parsed
+                    } else if !productName.isEmpty,
+                              let matched = localProducts.first(where: {
+                                  $0.name.caseInsensitiveCompare(productName) == .orderedSame
+                              }) {
+                        local.productId = matched.id
+                    }
+                    local.quantity = quantity
+                    local.receivedQuantity = received
+                    local.fromBoutiqueId = fromId
+                    local.toBoutiqueId = toId
+                    local.status = status
+                    local.requestedAt = requestedAt
+                    local.updatedAt = updatedAt
+                } else {
+                    let created = Transfer(
+                        transferNumber: transferNumber,
+                        asnNumber: asnNumber,
+                        productId: {
+                            if let raw = row.product_id, let parsed = UUID(uuidString: raw) {
+                                return parsed
+                            }
+                            if !productName.isEmpty,
+                               let matched = localProducts.first(where: {
+                                   $0.name.caseInsensitiveCompare(productName) == .orderedSame
+                               }) {
+                                return matched.id
+                            }
+                            return UUID()
+                        }(),
+                        productName: productName,
+                        serialNumber: row.serial_number ?? "",
+                        quantity: quantity,
+                        receivedQuantity: received,
+                        fromBoutiqueId: fromId,
+                        toBoutiqueId: toId,
+                        status: status
+                    )
+                    created.requestedByEmail = row.requested_by_email ?? created.requestedByEmail
+                    created.approvedByEmail = row.approved_by_email ?? created.approvedByEmail
+                    created.notes = row.notes ?? created.notes
+                    created.id = rid
+                    created.requestedAt = requestedAt
+                    created.updatedAt = updatedAt
+                    modelContext.insert(created)
+                }
+            }
+
+            try? modelContext.save()
+        } catch {
+            if error is CancellationError || error.localizedDescription.lowercased() == "cancelled" {
+                return
+            }
+            transferActionError = "Transfer sync failed: \(error.localizedDescription)"
+            showTransferActionError = true
+        }
+    }
+
+    private func parseBackendDate(_ value: String?) -> Date? {
+        guard let value, !value.isEmpty else { return nil }
+
+        let withFractional = ISO8601DateFormatter()
+        withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFractional.date(from: value) {
+            return date
+        }
+
+        let fallback = ISO8601DateFormatter()
+        fallback.formatOptions = [.withInternetDateTime]
+        return fallback.date(from: value)
+    }
+
+    private func mapTransferStatus(_ status: String?) -> TransferStatus {
+        guard let raw = status?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !raw.isEmpty else {
+            return .requested
+        }
+
+        switch raw {
+        case "requested", "pending_admin_approval", "pending":
+            return .requested
+        case "approved":
+            return .approved
+        case "picking":
+            return .picking
+        case "packed":
+            return .packed
+        case "in transit", "in_transit":
+            return .inTransit
+        case "partially received", "partially_received":
+            return .partiallyReceived
+        case "delivered", "completed":
+            return .delivered
+        case "cancelled", "canceled", "rejected":
+            return .cancelled
+        default:
+            return .requested
+        }
     }
 
     private func inboundTransferCard(_ transfer: Transfer, canMatch: Bool = true) -> some View {
@@ -687,6 +1031,15 @@ struct InvTransfersSubview: View {
         }
         // Fallback: show a formatted version of the ID with a note
         return "Store: \(boutiqueId)"
+    }
+
+    private func resolveStoreIdForTransferEndpoint(_ endpoint: String) -> UUID? {
+        if let id = UUID(uuidString: endpoint) {
+            return id
+        }
+        return allStores.first {
+            $0.code.caseInsensitiveCompare(endpoint) == .orderedSame
+        }?.id
     }
 }
 
@@ -845,6 +1198,7 @@ struct InvFlaggedSubview: View {
 
     @State private var isSyncing = false
     @State private var showTransferRequest = false
+    @State private var prefilledProductId: UUID? = nil
 
     // Items completely out of stock for this store — these are the "flagged" critical items
     private var flaggedItems: [InventoryByLocation] {
@@ -907,7 +1261,11 @@ struct InvFlaggedSubview: View {
         .refreshable { await syncInventory() }
         .task { await syncInventory() }
         .sheet(isPresented: $showTransferRequest) {
-            TransferRequestSheet(isPresented: $showTransferRequest)
+            TransferRequestSheet(
+                isPresented: $showTransferRequest,
+                initialProductId: prefilledProductId,
+                initialQuantity: 1
+            )
         }
     }
 
@@ -945,7 +1303,10 @@ struct InvFlaggedSubview: View {
                 Text("Updated \(item.updatedAt.formatted(.relative(presentation: .named)))")
                     .font(AppTypography.micro)
                     .foregroundColor(AppColors.neutral500)
-                Button(action: { showTransferRequest = true }) {
+                Button(action: {
+                    prefilledProductId = item.productId
+                    showTransferRequest = true
+                }) {
                     Text("Request")
                         .font(AppTypography.reviewButton)
                         .foregroundColor(AppColors.accent)
@@ -986,6 +1347,8 @@ struct InvFlaggedSubview: View {
 
 private struct TransferRequestSheet: View {
     @Binding var isPresented: Bool
+    let initialProductId: UUID?
+    let initialQuantity: Int?
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -1002,6 +1365,17 @@ private struct TransferRequestSheet: View {
     @State private var isLoadingStores = false
     @State private var errorMessage = ""
     @State private var showError = false
+    @State private var didApplyPrefill = false
+
+    init(
+        isPresented: Binding<Bool>,
+        initialProductId: UUID? = nil,
+        initialQuantity: Int? = nil
+    ) {
+        _isPresented = isPresented
+        self.initialProductId = initialProductId
+        self.initialQuantity = initialQuantity
+    }
 
     private var currentStore: StoreLocation? {
         guard let storeId = appState.currentStoreId else { return nil }
@@ -1016,10 +1390,15 @@ private struct TransferRequestSheet: View {
         Int(quantityText.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    private var scannedReference: String {
+        batchReference.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var isValid: Bool {
         selectedProduct != nil &&
         selectedDestinationStore != nil &&
         (quantity ?? 0) > 0 &&
+        !scannedReference.isEmpty &&
         (selectedProduct?.stockCount ?? 0) >= (quantity ?? 0)
     }
 
@@ -1122,9 +1501,9 @@ private struct TransferRequestSheet: View {
                     .padding(AppSpacing.md)
                     .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
 
-                    // Batch Reference (optional)
+                    // Batch Reference (required: scanned)
                     VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                        Text("BATCH REFERENCE (OPTIONAL)")
+                        Text("SCANNED ITEM REFERENCE")
                             .font(AppTypography.overline)
                             .tracking(2)
                             .foregroundColor(AppColors.accent)
@@ -1134,9 +1513,14 @@ private struct TransferRequestSheet: View {
                             .font(AppTypography.bodyMedium)
                             .padding(AppSpacing.sm)
                             .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
-                        Text("Item scanning is done at the receiving boutique during shipment confirmation.")
+                        Text("Required: scan barcode/serial before transfer submission.")
                             .font(AppTypography.micro)
                             .foregroundColor(AppColors.textSecondaryDark)
+                        if scannedReference.isEmpty {
+                            Text("Scan reference is required.")
+                                .font(AppTypography.micro)
+                                .foregroundColor(AppColors.error)
+                        }
                     }
                     .padding(AppSpacing.md)
                     .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
@@ -1226,7 +1610,21 @@ private struct TransferRequestSheet: View {
             }
             .task {
                 await loadStoresFromSupabase()
+                applyPrefillIfNeeded()
             }
+        }
+    }
+
+    private func applyPrefillIfNeeded() {
+        guard !didApplyPrefill else { return }
+        defer { didApplyPrefill = true }
+
+        if let initialProductId {
+            selectedProduct = allProducts.first(where: { $0.id == initialProductId })
+        }
+
+        if let initialQuantity, initialQuantity > 0, quantityText.isEmpty {
+            quantityText = "\(initialQuantity)"
         }
     }
 
@@ -1253,6 +1651,12 @@ private struct TransferRequestSheet: View {
             return
         }
 
+        guard !scannedReference.isEmpty else {
+            errorMessage = "Please scan the item and enter the scan reference before submitting."
+            showError = true
+            return
+        }
+
         guard product.stockCount >= qty else {
             errorMessage = "Not enough inventory. Available: \(product.stockCount) units."
             showError = true
@@ -1265,12 +1669,30 @@ private struct TransferRequestSheet: View {
 
             let sourceCode = currentStore?.code ?? "UNKNOWN"
             let transferNumber = makeTransferNumber(fromStoreCode: sourceCode)
-            let refValue = batchReference.trimmingCharacters(in: .whitespacesAndNewlines)
+            let refValue = scannedReference
 
             var transferNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
             if !refValue.isEmpty {
                 let refAudit = "Batch Ref: \(refValue)"
                 transferNotes = transferNotes.isEmpty ? refAudit : "\(transferNotes)\n\(refAudit)"
+            }
+
+            if let sourceStoreId = appState.currentStoreId {
+                do {
+                    let remoteAvailable = try await fetchRemoteAvailableQuantity(
+                        productId: product.id,
+                        storeId: sourceStoreId
+                    )
+                    if remoteAvailable < qty {
+                        errorMessage = "Insufficient live inventory. Supabase shows \(remoteAvailable) units available."
+                        showError = true
+                        return
+                    }
+                } catch {
+                    errorMessage = "Could not validate live inventory from Supabase. Please retry.\n\(error.localizedDescription)"
+                    showError = true
+                    return
+                }
             }
 
             let transfer = Transfer(
@@ -1281,8 +1703,9 @@ private struct TransferRequestSheet: View {
                 productName: product.name,
                 serialNumber: refValue,
                 quantity: qty,
-                fromBoutiqueId: currentStore?.code ?? appState.currentStoreId?.uuidString ?? "UNKNOWN",
-                toBoutiqueId: destination.code,
+                // Persist UUID strings for backend compatibility.
+                fromBoutiqueId: appState.currentStoreId?.uuidString.lowercased() ?? currentStore?.code ?? "UNKNOWN",
+                toBoutiqueId: destination.id.uuidString.lowercased(),
                 status: .requested,
                 requestedByEmail: appState.currentUserEmail.isEmpty ? "manager@local" : appState.currentUserEmail,
                 notes: transferNotes
@@ -1297,7 +1720,8 @@ private struct TransferRequestSheet: View {
                 do {
                     try await TransferSyncService.shared.syncReceipt(for: transfer)
                 } catch {
-                    syncWarning = "\nWarning: Saved locally, but remote sync failed (\(error.localizedDescription))."
+                    print("[TransferRequestSheet] Remote transfer sync failed: \(error)")
+                    syncWarning = "\nWarning: Saved locally, but cloud sync is pending. Please try again in a moment."
                 }
 
                 errorMessage = "Transfer request created successfully.\nTransfer ID: \(transferNumber)\(syncWarning)"
@@ -1322,6 +1746,23 @@ private struct TransferRequestSheet: View {
         let ts = formatter.string(from: Date())
         let random = Int.random(in: 100...999)
         return "TRF-\(storeToken)-\(ts)-\(random)"
+    }
+
+    private func fetchRemoteAvailableQuantity(productId: UUID, storeId: UUID) async throws -> Int {
+        struct InventoryQtyRow: Decodable {
+            let quantity: Int
+        }
+
+        let rows: [InventoryQtyRow] = try await SupabaseManager.shared.client
+            .from("inventory")
+            .select("quantity")
+            .eq("store_id", value: storeId.uuidString.lowercased())
+            .eq("product_id", value: productId.uuidString.lowercased())
+            .limit(1)
+            .execute()
+            .value
+
+        return rows.first?.quantity ?? 0
     }
 }
 

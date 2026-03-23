@@ -81,13 +81,30 @@ final class StoreAndInventorySyncService {
     // MARK: - Fetch Transfers from Supabase
 
     func fetchTransfers() async throws -> [SupabaseTransfer] {
-        let response = try await SupabaseManager.shared.client
-            .from("transfers")
-            .select()
-            .order("created_at", ascending: false)
-            .execute()
-
-        return try JSONDecoder().decode([SupabaseTransfer].self, from: response.data)
+        do {
+            let response = try await SupabaseManager.shared.client
+                .from("transfers")
+                .select()
+                .order("requested_at", ascending: false)
+                .execute()
+            return try JSONDecoder().decode([SupabaseTransfer].self, from: response.data)
+        } catch {
+            do {
+                let response = try await SupabaseManager.shared.client
+                    .from("transfers")
+                    .select()
+                    .order("updated_at", ascending: false)
+                    .execute()
+                return try JSONDecoder().decode([SupabaseTransfer].self, from: response.data)
+            } catch {
+                // Final fallback for legacy schemas with no sortable timestamps.
+                let response = try await SupabaseManager.shared.client
+                    .from("transfers")
+                    .select()
+                    .execute()
+                return try JSONDecoder().decode([SupabaseTransfer].self, from: response.data)
+            }
+        }
     }
 
     // MARK: - Sync Inventory with Local SwiftData
@@ -177,10 +194,15 @@ struct SupabaseTransfer: Codable {
     let transfer_number: String?
     let asn_number: String?
     let product_id: String?
+    let product_name: String?
+    let serial_number: String?
     let quantity: Int
     let received_quantity: Int?
     let from_boutique_id: String?
     let to_boutique_id: String?
+    let requested_by_email: String?
+    let approved_by_email: String?
+    let notes: String?
     let status: String?
     let requested_at: String?
     let updated_at: String?
@@ -190,10 +212,15 @@ struct SupabaseTransfer: Codable {
         case transfer_number
         case asn_number
         case product_id
+        case product_name
+        case serial_number
         case quantity
         case received_quantity
         case from_boutique_id
         case to_boutique_id
+        case requested_by_email
+        case approved_by_email
+        case notes
         case status
         case requested_at
         case updated_at

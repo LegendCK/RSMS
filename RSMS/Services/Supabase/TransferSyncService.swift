@@ -27,6 +27,8 @@ final class TransferSyncService {
     private init() {}
 
     func syncReceipt(for transfer: Transfer) async throws {
+        if Task.isCancelled { throw CancellationError() }
+
         let richPayload = TransferUpsertDTO(transfer: transfer)
         do {
             try await client
@@ -37,7 +39,7 @@ final class TransferSyncService {
         } catch {
             let richError = error.localizedDescription
 
-            let minimalPayload = TransferMinimalUpsertDTO(transfer: transfer)
+            let minimalPayload = TransferSchemaSafeUpsertDTO(transfer: transfer)
             do {
                 try await client
                     .from("transfers")
@@ -47,17 +49,43 @@ final class TransferSyncService {
             } catch {
                 let minimalError = error.localizedDescription
 
-                let patchPayload = TransferReceiptPatchDTO(transfer: transfer)
+                let legacyPayload = TransferLegacyUpsertDTO(transfer: transfer)
                 do {
                     try await client
                         .from("transfers")
-                        .update(patchPayload)
-                        .eq("id", value: transfer.id.uuidString)
+                        .upsert(legacyPayload, onConflict: "id")
                         .execute()
                     return
                 } catch {
-                    let patchError = error.localizedDescription
-                    throw TransferSyncServiceError.syncFailed("rich upsert: \(richError); minimal upsert: \(minimalError); patch: \(patchError)")
+                    let legacyError = error.localizedDescription
+
+                    let patchPayload = TransferReceiptPatchDTO(transfer: transfer)
+                    do {
+                        try await client
+                            .from("transfers")
+                            .update(patchPayload)
+                            .eq("id", value: transfer.id.uuidString)
+                            .execute()
+                        return
+                    } catch {
+                        let patchError = error.localizedDescription
+
+                        // Last-chance fallback for legacy schemas that only allow status updates.
+                        let statusOnly = TransferStatusPatchDTO(transfer: transfer)
+                        do {
+                            try await client
+                                .from("transfers")
+                                .update(statusOnly)
+                                .eq("id", value: transfer.id.uuidString)
+                                .execute()
+                            return
+                        } catch {
+                            let statusError = error.localizedDescription
+                            throw TransferSyncServiceError.syncFailed(
+                                "rich upsert: \(richError); schema-safe upsert: \(minimalError); legacy upsert: \(legacyError); patch: \(patchError); status-only: \(statusError)"
+                            )
+                        }
+                    }
                 }
             }
         }

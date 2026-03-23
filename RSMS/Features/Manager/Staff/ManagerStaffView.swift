@@ -642,6 +642,7 @@ struct ManagerCreateStaffSheet: View {
 
     private let roleOptions: [UserRole] = [
         .salesAssociate,
+        .inventoryController,
         .serviceTechnician
     ]
 
@@ -818,6 +819,8 @@ struct ManagerCreateStaffSheet: View {
             if msg.contains("users_email_domain_check") || msg.contains("violates check constraint") {
                 if selectedRole == .salesAssociate {
                     errorMessage = "This environment enforces role-email domains. For Sales Associate use an @associate.com email."
+                } else if selectedRole == .inventoryController {
+                    errorMessage = "This environment enforces role-email domains. For Inventory Controller use the inventory domain configured for your org."
                 } else if selectedRole == .serviceTechnician {
                     errorMessage = "This environment enforces role-email domains. For After-Sales use an @aftersales.com email."
                 } else {
@@ -836,6 +839,8 @@ struct ManagerCreateStaffSheet: View {
         switch selectedRole {
         case .salesAssociate:
             return "Role email rule: use @associate.com"
+        case .inventoryController:
+            return "Role email rule: use your org's inventory-controller domain"
         case .serviceTechnician:
             return "Role email rule: use @aftersales.com"
         default:
