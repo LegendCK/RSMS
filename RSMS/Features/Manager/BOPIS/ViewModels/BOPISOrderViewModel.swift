@@ -107,6 +107,7 @@ final class BOPISOrderViewModel {
     // MARK: - Private
 
     private var refreshTimer: Timer?
+    private var lastFetchedStoreId: UUID?
     private let client = SupabaseManager.shared.client
 
     // MARK: - Lifecycle
@@ -155,6 +156,7 @@ final class BOPISOrderViewModel {
 
             orders = fetched
             isOffline = false
+            lastFetchedStoreId = storeId
             BOPISOrderCache.save(orders)
         } catch {
             let cached = BOPISOrderCache.load()
@@ -186,7 +188,8 @@ final class BOPISOrderViewModel {
         guard refreshTimer == nil else { return }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.nudgeObservation()
+                guard let self else { return }
+                await self.fetch(storeId: self.lastFetchedStoreId)
             }
         }
     }
@@ -194,9 +197,5 @@ final class BOPISOrderViewModel {
     private func stopTimer() {
         refreshTimer?.invalidate()
         refreshTimer = nil
-    }
-
-    private func nudgeObservation() {
-        orders = orders
     }
 }

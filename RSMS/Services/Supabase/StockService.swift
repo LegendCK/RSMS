@@ -17,8 +17,10 @@ import Supabase
 protocol StockServiceProtocol: Sendable {
     /// Creates `quantity` product_items rows for the given product, each with a
     /// unique RSMS-prefixed barcode generated server-side.
+    /// `storeId` stamps each item with the IC's store so stock is immediately
+    /// visible in that store's inventory.
     /// Returns the newly created items (including their barcodes) for display.
-    func createStock(productId: UUID, quantity: Int) async throws -> [ProductItemDTO]
+    func createStock(productId: UUID, quantity: Int, storeId: UUID?) async throws -> [ProductItemDTO]
 
     /// Fetches all product_items for a product, ordered newest-first.
     func fetchItems(for productId: UUID) async throws -> [ProductItemDTO]
@@ -38,18 +40,25 @@ final class StockService: StockServiceProtocol, @unchecked Sendable {
     /// Calls the `create_product_items_bulk(p_product_id, p_quantity)` SQL function.
     /// The function uses generate_series() so only ONE database round-trip is made
     /// regardless of quantity.
-    nonisolated func createStock(productId: UUID, quantity: Int) async throws -> [ProductItemDTO] {
+    nonisolated func createStock(productId: UUID, quantity: Int, storeId: UUID?) async throws -> [ProductItemDTO] {
         guard quantity > 0 && quantity <= 500 else {
             throw StockError.invalidQuantity(quantity)
         }
 
-        // RPC returns SETOF product_items — no joined product here (keep it simple)
+        struct BulkParams: Encodable {
+            let p_product_id: String
+            let p_quantity:   Int
+            let p_store_id:   String?
+        }
+
+        let params = BulkParams(
+            p_product_id: productId.uuidString.lowercased(),
+            p_quantity:   quantity,
+            p_store_id:   storeId?.uuidString.lowercased()
+        )
+
         let items: [ProductItemDTO] = try await client
-            .rpc("create_product_items_bulk",
-                 params: [
-                    "p_product_id": .string(productId.uuidString),
-                    "p_quantity": .integer(quantity)
-                 ] as AnyJSON)
+            .rpc("create_product_items_bulk", params: params)
             .execute()
             .value
 
