@@ -594,6 +594,7 @@ struct OrderFulfillmentCard: View {
 
         do {
             let targetCanonical = OrderStatusMapper.canonical(newStatus)
+            let currentCanonical = OrderStatusMapper.canonical(order.status)
 
             // For transitions that move items off the shelf, decrement inventory
             let needsDecrement = ["processing", "shipped"].contains(targetCanonical)
@@ -623,6 +624,18 @@ struct OrderFulfillmentCard: View {
                         }
                     }
                 }
+            }
+
+            // Server state machine requires sequential transitions.
+            // If order is still "pending" and target skips "confirmed"
+            // (e.g. "Confirm & Dispatch" → shipped), advance to confirmed first
+            // so the audit trail shows both steps.
+            if currentCanonical == "pending" && !["confirmed", "cancelled"].contains(targetCanonical) {
+                try await OrderFulfillmentService.shared.updateOrderStatus(
+                    orderId: order.id,
+                    newStatus: "confirmed",
+                    notes: "Auto-confirmed on dispatch"
+                )
             }
 
             try await OrderFulfillmentService.shared.updateOrderStatus(

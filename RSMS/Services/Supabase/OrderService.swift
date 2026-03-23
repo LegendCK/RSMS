@@ -100,15 +100,23 @@ final class OrderService {
 
         print("[OrderService] Calling create-order edge function for order: \(orderNumber)")
 
-        // Explicitly fetch the current session token and attach it as the Authorization header.
-        // The Supabase Swift SDK does not always forward the bearer token automatically
-        // when invoking Edge Functions, causing a 401 at the gateway.
+        // Refresh the session to guarantee a non-expired JWT.
+        // client.auth.session returns the cached token which may be stale.
+        // refreshSession() exchanges it for a fresh one before calling the edge function.
         let accessToken: String
         do {
-            let session = try await client.auth.session
-            accessToken = session.accessToken
+            let refreshed = try await client.auth.refreshSession()
+            accessToken = refreshed.accessToken
+            print("[OrderService] Session refreshed, token obtained for \(refreshed.user.email ?? "unknown")")
         } catch {
-            throw OrderServiceError.edgeFunctionError("No active session — cannot authenticate with edge function: \(error.localizedDescription)")
+            // Refresh failed — fall back to the cached session token as last resort
+            do {
+                let session = try await client.auth.session
+                accessToken = session.accessToken
+                print("[OrderService] Using cached session token (refresh failed: \(error.localizedDescription))")
+            } catch {
+                throw OrderServiceError.edgeFunctionError("No active session: \(error.localizedDescription)")
+            }
         }
 
         let response: EdgeResponse = try await client.functions.invoke(
@@ -126,31 +134,8 @@ final class OrderService {
 
         let orderId = response.orderId ?? "unknown"
         let itemCount = response.itemsInserted ?? 0
-        print("[OrderService] ✅ Order \(orderNumber) saved to Supabase (id: \(orderId), items: \(itemCount))")
-
-        // Assign the nearest store — the edge function may not set store_id, so we
-        // patch it directly after creation so IC fulfillment queries pick it up.
-        if let sid = storeId, let orderUUID = UUID(uuidString: orderId) {
-            await assignStoreToOrder(orderId: orderUUID, storeId: sid)
-        }
-    }
-
-    // MARK: - Patch store_id via SECURITY DEFINER RPC (bypasses RLS)
-
-    /// Calls the `assign_order_store` Postgres function which runs as the table owner
-    /// (SECURITY DEFINER), so the customer's RLS policy doesn't block the update.
-    private func assignStoreToOrder(orderId: UUID, storeId: UUID) async {
-        let params: [String: String] = [
-            "p_order_id": orderId.uuidString.lowercased(),
-            "p_store_id": storeId.uuidString.lowercased()
-        ]
-        do {
-            try await client
-                .rpc("assign_order_store", params: params)
-                .execute()
-            print("[OrderService] ✅ store_id assigned → \(storeId) for order \(orderId)")
-        } catch {
-            print("[OrderService] store_id RPC failed (non-fatal): \(error.localizedDescription)")
-        }
+        print("[OrderService] ✅ Order \(orderNumber) saved to Supabase — id: \(orderId), items: \(itemCount), status: pending")
+        // Store routing is handled entirely server-side (city → state → fallback).
+        // The edge function always sets store_id; no client-side patch needed.
     }
 }
