@@ -184,8 +184,9 @@ final class ServiceTicketService: ServiceTicketServiceProtocol, @unchecked Senda
         return "EXR-\(orderNumber)"
     }
 
-    /// Three-tier store resolution. Returns a guaranteed non-optional UUID.
-    /// 1. Locally-cached boutiqueId  2. Orders table lookup  3. First active store
+    /// Two-tier store resolution. Returns a guaranteed non-optional UUID.
+    /// 1. Locally-cached boutiqueId  2. Orders table lookup
+    /// Throws if neither resolves — avoids silently routing to an arbitrary store.
     private func resolveStoreId(
         preferred: UUID?,
         orderNumber: String
@@ -198,23 +199,11 @@ final class ServiceTicketService: ServiceTicketServiceProtocol, @unchecked Senda
             return orderStore
         }
 
-        // Tier 3 — first active store (last resort)
-        struct StoreRow: Decodable { let id: UUID }
-        let stores: [StoreRow] = try await client
-            .from("stores")
-            .select("id")
-            .eq("is_active", value: true)
-            .order("created_at", ascending: true)
-            .limit(1)
-            .execute()
-            .value
-
-        guard let first = stores.first else {
-            throw ExchangeRequestError.missingOrderContext(
-                "No active store found. Please contact support."
-            )
-        }
-        return first.id
+        // Both tiers failed — order not found and no store context provided.
+        // Throwing here prevents the ticket landing on a random store.
+        throw ExchangeRequestError.missingOrderContext(
+            "Order '\(orderNumber)' was not found. Please verify the order number and try again."
+        )
     }
 
     // MARK: - Fetch List

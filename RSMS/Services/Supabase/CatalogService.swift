@@ -340,6 +340,24 @@ final class CatalogService {
         }
     }
 
+    func deleteProduct(id: UUID) async throws {
+        struct SoftDeletePayload: Encodable {
+            let is_active: Bool
+            let deleted_at: String
+        }
+        let payload = SoftDeletePayload(
+            is_active: false,
+            deleted_at: ISO8601DateFormatter().string(from: Date())
+        )
+        try await withRetry(label: "deleteProduct") {
+            try await client
+                .from("products")
+                .update(payload)
+                .eq("id", value: id.uuidString)
+                .execute()
+        }
+    }
+
     // MARK: - Storage
 
     private func uploadImage(data: Data, storagePath: String) async throws -> String {

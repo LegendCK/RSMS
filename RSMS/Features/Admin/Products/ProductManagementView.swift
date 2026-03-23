@@ -191,8 +191,11 @@ struct ProductManagementView: View {
                 }
                 Divider()
                 Button(role: .destructive, action: {
-                    modelContext.delete(product)
-                    try? modelContext.save()
+                    Task {
+                        try? await CatalogService.shared.deleteProduct(id: product.id)
+                        modelContext.delete(product)
+                        try? modelContext.save()
+                    }
                 }) {
                     Label("Delete", systemImage: "trash")
                 }

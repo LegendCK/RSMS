@@ -12,20 +12,36 @@ import Supabase
 private struct ReplenishmentRequest: Identifiable, Decodable {
     let id: UUID
     let transferNumber: String
-    let productId: String
+    let productId: String?
+    let productName: String?
     let quantity: Int
-    let toBoutiqueId: String
+    let fromBoutiqueId: String?
+    let toBoutiqueId: String?
+    let asnNumber: String?
+    let serialNumber: String?
+    let requestedByEmail: String?
+    let approvedByEmail: String?
+    let notes: String?
     let status: String
-    let requestedAt: String
+    let requestedAt: String?
+    let updatedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id
         case transferNumber = "transfer_number"
         case productId      = "product_id"
+        case productName    = "product_name"
         case quantity
+        case fromBoutiqueId = "from_boutique_id"
         case toBoutiqueId   = "to_boutique_id"
+        case asnNumber      = "asn_number"
+        case serialNumber   = "serial_number"
+        case requestedByEmail = "requested_by_email"
+        case approvedByEmail  = "approved_by_email"
+        case notes
         case status
         case requestedAt    = "requested_at"
+        case updatedAt      = "updated_at"
     }
 }
 
@@ -37,6 +53,7 @@ struct OperationsView: View {
     @State private var replenishmentRequests: [ReplenishmentRequest] = []
     @State private var isLoadingRequests = false
     @State private var approvingId: UUID? = nil
+    @State private var selectedRequest: ReplenishmentRequest? = nil
 
     private var lowStockProducts: [Product] { allProducts.filter { $0.stockCount <= 3 && $0.stockCount > 0 } }
     private var outOfStockProducts: [Product] { allProducts.filter { $0.stockCount == 0 } }
@@ -310,7 +327,10 @@ struct OperationsView: View {
                                 .foregroundColor(AppColors.textSecondaryDark)
                                 .padding(.vertical, AppSpacing.sm)
                         } else {
-                            ForEach(pending) { req in replenishmentRow(req) }
+                            ForEach(pending) { req in
+                                replenishmentRow(req)
+                                    .onTapGesture { selectedRequest = req }
+                            }
                         }
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -319,7 +339,10 @@ struct OperationsView: View {
                     if !approved.isEmpty {
                         VStack(alignment: .leading, spacing: AppSpacing.sm) {
                             sectionLabel("APPROVED")
-                            ForEach(approved) { req in replenishmentRow(req) }
+                            ForEach(approved) { req in
+                                replenishmentRow(req)
+                                    .onTapGesture { selectedRequest = req }
+                            }
                         }
                         .padding(.horizontal, AppSpacing.screenHorizontal)
                     }
@@ -329,6 +352,18 @@ struct OperationsView: View {
         }
         .task { await loadReplenishmentRequests() }
         .refreshable { await loadReplenishmentRequests() }
+        .sheet(item: $selectedRequest) { req in
+            ReplenishmentDetailSheet(
+                request: req,
+                isApproving: approvingId == req.id,
+                onApprove: req.status == "pending_admin_approval" ? {
+                    Task {
+                        await approveReplenishment(req)
+                        selectedRequest = replenishmentRequests.first(where: { $0.id == req.id })
+                    }
+                } : nil
+            )
+        }
     }
 
     private func replenishmentRow(_ req: ReplenishmentRequest) -> some View {
@@ -338,9 +373,14 @@ struct OperationsView: View {
                     .font(AppTypography.monoID)
                     .foregroundColor(AppColors.textPrimaryDark)
                     .lineLimit(1)
-                Text("Qty: \(req.quantity) · Store: \(req.toBoutiqueId.prefix(8))…")
+                Text("Qty: \(req.quantity) · To: \(storeLabel(req.toBoutiqueId))")
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
+                if let requestedAt = req.requestedAt, !requestedAt.isEmpty {
+                    Text("Requested: \(requestedAt)")
+                        .font(AppTypography.micro)
+                        .foregroundColor(AppColors.neutral500)
+                }
             }
             Spacer()
 
@@ -374,6 +414,11 @@ struct OperationsView: View {
         .padding(AppSpacing.sm)
         .background(AppColors.backgroundSecondary)
         .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func storeLabel(_ storeId: String?) -> String {
+        guard let storeId, !storeId.isEmpty else { return "Unknown" }
+        return "\(storeId.prefix(8))…"
     }
 
     @MainActor
@@ -421,6 +466,116 @@ struct OperationsView: View {
             .font(AppTypography.overline)
             .tracking(2)
             .foregroundColor(AppColors.accent)
+    }
+}
+
+private struct ReplenishmentDetailSheet: View {
+    let request: ReplenishmentRequest
+    let isApproving: Bool
+    let onApprove: (() -> Void)?
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppSpacing.md) {
+                    detailCard(title: "Transfer", rows: [
+                        ("Transfer ID", request.transferNumber),
+                        ("Status", request.status),
+                        ("ASN", request.asnNumber ?? "N/A"),
+                        ("Serial", request.serialNumber ?? "N/A")
+                    ])
+
+                    detailCard(title: "Inventory", rows: [
+                        ("Product", request.productName ?? request.productId ?? "Unknown"),
+                        ("Product ID", request.productId ?? "N/A"),
+                        ("Quantity", "\(request.quantity)")
+                    ])
+
+                    detailCard(title: "Routing", rows: [
+                        ("From Store", request.fromBoutiqueId ?? "N/A"),
+                        ("To Store", request.toBoutiqueId ?? "N/A")
+                    ])
+
+                    detailCard(title: "Audit", rows: [
+                        ("Requested By", request.requestedByEmail ?? "N/A"),
+                        ("Approved By", request.approvedByEmail ?? "—"),
+                        ("Requested At", request.requestedAt ?? "N/A"),
+                        ("Updated At", request.updatedAt ?? "N/A")
+                    ])
+
+                    if let notes = request.notes, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                            Text("Notes")
+                                .font(AppTypography.overline)
+                                .tracking(2)
+                                .foregroundColor(AppColors.accent)
+                            Text(notes)
+                                .font(AppTypography.bodySmall)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(AppSpacing.md)
+                        .background(AppColors.backgroundSecondary)
+                        .cornerRadius(AppSpacing.radiusMedium)
+                    }
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.md)
+                .padding(.bottom, AppSpacing.xxxl)
+            }
+            .navigationTitle("Approval Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+                if let onApprove {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            onApprove()
+                        } label: {
+                            if isApproving {
+                                ProgressView()
+                            } else {
+                                Text("Approve")
+                            }
+                        }
+                        .disabled(isApproving)
+                    }
+                }
+            }
+        }
+    }
+
+    private func detailCard(title: String, rows: [(String, String)]) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text(title)
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.accent)
+
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                HStack(alignment: .top) {
+                    Text(row.0)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .frame(width: 100, alignment: .leading)
+                    Text(row.1)
+                        .font(AppTypography.bodySmall)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if index < rows.count - 1 {
+                    Divider().background(AppColors.dividerLight)
+                }
+            }
+        }
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
     }
 }
 
