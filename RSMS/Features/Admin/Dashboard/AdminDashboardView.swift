@@ -9,6 +9,7 @@
 import SwiftUI
 import SwiftData
 import Supabase
+import Charts
 
 enum ActiveAdminSheet: Identifiable {
     case profile
@@ -34,6 +35,12 @@ enum ActiveAdminSheet: Identifiable {
         case .shareFile(let url): return "shareFile-\(url.absoluteString)"
         }
     }
+}
+
+private enum SharpCorners {
+    static let panel: CGFloat = 8
+    static let control: CGFloat = 6
+    static let badge: CGFloat = 5
 }
 
 // MARK: - Main Dashboard View
@@ -142,7 +149,19 @@ struct AdminDashboardView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color(.systemGroupedBackground).ignoresSafeArea()
+            AppColors.backgroundPrimary.ignoresSafeArea()
+
+            // Atmospheric depth layer for premium glass separation.
+            LinearGradient(
+                colors: [
+                    AppColors.backgroundPrimary,
+                    AppColors.accent.opacity(0.04),
+                    AppColors.backgroundPrimary
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
             // Maroon top glow
             LinearGradient(
@@ -164,10 +183,14 @@ struct AdminDashboardView: View {
                     Spacer().frame(height: 40)
                 }
             }
+            .padding(.top, 6)
             .refreshable {
                 await fetchLowStock()
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: isSyncingLiveData)
+        .animation(.easeInOut(duration: 0.25), value: lowStockAlerts.count)
+        .animation(.easeInOut(duration: 0.25), value: activeSheet?.id)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -182,6 +205,8 @@ struct AdminDashboardView: View {
                         Image(systemName: "bell.badge")
                             .font(.system(size: 16, weight: .light))
                             .foregroundColor(.primary)
+                            .frame(width: 32, height: 32)
+                            .liquidGlass(config: .ultraThin, cornerRadius: SharpCorners.control)
                     }
                     Button(action: { activeSheet = .profile }) {
                         ZStack {
@@ -192,6 +217,8 @@ struct AdminDashboardView: View {
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundColor(AppColors.accent)
                         }
+                        .frame(width: 32, height: 32)
+                        .liquidGlass(config: .ultraThin, cornerRadius: SharpCorners.control)
                     }
                 }
             }
@@ -278,6 +305,10 @@ struct AdminDashboardView: View {
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+        .liquidShadow(LiquidShadow.subtle)
         .padding(.horizontal, 20)
         .padding(.top, 8)
     }
@@ -490,7 +521,7 @@ struct AdminDashboardView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background((badgePositive ? AppColors.success : AppColors.warning).opacity(0.1))
-                    .clipShape(Capsule())
+                    .clipShape(RoundedRectangle(cornerRadius: SharpCorners.badge, style: .continuous))
             }
             Text(value)
                 .font(.system(size: 22, weight: .bold))
@@ -500,9 +531,8 @@ struct AdminDashboardView: View {
                 .foregroundColor(.secondary)
         }
         .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+        .liquidShadow(LiquidShadow.subtle)
     }
 
     // MARK: - System Health
@@ -531,8 +561,7 @@ struct AdminDashboardView: View {
                     .foregroundColor(AppColors.accent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(AppColors.accent.opacity(0.1))
-                    .clipShape(Capsule())
+                    .liquidGlass(config: .ultraThin, backgroundColor: AppColors.accent.opacity(0.08), cornerRadius: SharpCorners.control)
                 }
                 .buttonStyle(.plain)
             }
@@ -573,9 +602,8 @@ struct AdminDashboardView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(Capsule())
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+        .liquidGlass(config: .ultraThin, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.control)
+        .liquidShadow(LiquidShadow.subtle)
     }
 
     // MARK: - Low Stock Section
@@ -593,11 +621,14 @@ struct AdminDashboardView: View {
             }
             
             if lowStockAlerts.isEmpty && !isLoadingAlerts {
-                Text("No low stock items 🎉")
+                Text("No low stock items")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 20)
+                    .padding(.horizontal, 20)
+                    .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundSecondary, cornerRadius: 16)
+                    .padding(.horizontal, 20)
             } else {
                 LazyVStack(spacing: 10) {
                     ForEach(lowStockAlerts) { alert in
@@ -635,13 +666,12 @@ struct AdminDashboardView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(badgeColor.opacity(0.12))
-                .clipShape(Capsule())
+                .clipShape(RoundedRectangle(cornerRadius: SharpCorners.badge, style: .continuous))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+        .liquidShadow(LiquidShadow.subtle)
     }
 
     // MARK: - Alerts
@@ -657,7 +687,7 @@ struct AdminDashboardView: View {
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(AppColors.warning)
-                    .clipShape(Capsule())
+                    .clipShape(RoundedRectangle(cornerRadius: SharpCorners.badge, style: .continuous))
                     .padding(.trailing, 20)
             }
 
@@ -701,9 +731,8 @@ struct AdminDashboardView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+        .liquidShadow(LiquidShadow.subtle)
     }
 
     // MARK: - Quick Actions
@@ -758,9 +787,8 @@ struct AdminDashboardView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: 80)
             .padding(14)
-            .background(Color(.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+            .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+            .liquidShadow(LiquidShadow.subtle)
         }
         .buttonStyle(LiquidPressButtonStyle())
     }
@@ -794,9 +822,8 @@ struct AdminDashboardView: View {
                 Divider().padding(.horizontal, 14)
                 activityItem(action: "Stock Transfer", detail: "Classic Flap Bag — NYC → Paris (2 units)", by: "D. Park", time: "6h")
             }
-            .background(Color(.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+            .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+            .liquidShadow(LiquidShadow.subtle)
             .padding(.horizontal, 20)
         }
     }
@@ -1008,13 +1035,79 @@ private struct DashboardSalesInsightsSheet: View {
     }
 
     private var detailedSalesSeries: [Double] {
-        guard !filteredOrders.isEmpty else { return [] }
-        let grouped = Dictionary(grouping: filteredOrders) { bucketDayString($0.createdAt) }
-        let sortedKeys = grouped.keys.sorted()
-        let totals = sortedKeys.map { key in
-            grouped[key]?.reduce(0) { $0 + $1.grandTotal } ?? 0
+        detailedSalesPoints.map(\.value)
+    }
+
+    private enum SalesTrendBucket {
+        case day
+        case week
+        case month
+    }
+
+    private var detailedSalesBucket: SalesTrendBucket {
+        switch selectedRange {
+        case .sevenDays, .thirtyDays:
+            return .day
+        case .ninetyDays:
+            return .week
+        case .sixMonths:
+            return .month
+        case .custom:
+            let days = max(Calendar.current.dateComponents([.day], from: dateRange.start, to: dateRange.end).day ?? 0, 0)
+            if days > 120 { return .month }
+            if days > 45 { return .week }
+            return .day
         }
-        return Array(totals.suffix(14))
+    }
+
+    private var detailedSalesPointLimit: Int {
+        switch detailedSalesBucket {
+        case .day:
+            switch selectedRange {
+            case .sevenDays:
+                return 7
+            case .thirtyDays:
+                return 30
+            case .custom:
+                let days = max((Calendar.current.dateComponents([.day], from: dateRange.start, to: dateRange.end).day ?? 0) + 1, 1)
+                return min(days, 45)
+            case .ninetyDays, .sixMonths:
+                return 30
+            }
+        case .week:
+            return 13
+        case .month:
+            return 6
+        }
+    }
+
+    private var detailedSalesPoints: [(date: Date, value: Double)] {
+        guard !filteredOrders.isEmpty else { return [] }
+        let grouped = Dictionary(grouping: filteredOrders) { bucketStartDate(for: $0.createdAt) }
+        let sortedKeys = grouped.keys.sorted()
+        let points = sortedKeys.map { key in
+            (
+                date: key,
+                value: grouped[key]?.reduce(0) { $0 + $1.grandTotal } ?? 0
+            )
+        }
+        return Array(points.suffix(detailedSalesPointLimit))
+    }
+
+    private var latestSalesPoint: (date: Date, value: Double)? {
+        detailedSalesPoints.last
+    }
+
+    private var previousSalesPoint: (date: Date, value: Double)? {
+        guard detailedSalesPoints.count > 1 else { return nil }
+        return detailedSalesPoints[detailedSalesPoints.count - 2]
+    }
+
+    private var recentSalesDelta: Double? {
+        guard let latest = latestSalesPoint?.value,
+              let previous = previousSalesPoint?.value else { return nil }
+        if previous == 0 { return nil }
+        return (latest - previous) / previous
     }
 
     private var detailedSalesTotal: Double {
@@ -1022,6 +1115,11 @@ private struct DashboardSalesInsightsSheet: View {
     }
 
     private var detailedOrderCount: Int { filteredOrders.count }
+
+    private var averageOrderValue: Double {
+        guard detailedOrderCount > 0 else { return 0 }
+        return detailedSalesTotal / Double(detailedOrderCount)
+    }
 
     private var dateRange: (start: Date, end: Date) {
         switch selectedRange {
@@ -1040,30 +1138,61 @@ private struct DashboardSalesInsightsSheet: View {
         }
     }
 
+    private var monthlySalesTrendPoints: [(date: Date, value: Double)] {
+        let calendar = Calendar.current
+        let now = Date()
+        let values = monthlySalesTrend
+        let count = values.count
+
+        return values.enumerated().map { index, value in
+            let offset = (count - 1) - index
+            let date = calendar.date(byAdding: .month, value: -offset, to: now) ?? now
+            return (date: date, value: value)
+        }
+    }
+
+    private var monthlySalesAverage: Double {
+        guard !monthlySalesTrend.isEmpty else { return 0 }
+        return monthlySalesTrend.reduce(0, +) / Double(monthlySalesTrend.count)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.systemGroupedBackground).ignoresSafeArea()
+                AppColors.backgroundPrimary.ignoresSafeArea()
+                LinearGradient(
+                    colors: [AppColors.backgroundPrimary, AppColors.accent.opacity(0.05), AppColors.backgroundPrimary],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: AppSpacing.lg) {
-                        trendCard(
-                            title: "Sales Trend (6 Months)",
-                            subtitle: "Revenue trajectory",
-                            values: normalized(monthlySalesTrend),
-                            accent: AppColors.accent
+                        salesOverviewTrendChart
+
+                        summaryStrip(
+                            title: "Current Selection",
+                            stats: [
+                                ("Orders", "\(detailedOrderCount)", AppColors.info),
+                                ("Revenue", currency(detailedSalesTotal), AppColors.accent),
+                                ("Avg Order", currency(averageOrderValue), AppColors.success)
+                            ]
                         )
 
-                        insightCard(title: "Ratings Feedback of Associates", value: String(format: "%.2f / 5.00", associateRating), tone: AppColors.success)
-                        insightCard(title: "Appointments Not Approved / High Rejection", value: percent(appointmentRejectionRate), tone: appointmentRejectionRate > 0.25 ? AppColors.error : AppColors.warning)
-                        insightCard(title: "Churn Rate", value: percent(churnRate), tone: churnRate > 0.30 ? AppColors.error : AppColors.warning)
-                        insightCard(title: "Client Activity / Retention", value: percent(retentionRate), tone: AppColors.success)
-                        insightCard(title: "Stocks to Sale Ratio", value: String(format: "%.2f", stocksToSaleRatio), tone: AppColors.info)
+                        salesScopeHintCard
+
+                        sectionLabel("PERFORMANCE SIGNALS")
+                        salesSignalsGrid
+
+                        sectionLabel("DETAILED BREAKDOWN")
                         detailedGraphCard
                     }
                     .padding(.horizontal, 22)
                     .padding(.vertical, AppSpacing.lg)
                 }
             }
+            .animation(.easeInOut(duration: 0.25), value: selectedRange)
+            .animation(.easeInOut(duration: 0.25), value: selectedStoreId)
             .navigationTitle("Sales Insights")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1073,8 +1202,7 @@ private struct DashboardSalesInsightsSheet: View {
                         .foregroundColor(AppColors.accent)
                         .padding(.horizontal, AppSpacing.md)
                         .padding(.vertical, AppSpacing.xs)
-                        .background(AppColors.backgroundSecondary)
-                        .clipShape(Capsule())
+                        .liquidGlass(config: .ultraThin, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.control)
                 }
             }
         }
@@ -1099,7 +1227,7 @@ private struct DashboardSalesInsightsSheet: View {
             if snapshot == nil {
                 Text("Run live sync to enable per-store detailed graph.")
                     .font(AppTypography.caption)
-                    .foregroundColor(AppColors.textSecondaryDark)
+                    .foregroundColor(AppColors.textPrimaryDark)
             } else {
                 storePicker
                 rangePicker
@@ -1107,22 +1235,194 @@ private struct DashboardSalesInsightsSheet: View {
                     customDatePickers
                 }
 
-                trendCard(
-                    title: "Detailed Sales Graph",
-                    subtitle: "\(detailedOrderCount) orders · \(currency(detailedSalesTotal))",
-                    values: normalized(detailedSalesSeries),
-                    accent: AppColors.accent
-                )
+                if detailedSalesSeries.isEmpty {
+                    Text("No sales data in the selected range.")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 20)
+                        .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundPrimary, cornerRadius: SharpCorners.control)
+                } else {
+                    detailedSalesTrendChart
+                }
             }
         }
         .padding(18)
-        .background(AppColors.backgroundSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(AppColors.textPrimaryDark.opacity(0.08), lineWidth: 0.8)
-        )
-        .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 6)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+        .liquidShadow(LiquidShadow.medium)
+    }
+
+    private var salesOverviewTrendChart: some View {
+        let points = monthlySalesTrendPoints
+        let maxValue = max(points.map(\.value).max() ?? 1, 1)
+
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Sales Trend (6 Months)")
+                        .font(AppTypography.heading3)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("Monthly revenue trajectory")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
+                Spacer()
+                Text("Avg \(currency(monthlySalesAverage))")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(AppColors.accent)
+            }
+
+            Chart {
+                ForEach(Array(points.enumerated()), id: \.offset) { _, point in
+                    AreaMark(
+                        x: .value("Month", point.date),
+                        y: .value("Revenue", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [AppColors.accent.opacity(0.28), AppColors.accent.opacity(0.05)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                    LineMark(
+                        x: .value("Month", point.date),
+                        y: .value("Revenue", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 2.2))
+                    .foregroundStyle(AppColors.accent)
+
+                    PointMark(
+                        x: .value("Month", point.date),
+                        y: .value("Revenue", point.value)
+                    )
+                    .symbolSize(26)
+                    .foregroundStyle(AppColors.accent.opacity(0.95))
+                }
+
+                RuleMark(y: .value("Average", monthlySalesAverage))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                    .foregroundStyle(AppColors.info.opacity(0.9))
+                    .annotation(position: .topLeading) {
+                        Text("Average")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(AppColors.info)
+                    }
+            }
+            .frame(height: 210)
+            .chartYScale(domain: 0...(maxValue * 1.15))
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 6)) {
+                    AxisGridLine().foregroundStyle(AppColors.textPrimaryDark.opacity(0.20))
+                    AxisValueLabel(format: .dateTime.month(.abbreviated))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimaryDark)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) {
+                    AxisGridLine().foregroundStyle(AppColors.textPrimaryDark.opacity(0.20))
+                    AxisValueLabel()
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimaryDark)
+                }
+            }
+        }
+        .padding(18)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+        .liquidShadow(LiquidShadow.medium)
+    }
+
+    private var detailedSalesTrendChart: some View {
+        let points = detailedSalesPoints
+        let maxValue = max(points.map(\.value).max() ?? 1, 1)
+        let latestLabel = latestSalesPoint.map { displayDetailedBucketLabel(fromDate: $0.date) } ?? "-"
+        let latestValue = latestSalesPoint?.value ?? 0
+        let deltaText = recentSalesDelta.map { String(format: "%+.1f%% vs previous %@", $0 * 100, detailedBucketLabel) } ?? "Trend baseline unavailable"
+        let deltaTone: Color = (recentSalesDelta ?? 0) >= 0 ? AppColors.success : AppColors.error
+
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Detailed Sales Trend")
+                        .font(AppTypography.heading3)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("\(detailedOrderCount) orders · \(currency(detailedSalesTotal))")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(latestLabel)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(currency(latestValue))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+
+            Chart {
+                ForEach(Array(points.enumerated()), id: \.offset) { _, point in
+                    AreaMark(
+                        x: .value("Date", point.date),
+                        y: .value("Revenue", point.value)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [AppColors.accent.opacity(0.28), AppColors.accent.opacity(0.04)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                    LineMark(
+                        x: .value("Date", point.date),
+                        y: .value("Revenue", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .foregroundStyle(AppColors.accent)
+                }
+
+                if let latestSalesPoint {
+                    PointMark(
+                        x: .value("Latest", latestSalesPoint.date),
+                        y: .value("Latest Revenue", latestSalesPoint.value)
+                    )
+                    .symbolSize(42)
+                    .foregroundStyle(AppColors.accent)
+                }
+            }
+            .frame(height: 200)
+            .chartYScale(domain: 0...(maxValue * 1.15))
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 4)) {
+                    AxisGridLine().foregroundStyle(AppColors.textPrimaryDark.opacity(0.20))
+                    AxisValueLabel(format: detailedXAxisFormat)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimaryDark)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) {
+                    AxisGridLine().foregroundStyle(AppColors.textPrimaryDark.opacity(0.20))
+                    AxisValueLabel()
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimaryDark)
+                }
+            }
+
+            Text(deltaText)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(deltaTone)
+        }
+        .padding(18)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+        .liquidShadow(LiquidShadow.medium)
     }
 
     private var storePicker: some View {
@@ -1143,8 +1443,7 @@ private struct DashboardSalesInsightsSheet: View {
             }
             .padding(.horizontal, AppSpacing.sm)
             .padding(.vertical, AppSpacing.sm)
-            .background(AppColors.backgroundPrimary)
-            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
+            .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundPrimary, cornerRadius: SharpCorners.control)
         }
     }
 
@@ -1156,8 +1455,7 @@ private struct DashboardSalesInsightsSheet: View {
         }
         .pickerStyle(.segmented)
         .padding(4)
-        .background(AppColors.backgroundTertiary.opacity(0.65))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundTertiary.opacity(0.65), cornerRadius: SharpCorners.control)
     }
 
     private var customDatePickers: some View {
@@ -1168,8 +1466,7 @@ private struct DashboardSalesInsightsSheet: View {
                 .labelsHidden()
         }
         .padding(AppSpacing.xs)
-        .background(AppColors.backgroundPrimary)
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
+        .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundPrimary, cornerRadius: SharpCorners.control)
     }
 
     private var selectedStoreLabel: String {
@@ -1188,6 +1485,201 @@ private struct DashboardSalesInsightsSheet: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
+    }
+
+    private func bucketStartDate(for date: Date) -> Date {
+        let calendar = Calendar.current
+        switch detailedSalesBucket {
+        case .day:
+            return calendar.startOfDay(for: date)
+        case .week:
+            let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+            return calendar.date(from: components).map { calendar.startOfDay(for: $0) } ?? calendar.startOfDay(for: date)
+        case .month:
+            let components = calendar.dateComponents([.year, .month], from: date)
+            return calendar.date(from: components).map { calendar.startOfDay(for: $0) } ?? calendar.startOfDay(for: date)
+        }
+    }
+
+    private func displayDayString(fromDate date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd MMM"
+        return formatter.string(from: date)
+    }
+
+    private var detailedBucketLabel: String {
+        switch detailedSalesBucket {
+        case .day: return "day"
+        case .week: return "week"
+        case .month: return "month"
+        }
+    }
+
+    private var detailedXAxisFormat: Date.FormatStyle {
+        switch detailedSalesBucket {
+        case .day:
+            return .dateTime.day().month(.abbreviated)
+        case .week:
+            return .dateTime.day().month(.abbreviated)
+        case .month:
+            return .dateTime.month(.abbreviated)
+        }
+    }
+
+    private func displayDetailedBucketLabel(fromDate date: Date) -> String {
+        let formatter = DateFormatter()
+        switch detailedSalesBucket {
+        case .day:
+            formatter.dateFormat = "dd MMM"
+            return formatter.string(from: date)
+        case .week:
+            formatter.dateFormat = "dd MMM"
+            return "Wk of \(formatter.string(from: date))"
+        case .month:
+            formatter.dateFormat = "MMM yyyy"
+            return formatter.string(from: date)
+        }
+    }
+
+    private var salesScopeHintCard: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(AppColors.accent)
+
+            Text("Use Store and Date filters in Detailed Breakdown to inspect a specific segment.")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(AppColors.textPrimaryDark)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.control)
+    }
+
+    private var salesSignalsGrid: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10)
+            ],
+            spacing: 10
+        ) {
+            performanceSignalCard(
+                title: "Associate Rating",
+                value: String(format: "%.2f / 5.00", associateRating),
+                status: associateRating >= 4.2 ? "Strong" : (associateRating >= 3.6 ? "Moderate" : "Weak"),
+                benchmark: "Target ≥ 4.20",
+                normalizedScore: min(max(associateRating / 5, 0), 1),
+                higherIsBetter: true,
+                tone: associateRating >= 4.2 ? AppColors.success : (associateRating >= 3.6 ? AppColors.warning : AppColors.error)
+            )
+
+            performanceSignalCard(
+                title: "Rejection Rate",
+                value: percent(appointmentRejectionRate),
+                status: appointmentRejectionRate <= 0.12 ? "Healthy" : (appointmentRejectionRate <= 0.25 ? "Watch" : "Critical"),
+                benchmark: "Target ≤ 12%",
+                normalizedScore: min(max(appointmentRejectionRate / 0.35, 0), 1),
+                higherIsBetter: false,
+                tone: appointmentRejectionRate <= 0.12 ? AppColors.success : (appointmentRejectionRate <= 0.25 ? AppColors.warning : AppColors.error)
+            )
+
+            performanceSignalCard(
+                title: "Churn Rate",
+                value: percent(churnRate),
+                status: churnRate <= 0.15 ? "Healthy" : (churnRate <= 0.30 ? "Watch" : "Critical"),
+                benchmark: "Target ≤ 15%",
+                normalizedScore: min(max(churnRate / 0.40, 0), 1),
+                higherIsBetter: false,
+                tone: churnRate <= 0.15 ? AppColors.success : (churnRate <= 0.30 ? AppColors.warning : AppColors.error)
+            )
+
+            performanceSignalCard(
+                title: "Retention",
+                value: percent(retentionRate),
+                status: retentionRate >= 0.85 ? "Strong" : (retentionRate >= 0.70 ? "Moderate" : "Weak"),
+                benchmark: "Target ≥ 85%",
+                normalizedScore: min(max(retentionRate, 0), 1),
+                higherIsBetter: true,
+                tone: retentionRate >= 0.85 ? AppColors.success : (retentionRate >= 0.70 ? AppColors.warning : AppColors.error)
+            )
+
+            performanceSignalCard(
+                title: "Stocks / Sale Ratio",
+                value: String(format: "%.2f", stocksToSaleRatio),
+                status: stocksToSaleRatio <= 1.8 ? "Balanced" : (stocksToSaleRatio <= 2.8 ? "Elevated" : "Heavy"),
+                benchmark: "Target ≤ 1.80",
+                normalizedScore: min(max(stocksToSaleRatio / 3.6, 0), 1),
+                higherIsBetter: false,
+                tone: stocksToSaleRatio <= 1.8 ? AppColors.success : (stocksToSaleRatio <= 2.8 ? AppColors.warning : AppColors.error)
+            )
+        }
+    }
+
+    private func performanceSignalCard(
+        title: String,
+        value: String,
+        status: String,
+        benchmark: String,
+        normalizedScore: Double,
+        higherIsBetter: Bool,
+        tone: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(AppColors.textPrimaryDark)
+                Spacer()
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(tone)
+                        .frame(width: 6, height: 6)
+                    Text(status.uppercased())
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
+            }
+
+            Text(value)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(AppColors.textPrimaryDark)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            GeometryReader { proxy in
+                let clamped = min(max(normalizedScore, 0), 1)
+                let fillWidth = higherIsBetter ? clamped : (1 - clamped)
+
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(AppColors.textPrimaryDark.opacity(0.26))
+                        .frame(height: 5)
+
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(tone.opacity(0.95))
+                        .frame(width: max(6, proxy.size.width * fillWidth), height: 5)
+                }
+            }
+            .frame(height: 5)
+
+            Text(benchmark)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(AppColors.textPrimaryDark)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+        .liquidShadow(LiquidShadow.subtle)
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .tracking(2.5)
+            .foregroundColor(AppColors.textPrimaryDark)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1218,19 +1710,82 @@ private struct DashboardInventoryInsightsSheet: View {
         }
     }
 
-    private var detailedUnitsSeries: [Double] {
+    private enum InventoryTrendBucket {
+        case day
+        case week
+        case month
+    }
+
+    private var detailedInventoryBucket: InventoryTrendBucket {
+        switch selectedRange {
+        case .sevenDays, .thirtyDays:
+            return .day
+        case .ninetyDays:
+            return .week
+        case .sixMonths:
+            return .month
+        case .custom:
+            let days = max(Calendar.current.dateComponents([.day], from: dateRange.start, to: dateRange.end).day ?? 0, 0)
+            if days > 120 { return .month }
+            if days > 45 { return .week }
+            return .day
+        }
+    }
+
+    private var detailedInventoryPointLimit: Int {
+        switch detailedInventoryBucket {
+        case .day:
+            switch selectedRange {
+            case .sevenDays:
+                return 7
+            case .thirtyDays:
+                return 30
+            case .custom:
+                let days = max((Calendar.current.dateComponents([.day], from: dateRange.start, to: dateRange.end).day ?? 0) + 1, 1)
+                return min(days, 45)
+            case .ninetyDays, .sixMonths:
+                return 30
+            }
+        case .week:
+            return 13
+        case .month:
+            return 6
+        }
+    }
+
+    private var detailedInventoryPoints: [(date: Date, value: Double)] {
         guard let snapshot else { return [] }
         let orderLookup = Dictionary(uniqueKeysWithValues: filteredOrders.map { ($0.id, $0) })
         let filteredItems = snapshot.orderItems.filter { orderLookup[$0.orderId] != nil }
         let grouped = Dictionary(grouping: filteredItems) { item in
             let orderDate = orderLookup[item.orderId]?.createdAt ?? Date()
-            return bucketDayString(orderDate)
+            return inventoryBucketStartDate(for: orderDate)
         }
         let sortedKeys = grouped.keys.sorted()
-        let totals = sortedKeys.map { key in
-            grouped[key]?.reduce(0) { $0 + Double($1.quantity) } ?? 0
+        let points = sortedKeys.map { key in
+            (date: key, value: grouped[key]?.reduce(0) { $0 + Double($1.quantity) } ?? 0)
         }
-        return Array(totals.suffix(14))
+        return Array(points.suffix(detailedInventoryPointLimit))
+    }
+
+    private var detailedUnitsSeries: [Double] {
+        detailedInventoryPoints.map(\.value)
+    }
+
+    private var latestInventoryPoint: (date: Date, value: Double)? {
+        detailedInventoryPoints.last
+    }
+
+    private var previousInventoryPoint: (date: Date, value: Double)? {
+        guard detailedInventoryPoints.count > 1 else { return nil }
+        return detailedInventoryPoints[detailedInventoryPoints.count - 2]
+    }
+
+    private var recentInventoryDelta: Double? {
+        guard let latest = latestInventoryPoint?.value,
+              let previous = previousInventoryPoint?.value else { return nil }
+        if previous == 0 { return nil }
+        return (latest - previous) / previous
     }
 
     private var filteredInventoryUnits: Int {
@@ -1244,6 +1799,10 @@ private struct DashboardInventoryInsightsSheet: View {
         let sold = detailedUnitsSeries.reduce(0, +)
         let onHand = Double(max(filteredInventoryUnits, 0))
         return sold / max(sold + onHand, 1)
+    }
+
+    private var detailedUnitsSold: Int {
+        Int(detailedUnitsSeries.reduce(0, +))
     }
 
     private var dateRange: (start: Date, end: Date) {
@@ -1263,39 +1822,71 @@ private struct DashboardInventoryInsightsSheet: View {
         }
     }
 
+    private var monthlySellThroughPoints: [(date: Date, value: Double)] {
+        let calendar = Calendar.current
+        let now = Date()
+        let values = monthlySellThroughTrend.map { min(max($0, 0), 1) }
+        let count = values.count
+
+        return values.enumerated().map { index, value in
+            let offset = (count - 1) - index
+            let date = calendar.date(byAdding: .month, value: -offset, to: now) ?? now
+            return (date: date, value: value)
+        }
+    }
+
+    private var monthlySellThroughAverage: Double {
+        guard !monthlySellThroughTrend.isEmpty else { return 0 }
+        let normalized = monthlySellThroughTrend.map { min(max($0, 0), 1) }
+        return normalized.reduce(0, +) / Double(normalized.count)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.systemGroupedBackground).ignoresSafeArea()
+                AppColors.backgroundPrimary.ignoresSafeArea()
+                LinearGradient(
+                    colors: [AppColors.backgroundPrimary, AppColors.secondary.opacity(0.06), AppColors.backgroundPrimary],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 14) {
-                        trendCard(
-                            title: "Sell Through (6 Months)",
-                            subtitle: "Inventory conversion trend",
-                            values: monthlySellThroughTrend.map { min(max($0, 0), 1) },
-                            accent: AppColors.secondary
+                        inventoryOverviewTrendChart
+
+                        summaryStrip(
+                            title: "Current Selection",
+                            stats: [
+                                ("Units Sold", "\(detailedUnitsSold)", AppColors.secondary),
+                                ("On Hand", "\(filteredInventoryUnits)", AppColors.info),
+                                ("Sell Through", percent(filteredSellThrough), AppColors.success)
+                            ]
                         )
 
-                        insightCard(title: "Inventory Turnover Ratio", value: String(format: "%.2f", inventoryTurnoverRatio), tone: AppColors.info)
-                        insightCard(title: "Sell Through Rate", value: percent(sellThroughRate), tone: AppColors.success)
-                        insightCard(
-                            title: "Customer Acquisition (Visited, No Purchase)",
-                            value: percent(customerAcquisitionNoPurchaseRate),
-                            tone: customerAcquisitionNoPurchaseRate > 0.40 ? AppColors.error : AppColors.warning
-                        )
-                        insightCard(title: "After Sales Losses (Warranty/Defects)", value: currency(afterSalesLosses), tone: AppColors.error)
+                        inventoryScopeHintCard
+
+                        sectionLabel("INVENTORY SIGNALS")
+                        inventorySignalsGrid
+
+                        sectionLabel("DETAILED BREAKDOWN")
                         detailedGraphCard
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 14)
                 }
             }
+            .animation(.easeInOut(duration: 0.25), value: selectedRange)
+            .animation(.easeInOut(duration: 0.25), value: selectedStoreId)
             .navigationTitle("Inventory Insights")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Close") { dismiss() }
                         .foregroundColor(AppColors.accent)
+                        .padding(.horizontal, AppSpacing.md)
+                        .padding(.vertical, AppSpacing.xs)
+                        .liquidGlass(config: .ultraThin, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.control)
                 }
             }
         }
@@ -1313,15 +1904,15 @@ private struct DashboardInventoryInsightsSheet: View {
     }
 
     private var detailedGraphCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             Text("Store & Date Specific")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.primary)
+                .font(AppTypography.heading3)
+                .foregroundColor(AppColors.textPrimaryDark)
 
             if snapshot == nil {
                 Text("Run live sync to enable per-store detailed graph.")
-                    .font(.system(size: 11, weight: .light))
-                    .foregroundColor(.secondary)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textPrimaryDark)
             } else {
                 storePicker
                 rangePicker
@@ -1329,18 +1920,194 @@ private struct DashboardInventoryInsightsSheet: View {
                     customDatePickers
                 }
 
-                trendCard(
-                    title: "Detailed Inventory Movement",
-                    subtitle: "Sell Through \(percent(filteredSellThrough)) · On-hand \(filteredInventoryUnits) units",
-                    values: normalized(detailedUnitsSeries),
-                    accent: AppColors.secondary
-                )
+                if detailedUnitsSeries.isEmpty {
+                    Text("No inventory movement in the selected range.")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 20)
+                        .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundPrimary, cornerRadius: SharpCorners.control)
+                } else {
+                    detailedInventoryTrendChart
+                }
             }
         }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+        .padding(18)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+        .liquidShadow(LiquidShadow.medium)
+    }
+
+    private var inventoryOverviewTrendChart: some View {
+        let points = monthlySellThroughPoints
+        let maxValue = max(points.map(\.value).max() ?? 1, 1)
+
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Sell Through (6 Months)")
+                        .font(AppTypography.heading3)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("Inventory conversion trend")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
+                Spacer()
+                Text("Avg \(percent(monthlySellThroughAverage))")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(AppColors.secondary)
+            }
+
+            Chart {
+                ForEach(Array(points.enumerated()), id: \.offset) { _, point in
+                    AreaMark(
+                        x: .value("Month", point.date),
+                        y: .value("Sell Through", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [AppColors.secondary.opacity(0.28), AppColors.secondary.opacity(0.05)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                    LineMark(
+                        x: .value("Month", point.date),
+                        y: .value("Sell Through", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 2.2))
+                    .foregroundStyle(AppColors.secondary)
+
+                    PointMark(
+                        x: .value("Month", point.date),
+                        y: .value("Sell Through", point.value)
+                    )
+                    .symbolSize(26)
+                    .foregroundStyle(AppColors.secondary.opacity(0.95))
+                }
+
+                RuleMark(y: .value("Average", monthlySellThroughAverage))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                    .foregroundStyle(AppColors.info.opacity(0.9))
+                    .annotation(position: .topLeading) {
+                        Text("Average")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(AppColors.info)
+                    }
+            }
+            .frame(height: 210)
+            .chartYScale(domain: 0...(min(maxValue * 1.15, 1.0)))
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 6)) {
+                    AxisGridLine().foregroundStyle(AppColors.textPrimaryDark.opacity(0.20))
+                    AxisValueLabel(format: .dateTime.month(.abbreviated))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimaryDark)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) {
+                    AxisGridLine().foregroundStyle(AppColors.textPrimaryDark.opacity(0.20))
+                    AxisValueLabel(format: FloatingPointFormatStyle<Double>.Percent().precision(.fractionLength(0)))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimaryDark)
+                }
+            }
+        }
+        .padding(18)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+        .liquidShadow(LiquidShadow.medium)
+    }
+
+    private var detailedInventoryTrendChart: some View {
+        let points = detailedInventoryPoints
+        let maxValue = max(points.map(\.value).max() ?? 1, 1)
+        let latestLabel = latestInventoryPoint.map { displayDetailedInventoryBucketLabel(fromDate: $0.date) } ?? "-"
+        let latestValue = latestInventoryPoint?.value ?? 0
+        let deltaText = recentInventoryDelta.map { String(format: "%+.1f%% vs previous %@", $0 * 100, detailedInventoryBucketLabel) } ?? "Trend baseline unavailable"
+        let deltaTone: Color = (recentInventoryDelta ?? 0) >= 0 ? AppColors.success : AppColors.error
+
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Detailed Inventory Trend")
+                        .font(AppTypography.heading3)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("Sell Through \(percent(filteredSellThrough)) · On-hand \(filteredInventoryUnits) units")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(latestLabel)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("\(Int(latestValue)) units")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppColors.secondary)
+                }
+            }
+
+            Chart {
+                ForEach(Array(points.enumerated()), id: \.offset) { _, point in
+                    AreaMark(
+                        x: .value("Date", point.date),
+                        y: .value("Units", point.value)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [AppColors.secondary.opacity(0.28), AppColors.secondary.opacity(0.04)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                    LineMark(
+                        x: .value("Date", point.date),
+                        y: .value("Units", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .foregroundStyle(AppColors.secondary)
+                }
+
+                if let latestInventoryPoint {
+                    PointMark(
+                        x: .value("Latest", latestInventoryPoint.date),
+                        y: .value("Latest Units", latestInventoryPoint.value)
+                    )
+                    .symbolSize(42)
+                    .foregroundStyle(AppColors.secondary)
+                }
+            }
+            .frame(height: 200)
+            .chartYScale(domain: 0...(maxValue * 1.15))
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 4)) {
+                    AxisGridLine().foregroundStyle(AppColors.textPrimaryDark.opacity(0.20))
+                    AxisValueLabel(format: detailedInventoryXAxisFormat)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimaryDark)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) {
+                    AxisGridLine().foregroundStyle(AppColors.textPrimaryDark.opacity(0.20))
+                    AxisValueLabel()
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimaryDark)
+                }
+            }
+
+            Text(deltaText)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(deltaTone)
+        }
+        .padding(18)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+        .liquidShadow(LiquidShadow.medium)
     }
 
     private var storePicker: some View {
@@ -1361,8 +2128,7 @@ private struct DashboardInventoryInsightsSheet: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundPrimary, cornerRadius: SharpCorners.control)
         }
     }
 
@@ -1373,6 +2139,8 @@ private struct DashboardInventoryInsightsSheet: View {
             }
         }
         .pickerStyle(.segmented)
+        .padding(4)
+        .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundTertiary.opacity(0.65), cornerRadius: SharpCorners.control)
     }
 
     private var customDatePickers: some View {
@@ -1382,6 +2150,8 @@ private struct DashboardInventoryInsightsSheet: View {
             DatePicker("To", selection: $customEnd, displayedComponents: .date)
                 .labelsHidden()
         }
+        .padding(AppSpacing.xs)
+        .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundPrimary, cornerRadius: SharpCorners.control)
     }
 
     private var selectedStoreLabel: String {
@@ -1389,16 +2159,183 @@ private struct DashboardInventoryInsightsSheet: View {
         return stores.first(where: { $0.id == selectedStoreId })?.name ?? "Selected Store"
     }
 
-    private func normalized(_ values: [Double]) -> [Double] {
-        let maxValue = values.max() ?? 1
-        if maxValue == 0 { return Array(repeating: 0, count: values.count) }
-        return values.map { $0 / maxValue }
+    private func inventoryBucketStartDate(for date: Date) -> Date {
+        let calendar = Calendar.current
+        switch detailedInventoryBucket {
+        case .day:
+            return calendar.startOfDay(for: date)
+        case .week:
+            let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+            return calendar.date(from: components).map { calendar.startOfDay(for: $0) } ?? calendar.startOfDay(for: date)
+        case .month:
+            let components = calendar.dateComponents([.year, .month], from: date)
+            return calendar.date(from: components).map { calendar.startOfDay(for: $0) } ?? calendar.startOfDay(for: date)
+        }
     }
 
-    private func bucketDayString(_ date: Date) -> String {
+    private var detailedInventoryBucketLabel: String {
+        switch detailedInventoryBucket {
+        case .day: return "day"
+        case .week: return "week"
+        case .month: return "month"
+        }
+    }
+
+    private var detailedInventoryXAxisFormat: Date.FormatStyle {
+        switch detailedInventoryBucket {
+        case .day:
+            return .dateTime.day().month(.abbreviated)
+        case .week:
+            return .dateTime.day().month(.abbreviated)
+        case .month:
+            return .dateTime.month(.abbreviated)
+        }
+    }
+
+    private func displayDetailedInventoryBucketLabel(fromDate date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        switch detailedInventoryBucket {
+        case .day:
+            formatter.dateFormat = "dd MMM"
+            return formatter.string(from: date)
+        case .week:
+            formatter.dateFormat = "dd MMM"
+            return "Wk of \(formatter.string(from: date))"
+        case .month:
+            formatter.dateFormat = "MMM yyyy"
+            return formatter.string(from: date)
+        }
+    }
+
+    private var inventoryScopeHintCard: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(AppColors.secondary)
+
+            Text("Use Store and Date filters in Detailed Breakdown to inspect inventory flow by period.")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(AppColors.textPrimaryDark)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.control)
+    }
+
+    private var inventorySignalsGrid: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10)
+            ],
+            spacing: 10
+        ) {
+            inventorySignalCard(
+                title: "Turnover Ratio",
+                value: String(format: "%.2f", inventoryTurnoverRatio),
+                status: inventoryTurnoverRatio >= 1.20 ? "Strong" : (inventoryTurnoverRatio >= 0.80 ? "Moderate" : "Weak"),
+                benchmark: "Target ≥ 1.20",
+                normalizedScore: min(max(inventoryTurnoverRatio / 2.0, 0), 1),
+                higherIsBetter: true,
+                tone: inventoryTurnoverRatio >= 1.20 ? AppColors.success : (inventoryTurnoverRatio >= 0.80 ? AppColors.warning : AppColors.error)
+            )
+
+            inventorySignalCard(
+                title: "Sell Through",
+                value: percent(sellThroughRate),
+                status: sellThroughRate >= 0.55 ? "Healthy" : (sellThroughRate >= 0.35 ? "Watch" : "Critical"),
+                benchmark: "Target ≥ 55%",
+                normalizedScore: min(max(sellThroughRate, 0), 1),
+                higherIsBetter: true,
+                tone: sellThroughRate >= 0.55 ? AppColors.success : (sellThroughRate >= 0.35 ? AppColors.warning : AppColors.error)
+            )
+
+            inventorySignalCard(
+                title: "No-Purchase Rate",
+                value: percent(customerAcquisitionNoPurchaseRate),
+                status: customerAcquisitionNoPurchaseRate <= 0.25 ? "Healthy" : (customerAcquisitionNoPurchaseRate <= 0.40 ? "Watch" : "Critical"),
+                benchmark: "Target ≤ 25%",
+                normalizedScore: min(max(customerAcquisitionNoPurchaseRate / 0.60, 0), 1),
+                higherIsBetter: false,
+                tone: customerAcquisitionNoPurchaseRate <= 0.25 ? AppColors.success : (customerAcquisitionNoPurchaseRate <= 0.40 ? AppColors.warning : AppColors.error)
+            )
+
+            inventorySignalCard(
+                title: "After-Sales Losses",
+                value: currency(afterSalesLosses),
+                status: afterSalesLosses <= 25000 ? "Contained" : (afterSalesLosses <= 75000 ? "Elevated" : "Critical"),
+                benchmark: "Target ≤ ₹25k",
+                normalizedScore: min(max(afterSalesLosses / 100000, 0), 1),
+                higherIsBetter: false,
+                tone: afterSalesLosses <= 25000 ? AppColors.success : (afterSalesLosses <= 75000 ? AppColors.warning : AppColors.error)
+            )
+        }
+    }
+
+    private func inventorySignalCard(
+        title: String,
+        value: String,
+        status: String,
+        benchmark: String,
+        normalizedScore: Double,
+        higherIsBetter: Bool,
+        tone: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(AppColors.textPrimaryDark)
+                Spacer()
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(tone)
+                        .frame(width: 6, height: 6)
+                    Text(status.uppercased())
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
+            }
+
+            Text(value)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(AppColors.textPrimaryDark)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            GeometryReader { proxy in
+                let clamped = min(max(normalizedScore, 0), 1)
+                let fillWidth = higherIsBetter ? clamped : (1 - clamped)
+
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(AppColors.textPrimaryDark.opacity(0.26))
+                        .frame(height: 5)
+
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(tone.opacity(0.95))
+                        .frame(width: max(6, proxy.size.width * fillWidth), height: 5)
+                }
+            }
+            .frame(height: 5)
+
+            Text(benchmark)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(AppColors.textPrimaryDark)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+        .liquidShadow(LiquidShadow.subtle)
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .tracking(2.5)
+            .foregroundColor(AppColors.textPrimaryDark)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1413,7 +2350,7 @@ private func trendCard(title: String, subtitle: String, values: [Double], accent
 
         HStack(alignment: .bottom, spacing: 8) {
             ForEach(Array(values.enumerated()), id: \.offset) { _, value in
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [accent.opacity(0.95), accent.opacity(0.70)],
@@ -1429,19 +2366,39 @@ private func trendCard(title: String, subtitle: String, values: [Double], accent
         .padding(.top, 2)
     }
     .padding(18)
-    .background(
-        LinearGradient(
-            colors: [AppColors.backgroundSecondary, AppColors.backgroundSecondary.opacity(0.98)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    )
-    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-    .overlay(
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .stroke(AppColors.textPrimaryDark.opacity(0.08), lineWidth: 0.8)
-    )
-    .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 6)
+    .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+    .liquidShadow(LiquidShadow.medium)
+}
+
+private func summaryStrip(title: String, stats: [(label: String, value: String, tone: Color)]) -> some View {
+    VStack(alignment: .leading, spacing: 10) {
+        Text(title)
+            .font(.system(size: 9, weight: .semibold))
+            .tracking(2.5)
+            .foregroundColor(AppColors.textSecondaryDark.opacity(0.8))
+
+        HStack(spacing: 10) {
+            ForEach(Array(stats.enumerated()), id: \.offset) { _, stat in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(stat.label)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .lineLimit(1)
+                    Text(stat.value)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppColors.textPrimaryDark)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 10)
+                .liquidGlass(config: .thin, backgroundColor: stat.tone.opacity(0.08), cornerRadius: SharpCorners.control)
+            }
+        }
+    }
+    .padding(14)
+    .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
+    .liquidShadow(LiquidShadow.subtle)
 }
 
 private func insightCard(title: String, value: String, tone: Color) -> some View {
@@ -1472,21 +2429,14 @@ private func insightCard(title: String, value: String, tone: Color) -> some View
     }
     .padding(18)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(AppColors.backgroundSecondary)
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(AppColors.textPrimaryDark.opacity(0.08), lineWidth: 0.8)
-            )
-    )
+    .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
     .overlay(alignment: .leading) {
         RoundedRectangle(cornerRadius: 3, style: .continuous)
             .fill(tone.opacity(0.75))
             .frame(width: 4, height: 54)
             .padding(.leading, 6)
     }
-    .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 6)
+    .liquidShadow(LiquidShadow.medium)
 }
 
 // MARK: - Liquid Press Button Style
@@ -1496,7 +2446,7 @@ struct LiquidPressButtonStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.93 : 1.0)
             .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
+            .animation(.easeInOut(duration: 0.25), value: configuration.isPressed)
     }
 }
 
@@ -1578,8 +2528,8 @@ struct CreateStoreSheet: View {
                                                 .padding(.horizontal, 16)
                                                 .padding(.vertical, 9)
                                                 .background(storeType == type ? AppColors.accent : Color(.secondarySystemGroupedBackground))
-                                                .clipShape(Capsule())
-                                                .overlay(Capsule().strokeBorder(storeType == type ? Color.clear : Color(.systemGray4), lineWidth: 1))
+                                                .clipShape(RoundedRectangle(cornerRadius: SharpCorners.control, style: .continuous))
+                                                .overlay(RoundedRectangle(cornerRadius: SharpCorners.control, style: .continuous).strokeBorder(storeType == type ? Color.clear : Color(.systemGray4), lineWidth: 1))
                                         }
                                         .buttonStyle(PlainButtonStyle())
                                     }
@@ -1786,8 +2736,8 @@ struct CreatePromotionSheet: View {
                                                 .padding(.horizontal, 16)
                                                 .padding(.vertical, 9)
                                                 .background(scope == s ? AppColors.accent : Color(.secondarySystemGroupedBackground))
-                                                .clipShape(Capsule())
-                                                .overlay(Capsule().strokeBorder(scope == s ? Color.clear : Color(.systemGray4), lineWidth: 1))
+                                                .clipShape(RoundedRectangle(cornerRadius: SharpCorners.control, style: .continuous))
+                                                .overlay(RoundedRectangle(cornerRadius: SharpCorners.control, style: .continuous).strokeBorder(scope == s ? Color.clear : Color(.systemGray4), lineWidth: 1))
                                         }
                                         .buttonStyle(.plain)
                                     }
@@ -1864,8 +2814,8 @@ struct CreatePromotionSheet: View {
                                                 .padding(.horizontal, 16)
                                                 .padding(.vertical, 9)
                                                 .background(discountType == dt ? AppColors.accent : Color(.secondarySystemGroupedBackground))
-                                                .clipShape(Capsule())
-                                                .overlay(Capsule().strokeBorder(discountType == dt ? Color.clear : Color(.systemGray4), lineWidth: 1))
+                                                .clipShape(RoundedRectangle(cornerRadius: SharpCorners.control, style: .continuous))
+                                                .overlay(RoundedRectangle(cornerRadius: SharpCorners.control, style: .continuous).strokeBorder(discountType == dt ? Color.clear : Color(.systemGray4), lineWidth: 1))
                                         }
                                         .buttonStyle(.plain)
                                     }
@@ -1915,7 +2865,7 @@ struct CreatePromotionSheet: View {
                                 .padding(.vertical, 14)
                             }
                             .background(Color(.secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: SharpCorners.panel, style: .continuous))
                             .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
                             .padding(.horizontal, 20)
                         }
@@ -1937,7 +2887,7 @@ struct CreatePromotionSheet: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 14)
                         .background(Color(.secondarySystemGroupedBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: SharpCorners.panel, style: .continuous))
                         .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
                         .padding(.horizontal, 20)
 
