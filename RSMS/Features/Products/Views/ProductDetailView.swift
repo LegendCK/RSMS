@@ -1303,10 +1303,7 @@ private struct AdminProductManageSheet: View {
             .navigationTitle("Manage Product")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundColor(AppColors.accent)
-                }
+                // Removed cancel/cross button as per design update
             }
             .onAppear {
                 name = product.name

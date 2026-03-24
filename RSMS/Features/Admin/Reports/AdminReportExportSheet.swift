@@ -74,9 +74,7 @@ struct AdminReportExportSheet: View {
             .navigationTitle("Export")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") { dismiss() }
-                }
+                // Removed cancel/close button as per design update
             }
         }
     }

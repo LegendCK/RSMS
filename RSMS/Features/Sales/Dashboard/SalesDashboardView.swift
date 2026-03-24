@@ -10,7 +10,7 @@ import SwiftData
 
 struct SalesDashboardView: View {
     @Environment(AppState.self) private var appState
-    @State private var showAfterSales = false
+    @State private var activeSheet: ActiveSalesSheet?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -60,11 +60,29 @@ struct SalesDashboardView: View {
                         columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
                         spacing: 12
                     ) {
-                        quickAction(title: "New Client", icon: "person.badge.plus", color: AppColors.accent)
-                        quickAction(title: "Book Appointment", icon: "calendar.badge.plus", color: AppColors.info)
-                        quickAction(title: "Start Sale", icon: "bag.badge.plus", color: AppColors.accent)
                         Button {
-                            showAfterSales = true
+                            activeSheet = .newClient
+                        } label: {
+                            quickAction(title: "New Client", icon: "person.badge.plus", color: AppColors.accent)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            activeSheet = .bookAppointment
+                        } label: {
+                            quickAction(title: "Book Appointment", icon: "calendar.badge.plus", color: AppColors.info)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            activeSheet = .startSale
+                        } label: {
+                            quickAction(title: "Start Sale", icon: "bag.badge.plus", color: AppColors.accent)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            activeSheet = .serviceTicket
                         } label: {
                             quickAction(title: "Service Ticket", icon: "wrench.and.screwdriver", color: AppColors.secondary)
                         }
@@ -109,8 +127,19 @@ struct SalesDashboardView: View {
                     .foregroundColor(.primary)
             }
         }
-        .sheet(isPresented: $showAfterSales) {
-            SalesAfterSalesView()
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .newClient:
+                NavigationStack {
+                    CreateClientProfileView()
+                }
+            case .bookAppointment:
+                CreateAppointmentView()
+            case .startSale:
+                SACatalogView()
+            case .serviceTicket:
+                SalesAfterSalesView()
+            }
         }
     }
 
@@ -169,4 +198,13 @@ struct SalesDashboardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
     }
+}
+
+private enum ActiveSalesSheet: String, Identifiable {
+    case newClient
+    case bookAppointment
+    case startSale
+    case serviceTicket
+
+    var id: String { rawValue }
 }
