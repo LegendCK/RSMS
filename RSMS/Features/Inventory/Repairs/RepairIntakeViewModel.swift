@@ -91,6 +91,7 @@ final class RepairIntakeViewModel {
                 type:          selectedType.rawValue,
                 status:        RepairStatus.intake.rawValue,
                 conditionNotes: conditionNotes.trimmingCharacters(in: .whitespaces),
+                intakePhotos:  nil,
                 estimatedCost: parsedCost,
                 currency:      "USD",
                 slaDueDate:    slaString,

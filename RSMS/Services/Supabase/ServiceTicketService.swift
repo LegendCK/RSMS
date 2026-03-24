@@ -44,6 +44,8 @@ protocol ServiceTicketServiceProtocol: Sendable {
     func updateStatus(ticketId: UUID, status: String) async throws
     func updateTicket(ticketId: UUID, patch: ServiceTicketUpdatePatch) async throws -> ServiceTicketDTO
     func resolveProductId(forBarcode barcode: String) async throws -> UUID
+    func uploadPhotos(images: [Data], ticketId: UUID) async throws -> [String]
+    func updateIntakePhotos(ticketId: UUID, photoPaths: [String]) async throws
 }
 
 // MARK: - Implementation
@@ -166,6 +168,7 @@ final class ServiceTicketService: ServiceTicketServiceProtocol, @unchecked Senda
             type: RepairType.warrantyClaim.rawValue,
             status: RepairStatus.intake.rawValue,
             conditionNotes: "Customer exchange request – \(itemName) (Qty \(quantity))",
+            intakePhotos: nil,
             estimatedCost: nil,
             currency: "INR",
             slaDueDate: nil,
@@ -263,6 +266,52 @@ final class ServiceTicketService: ServiceTicketServiceProtocol, @unchecked Senda
             .execute()
             .value
         return ticket
+    }
+
+    // MARK: - Barcode → Product ID Resolution
+
+    // MARK: - Photo Upload
+
+    /// Uploads an image to Supabase Storage and returns the public URL path.
+    /// Images are stored under `service-ticket-photos/{ticketId}/{filename}`.
+    func uploadPhoto(imageData: Data, ticketId: UUID, index: Int) async throws -> String {
+        let fileName = "\(ticketId.uuidString)/photo_\(index)_\(Int(Date().timeIntervalSince1970)).jpg"
+        let bucket = "service-ticket-photos"
+
+        try await client.storage
+            .from(bucket)
+            .upload(
+                path: fileName,
+                file: imageData,
+                options: .init(contentType: "image/jpeg", upsert: true)
+            )
+
+        return "\(bucket)/\(fileName)"
+    }
+
+    /// Uploads multiple photos and returns their storage paths.
+    func uploadPhotos(images: [Data], ticketId: UUID) async throws -> [String] {
+        var paths: [String] = []
+        for (index, imageData) in images.enumerated() {
+            let path = try await uploadPhoto(imageData: imageData, ticketId: ticketId, index: index)
+            paths.append(path)
+        }
+        return paths
+    }
+
+    /// Updates the intake_photos array on an existing ticket.
+    func updateIntakePhotos(ticketId: UUID, photoPaths: [String]) async throws {
+        struct PhotoPatch: Encodable {
+            let intakePhotos: [String]
+            enum CodingKeys: String, CodingKey {
+                case intakePhotos = "intake_photos"
+            }
+        }
+        try await client
+            .from("service_tickets")
+            .update(PhotoPatch(intakePhotos: photoPaths))
+            .eq("id", value: ticketId.uuidString)
+            .execute()
     }
 
     // MARK: - Barcode → Product ID Resolution

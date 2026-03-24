@@ -59,6 +59,9 @@ struct ProfileView: View {
                         NavigationLink(destination: MyExchangeRequestsView()) {
                             Label("My Exchange Requests", systemImage: "arrow.triangle.2.circlepath")
                         }
+                        NavigationLink(destination: CustomerServiceTicketsView()) {
+                            Label("My Service Tickets", systemImage: "wrench.and.screwdriver")
+                        }
                         NavigationLink(destination: PaymentMethodsView()) {
                             Label("Payment Methods", systemImage: "creditcard")
                         }

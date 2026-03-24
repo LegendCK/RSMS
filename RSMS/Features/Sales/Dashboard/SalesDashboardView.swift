@@ -11,6 +11,8 @@ import SwiftData
 struct SalesDashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var showAfterSales = false
+    @State private var showCreateTicket = false
+    @State private var showTicketList = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -64,9 +66,21 @@ struct SalesDashboardView: View {
                         quickAction(title: "Book Appointment", icon: "calendar.badge.plus", color: AppColors.info)
                         quickAction(title: "Start Sale", icon: "bag.badge.plus", color: AppColors.accent)
                         Button {
+                            showCreateTicket = true
+                        } label: {
+                            quickAction(title: "New Ticket", icon: "doc.badge.plus", color: AppColors.accent)
+                        }
+                        .buttonStyle(.plain)
+                        Button {
+                            showTicketList = true
+                        } label: {
+                            quickAction(title: "All Tickets", icon: "wrench.and.screwdriver", color: AppColors.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        Button {
                             showAfterSales = true
                         } label: {
-                            quickAction(title: "Service Ticket", icon: "wrench.and.screwdriver", color: AppColors.secondary)
+                            quickAction(title: "Warranty Check", icon: "checkmark.shield", color: AppColors.info)
                         }
                         .buttonStyle(.plain)
                     }
@@ -111,6 +125,14 @@ struct SalesDashboardView: View {
         }
         .sheet(isPresented: $showAfterSales) {
             SalesAfterSalesView()
+        }
+        .sheet(isPresented: $showCreateTicket) {
+            NavigationStack {
+                CreateServiceTicketView()
+            }
+        }
+        .navigationDestination(isPresented: $showTicketList) {
+            ServiceTicketListView()
         }
     }
 
