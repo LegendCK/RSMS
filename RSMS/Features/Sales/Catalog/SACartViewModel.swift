@@ -95,8 +95,8 @@ final class SACartViewModel {
     private func fmt(_ v: Double) -> String {
         let f = NumberFormatter()
         f.numberStyle  = .currency
-        f.currencyCode = "USD"
-        return f.string(from: NSNumber(value: v)) ?? "$\(v)"
+        f.currencyCode = "INR"
+        return f.string(from: NSNumber(value: v)) ?? "₹\(v)"
     }
 
     // MARK: - Cart mutations

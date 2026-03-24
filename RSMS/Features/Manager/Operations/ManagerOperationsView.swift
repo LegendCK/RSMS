@@ -23,12 +23,17 @@ struct ManagerOperationsView: View {
     @State private var liveDiscrepancies: [InventoryDiscrepancyDTO] = []
     @State private var isLoadingDiscrepancies = false
     @State private var discrepancyLoadError: String? = nil
+    @State private var selectedDiscrepancyForReview: InventoryDiscrepancyDTO? = nil
 
     // Live events data
     @State private var liveEvents: [EventDTO] = []
     @State private var isLoadingEvents = false
     @State private var selectedEventForReport: EventDTO? = nil
+    @State private var eventForEdit: EventDTO? = nil
     @State private var showCreateEvent = false
+
+    // RSVP counts cache keyed by event UUID
+    @State private var rsvpCountsCache: [UUID: RSVPCounts] = [:]
 
     // Live orders data
     @State private var liveOrders: [OrderDTO] = []
@@ -143,6 +148,11 @@ struct ManagerOperationsView: View {
                 Task { await loadLiveEvents() }
             }
         }
+        .sheet(item: $eventForEdit) { event in
+            EditEventSheet(event: event) {
+                Task { await loadLiveEvents() }
+            }
+        }
         .task {
             await loadLiveDiscrepancies()
             await loadLiveEvents()
@@ -158,6 +168,11 @@ struct ManagerOperationsView: View {
                     await loadLiveOrders()
                     await loadLiveEvents()
                 }
+            }
+        }
+        .sheet(item: $selectedDiscrepancyForReview) { disc in
+            DiscrepancyDetailSheet(discrepancy: disc) { _ in
+                Task { await loadLiveDiscrepancies() }
             }
         }
     }
@@ -426,10 +441,18 @@ struct ManagerOperationsView: View {
                     .font(AppTypography.caption).foregroundColor(AppColors.neutral500)
                 Spacer()
                 if item.status == "pending" && appState.currentUserRole == .boutiqueManager {
-                    Text("Review in Inventory → Requests")
-                        .font(AppTypography.nano)
-                        .foregroundColor(AppColors.accent)
-                        .italic()
+                    Button {
+                        selectedDiscrepancyForReview = item
+                    } label: {
+                        Text("Review")
+                            .font(AppTypography.nano)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(AppColors.accent)
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -521,6 +544,15 @@ struct ManagerOperationsView: View {
                     .font(AppTypography.nano).foregroundColor(sc)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(sc.opacity(0.12)).cornerRadius(4)
+                // Edit/Cancel button — pencil for editable, xmark for In Progress
+                if event.isCancellable {
+                    Button { eventForEdit = event } label: {
+                        Image(systemName: event.isEditable ? "pencil.circle" : "xmark.circle")
+                            .font(.system(size: 18, weight: .light))
+                            .foregroundColor(event.isEditable ? AppColors.accent : AppColors.error)
+                    }
+                    .padding(.leading, AppSpacing.xs)
+                }
             }
             Divider().background(AppColors.border)
             HStack(spacing: AppSpacing.md) {
@@ -534,6 +566,30 @@ struct ManagerOperationsView: View {
                 Label(event.relatedCategory, systemImage: "tag")
                     .font(AppTypography.micro).foregroundColor(AppColors.textSecondaryDark)
             }
+
+            // Invited segment + RSVP counts
+            if let seg = event.invitedSegment {
+                let counts = rsvpCountsCache[event.id]
+                HStack(spacing: AppSpacing.sm) {
+                    Label(seg.capitalized, systemImage: "person.2.fill")
+                        .font(AppTypography.micro)
+                        .foregroundColor(AppColors.secondary)
+                    Spacer()
+                    if let c = counts {
+                        HStack(spacing: 6) {
+                            rsvpPill(value: c.yes,     label: "Yes",     color: AppColors.success)
+                            rsvpPill(value: c.no,      label: "No",      color: AppColors.error)
+                            rsvpPill(value: c.pending, label: "Pending", color: AppColors.warning)
+                        }
+                    } else {
+                        ProgressView().scaleEffect(0.7)
+                            .tint(AppColors.accent)
+                            .task { await loadRSVPCounts(for: event) }
+                    }
+                }
+                .padding(.top, AppSpacing.xxs)
+            }
+
             // View Sales Report button
             Button {
                 selectedEventForReport = event
@@ -553,6 +609,28 @@ struct ManagerOperationsView: View {
         .padding(AppSpacing.cardPadding)
         .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
         .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    private func rsvpPill(value: Int, label: String, color: Color) -> some View {
+        HStack(spacing: 2) {
+            Text("\(value)")
+                .font(AppTypography.nano)
+                .fontWeight(.semibold)
+                .foregroundColor(color)
+            Text(label)
+                .font(AppTypography.nano)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(color.opacity(0.10))
+        .cornerRadius(4)
+    }
+
+    private func loadRSVPCounts(for event: EventDTO) async {
+        guard event.invitedSegment != nil else { return }
+        let counts = try? await EventInvitationService.shared.fetchRSVPCounts(eventId: event.id)
+        rsvpCountsCache[event.id] = counts ?? RSVPCounts()
     }
 
     private func loadLiveEvents() async {

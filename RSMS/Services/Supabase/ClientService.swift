@@ -111,7 +111,7 @@ final class ClientService {
         
         // Match multiple VIP segments using 'in' works, but Supabase swift client uses in(column, array)
         return try await query
-            .in("segment", values: ["gold", "vip", "ultra_vip"])
+            .in("segment", values: ["gold", "vip"])
             .order("last_name", ascending: true)
             .execute()
             .value

@@ -38,8 +38,12 @@ final class ScannerViewModel {
 
     private let manager: ScanManager
 
-    init(manager: ScanManager = .shared) {
+    init(manager: ScanManager) {
         self.manager = manager
+    }
+
+    convenience init() {
+        self.init(manager: ScanManager.shared)
     }
 
     // MARK: - Session Control
@@ -140,7 +144,7 @@ final class ScannerViewModel {
                     scanState = .error(scanErr.errorDescription ?? "Unknown error.")
                 }
                 scheduleClearState(after: 4)
-            } catch let error as URLError {
+            } catch _ as URLError {
                 triggerFeedback(.error)
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                     scanState = .error("Network unavailable. Please check your connection.")

@@ -12,6 +12,7 @@ struct WishlistView: View {
     @Query(filter: #Predicate<Product> { $0.isWishlisted == true })
     private var wishlistProducts: [Product]
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         NavigationStack {
@@ -61,6 +62,9 @@ struct WishlistView: View {
                         .font(AppTypography.navTitle)
                         .foregroundColor(AppColors.textPrimaryDark)
                 }
+            }
+            .task {
+                await hydrateFromBackend()
             }
         }
     }
@@ -136,10 +140,7 @@ struct WishlistView: View {
 
             // Remove from wishlist
             Button(action: {
-                withAnimation {
-                    product.isWishlisted = false
-                    try? modelContext.save()
-                }
+                removeFromWishlist(product)
             }) {
                 Image(systemName: "heart.fill")
                     .font(AppTypography.heartIcon)
@@ -149,6 +150,34 @@ struct WishlistView: View {
         .padding(AppSpacing.cardPadding)
         .background(AppColors.backgroundSecondary)
         .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func hydrateFromBackend() async {
+        guard appState.isAuthenticated, !appState.isGuest else { return }
+        do {
+            try await WishlistService.shared.hydrateLocalWishlist(modelContext: modelContext)
+        } catch {
+            print("[WishlistView] Hydration failed: \(error)")
+        }
+    }
+
+    private func removeFromWishlist(_ product: Product) {
+        withAnimation {
+            product.isWishlisted = false
+            try? modelContext.save()
+        }
+
+        guard appState.isAuthenticated, !appState.isGuest else { return }
+
+        Task { @MainActor in
+            do {
+                try await WishlistService.shared.remove(productId: product.id)
+            } catch {
+                product.isWishlisted = true
+                try? modelContext.save()
+                print("[WishlistView] Remove sync failed for \(product.id): \(error)")
+            }
+        }
     }
 }
 

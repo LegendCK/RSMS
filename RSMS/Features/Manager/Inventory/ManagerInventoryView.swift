@@ -1998,7 +1998,7 @@ struct InvDiscrepanciesSubview: View {
 
 // MARK: - Discrepancy Detail Sheet
 
-private struct DiscrepancyDetailSheet: View {
+struct DiscrepancyDetailSheet: View {
     let discrepancy: InventoryDiscrepancyDTO
     let onResolved: (String) -> Void
 

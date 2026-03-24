@@ -822,9 +822,9 @@ struct ManagerDashboardView: View {
     private func currency(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
+        formatter.currencyCode = "INR"
         formatter.maximumFractionDigits = value >= 10_000 ? 0 : 2
-        return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
+        return formatter.string(from: NSNumber(value: value)) ?? "₹\(value)"
     }
 
     private func loadDashboard(forceRefresh: Bool = false) async {

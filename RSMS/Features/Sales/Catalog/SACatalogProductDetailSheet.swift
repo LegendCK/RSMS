@@ -298,8 +298,8 @@ struct SACatalogProductDetailSheet: View {
     private func formattedCurrency(_ value: Double) -> String {
         let f = NumberFormatter()
         f.numberStyle = .currency
-        f.currencyCode = "USD"
-        return f.string(from: NSNumber(value: value)) ?? "$\(value)"
+        f.currencyCode = "INR"
+        return f.string(from: NSNumber(value: value)) ?? "₹\(value)"
     }
 
     private func marginString(price: Double, cost: Double) -> String {

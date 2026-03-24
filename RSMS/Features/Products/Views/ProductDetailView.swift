@@ -121,6 +121,24 @@ struct ProductDetailView: View {
                                  AppColors.error
     }
 
+    private func toggleWishlist() {
+        let targetState = !product.isWishlisted
+        product.isWishlisted = targetState
+        try? modelContext.save()
+
+        guard appState.isAuthenticated, !appState.isGuest else { return }
+
+        Task { @MainActor in
+            do {
+                try await WishlistService.shared.setWishlisted(productId: product.id, isWishlisted: targetState)
+            } catch {
+                product.isWishlisted = !targetState
+                try? modelContext.save()
+                print("[ProductDetailView] Wishlist sync failed for \(product.id): \(error)")
+            }
+        }
+    }
+
     private var cartItemQuantity: Int {
         allCartItems
             .first(where: { $0.customerEmail == appState.currentUserEmail && $0.productId == product.id })?
@@ -229,8 +247,7 @@ struct ProductDetailView: View {
                     HStack(spacing: 16) {
                         Button(action: {
                             withAnimation(.spring(response: 0.3)) {
-                                product.isWishlisted.toggle()
-                                try? modelContext.save()
+                                toggleWishlist()
                             }
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         }) {
