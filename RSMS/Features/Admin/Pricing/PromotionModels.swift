@@ -2,31 +2,23 @@ import Foundation
 import SwiftData
 
 enum PromotionScope: String, Codable, CaseIterable, Identifiable {
-    case product
-    case category
+    case product = "Specific Product"
+    case category = "Category"
+    case storeWide = "Store Wide"
 
     var id: String { rawValue }
 
-    var title: String {
-        switch self {
-        case .product: return "Product"
-        case .category: return "Category"
-        }
-    }
+    var title: String { rawValue }
 }
 
 enum PromotionDiscountType: String, Codable, CaseIterable, Identifiable {
-    case percentage
-    case fixedAmount = "fixed_amount"
+    case percentage = "Percentage"
+    case fixedAmount = "Fixed Amount"
+    case bogo = "BOGO"
 
     var id: String { rawValue }
 
-    var title: String {
-        switch self {
-        case .percentage: return "Percentage"
-        case .fixedAmount: return "Fixed Amount"
-        }
-    }
+    var title: String { rawValue }
 }
 
 @Model
