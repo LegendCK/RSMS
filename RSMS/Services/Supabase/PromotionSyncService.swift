@@ -20,7 +20,7 @@ final class PromotionSyncService {
             }
         }
 
-        let remoteIDs = Set(remotePromotions.map(\.id))
+        let remoteIDs = Set(remotePromotions.map { $0.id })
         for local in locals where !remoteIDs.contains(local.id) {
             modelContext.delete(local)
             localById.removeValue(forKey: local.id)
@@ -30,10 +30,10 @@ final class PromotionSyncService {
             if let local = localById[dto.id] {
                 local.name = dto.name
                 local.details = dto.details ?? ""
-                local.scope = dto.promotionScope
+                local.scope = PromotionScope(rawValue: dto.promotionScope) ?? .product
                 local.targetProductId = dto.targetProductId
                 local.targetCategoryId = dto.targetCategoryId
-                local.discountType = dto.promotionDiscountType
+                local.discountType = PromotionDiscountType(rawValue: dto.promotionDiscountType) ?? .percentage
                 local.discountValue = dto.discountValue
                 local.startsAt = dto.startsAt
                 local.endsAt = dto.endsAt
@@ -47,10 +47,10 @@ final class PromotionSyncService {
                         id: dto.id,
                         name: dto.name,
                         details: dto.details ?? "",
-                        scope: dto.promotionScope,
+                        scope: PromotionScope(rawValue: dto.promotionScope) ?? .product,
                         targetProductId: dto.targetProductId,
                         targetCategoryId: dto.targetCategoryId,
-                        discountType: dto.promotionDiscountType,
+                        discountType: PromotionDiscountType(rawValue: dto.promotionDiscountType) ?? .percentage,
                         discountValue: dto.discountValue,
                         startsAt: dto.startsAt,
                         endsAt: dto.endsAt,

@@ -41,8 +41,7 @@ struct ProductImageGalleryView: View {
                                 .fill(.ultraThinMaterial)
                                 .frame(width: 44, height: 44)
                             Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
+                                // Removed cross button as per design update
                         }
                     }
                     Spacer()

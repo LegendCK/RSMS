@@ -1,17 +1,7 @@
-//
-//  CreateEventSheet.swift
-//  RSMS
-//
-//  Form for Boutique Managers to create a new boutique event in Supabase.
-//  After creation the event appears in the VIP Events tab and sales can be tagged to it.
-//
-
 import SwiftUI
 
 struct CreateEventSheet: View {
     let onCreated: () -> Void
-
-    @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
     // Form fields
@@ -183,19 +173,6 @@ struct CreateEventSheet: View {
                                 .padding(.vertical, AppSpacing.sm)
                         }
                     }
-                    .background(isValid ? AppColors.accent : AppColors.neutral500)
-                    .cornerRadius(AppSpacing.radiusMedium)
-                    .disabled(!isValid || isSubmitting)
-                }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
-                .padding(.top, AppSpacing.md)
-                .padding(.bottom, AppSpacing.xxxl)
-            }
-            .navigationTitle("New Event")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
                 }
             }
             .alert("Error", isPresented: $showError) {

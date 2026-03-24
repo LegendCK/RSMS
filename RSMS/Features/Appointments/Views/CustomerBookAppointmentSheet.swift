@@ -217,10 +217,7 @@ struct CustomerBookAppointmentSheet: View {
                         .tracking(2)
                         .foregroundColor(AppColors.accent)
                 }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") { dismiss() }
-                        .foregroundColor(AppColors.accent)
-                }
+                // Removed cancel/close button as per design update
             }
             .task { await loadStores() }
             .alert("Error", isPresented: $showError) {

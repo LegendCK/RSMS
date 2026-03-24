@@ -198,6 +198,8 @@ enum IndianPricingEngine {
                 return promotion.targetProductId == item.productId
             case .category:
                 return promotion.targetCategoryId == item.categoryId
+            case .storeWide:
+                return true
             }
         }
 
@@ -210,6 +212,8 @@ enum IndianPricingEngine {
                     unitDiscount = basePrice * percent
                 case .fixedAmount:
                     unitDiscount = min(max(promotion.discountValue, 0), basePrice)
+                case .bogo:
+                    unitDiscount = 0 // BOGO requires quantity-aware logic, skipping for simple unit calculation
                 }
 
                 guard unitDiscount > 0 else { return nil }

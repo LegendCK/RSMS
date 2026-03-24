@@ -114,6 +114,7 @@ final class RepairIntakeViewModel {
 
             // Step 4 — write to Supabase
             submittedTicket = try await service.createTicket(payload)
+            NotificationCenter.default.post(name: .repairTicketCreated, object: nil)
 
         } catch {
             errorMessage = "Could not create ticket: \(error.localizedDescription)"

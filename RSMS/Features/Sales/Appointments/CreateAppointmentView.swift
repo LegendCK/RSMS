@@ -46,10 +46,6 @@ struct CreateAppointmentView: View {
             .navigationTitle(vm.isEditing ? "Edit Appointment" : "New Appointment")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundColor(AppColors.textSecondaryDark)
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         Task {

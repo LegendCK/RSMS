@@ -11,6 +11,10 @@
 
 import SwiftUI
 
+extension Notification.Name {
+    static let repairTicketCreated = Notification.Name("repairTicketCreated")
+}
+
 @Observable
 @MainActor
 final class RepairTicketsListViewModel {
@@ -49,6 +53,10 @@ final class RepairTicketsListViewModel {
     ) {
         self.storeId = storeId
         self.service = service
+        
+        NotificationCenter.default.addObserver(forName: .repairTicketCreated, object: nil, queue: .main) { [weak self] _ in
+            Task { await self?.load() }
+        }
     }
 
     convenience init(storeId: UUID) {

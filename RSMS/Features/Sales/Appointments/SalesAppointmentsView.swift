@@ -17,7 +17,6 @@ struct SalesAppointmentsView: View {
     @State private var requestToReject: AppointmentDTO?
 
     var body: some View {
-        NavigationStack {
             ZStack {
                 AppColors.backgroundPrimary.ignoresSafeArea()
 
@@ -136,7 +135,6 @@ struct SalesAppointmentsView: View {
                     Text("Reject request for \(request.scheduledAt.formatted(date: .abbreviated, time: .shortened))?")
                 }
             }
-        }
     }
     
     @ViewBuilder

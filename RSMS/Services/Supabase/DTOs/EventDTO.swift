@@ -1,11 +1,3 @@
-//
-//  EventDTO.swift
-//  RSMS
-//
-//  Codable DTOs matching the Supabase `boutique_events` table and
-//  the `event_sales_summary` view.
-//
-
 import Foundation
 
 // MARK: - Event Read DTO

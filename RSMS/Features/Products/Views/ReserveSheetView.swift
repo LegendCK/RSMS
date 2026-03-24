@@ -30,11 +30,7 @@ struct ReserveSheetView: View {
                         .font(AppTypography.heading3)
                         .foregroundColor(AppColors.textPrimaryDark)
                     Spacer()
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(AppColors.neutral400)
-                    }
+                    // Removed cancel/cross button as per design update
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
                 .padding(.top, AppSpacing.lg)
