@@ -33,8 +33,9 @@ struct SACatalogView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("CATALOG")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
+                        .font(AppTypography.overline)
+                        .tracking(2)
+                        .foregroundColor(AppColors.accent)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: AppSpacing.md) {
