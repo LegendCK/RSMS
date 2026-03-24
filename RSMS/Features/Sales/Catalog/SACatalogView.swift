@@ -8,6 +8,10 @@
 import SwiftUI
 
 struct SACatalogView: View {
+    @State private var vm = SACatalogViewModel()
+    @Environment(SACartViewModel.self) private var cart
+    @State private var selectedProduct: ProductDTO?
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -172,6 +176,98 @@ struct SACatalogView: View {
                     vm.sortOption = .nameAZ
                 }
             }
+        }
+        .padding(.horizontal, AppSpacing.screenHorizontal)
+        .padding(.vertical, AppSpacing.xs)
+    }
+
+    // MARK: - Product List
+
+    private var productList: some View {
+        Group {
+            if vm.isLoading {
+                ProgressView()
+                    .tint(AppColors.accent)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.top, AppSpacing.xxxl)
+            } else if vm.filtered.isEmpty {
+                VStack(spacing: AppSpacing.md) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 36, weight: .ultraLight))
+                        .foregroundColor(AppColors.neutral300)
+                    Text("No products found")
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, AppSpacing.xxxl)
+            } else {
+                List(vm.filtered) { product in
+                    Button { selectedProduct = product } label: {
+                        HStack(spacing: AppSpacing.md) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(product.name)
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                    .lineLimit(1)
+                                if let brand = product.brand {
+                                    Text(brand)
+                                        .font(AppTypography.caption)
+                                        .foregroundColor(AppColors.textSecondaryDark)
+                                }
+                                Text(product.sku)
+                                    .font(AppTypography.micro)
+                                    .foregroundColor(AppColors.neutral300)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("₹\(product.price, specifier: "%.0f")")
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                let (label, color) = vm.stockInfo(for: product.id)
+                                Text(label)
+                                    .font(AppTypography.micro)
+                                    .foregroundColor(color)
+                            }
+                        }
+                        .padding(.vertical, AppSpacing.xs)
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(AppColors.backgroundPrimary)
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+            }
+        }
+    }
+
+    // MARK: - Filter Pill Helper
+
+    private func filterPill(_ label: String, onRemove: @escaping () -> Void) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.accent)
+            Button { onRemove() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(AppColors.accent)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(AppColors.accent.opacity(0.1))
+        .clipShape(Capsule())
+    }
+
+    private func priceRangeLabel() -> String {
+        let min = vm.minPriceText.isEmpty ? nil : vm.minPriceText
+        let max = vm.maxPriceText.isEmpty ? nil : vm.maxPriceText
+        switch (min, max) {
+        case let (lo?, hi?): return "₹\(lo)–₹\(hi)"
+        case let (lo?, nil): return "₹\(lo)+"
+        case let (nil, hi?): return "Up to ₹\(hi)"
+        default:             return "Price"
         }
     }
 }
