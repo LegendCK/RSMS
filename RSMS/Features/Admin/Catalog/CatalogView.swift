@@ -1416,54 +1416,77 @@ struct CatalogPromotionsSubview: View {
 
     private var promotionsHeroCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
+            // Top row: overline label + New Offer button
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("OFFERS STUDIO")
-                        .font(AppTypography.overline)
-                        .tracking(2)
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(2.5)
                         .foregroundColor(AppColors.accent)
-                    Text("Luxury promotions that update every checkout instantly.")
-                        .font(AppTypography.heading3)
+                    Text("Luxury promotions,\nlive at every checkout.")
+                        .font(.system(size: 19, weight: .semibold, design: .serif))
                         .foregroundColor(AppColors.textPrimaryDark)
-                    Text("Corporate admin can target a specific SKU or an entire category with a scheduled native iOS workflow.")
-                        .font(AppTypography.bodySmall)
-                        .foregroundColor(AppColors.textSecondaryDark)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineSpacing(2)
                 }
-                Spacer(minLength: AppSpacing.md)
+                Spacer()
                 Button(action: { showCreateSheet = true }) {
-                    Label("New Offer", systemImage: "plus")
-                        .font(AppTypography.buttonSecondary)
-                        .foregroundColor(AppColors.textPrimaryLight)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(AppColors.accent)
-                        .clipShape(Capsule())
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("New Offer")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(AppColors.accent)
+                    .clipShape(Capsule())
                 }
+                .padding(.top, 2)
             }
 
-            HStack(spacing: AppSpacing.sm) {
-                metricChip(value: activeCount, label: "Live")
-                metricChip(value: scheduledCount, label: "Scheduled")
-                metricChip(value: expiredCount, label: "Archive")
+            // Thin accent rule
+            Rectangle()
+                .fill(AppColors.accent.opacity(0.20))
+                .frame(height: 0.5)
+
+            // Metrics row
+            HStack(spacing: 0) {
+                heroMetric(value: activeCount,    label: "LIVE",      valueColor: AppColors.success)
+                heroMetricDivider()
+                heroMetric(value: scheduledCount, label: "SCHEDULED", valueColor: AppColors.textSecondaryDark)
+                heroMetricDivider()
+                heroMetric(value: expiredCount,   label: "ARCHIVE",   valueColor: AppColors.textSecondaryDark)
             }
         }
         .padding(AppSpacing.cardPadding)
-        .background(
-            LinearGradient(
-                colors: [
-                    AppColors.backgroundSecondary,
-                    AppColors.backgroundSecondary.opacity(0.92)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .cornerRadius(AppSpacing.radiusLarge)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
-                .stroke(AppColors.border, lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
+                .stroke(AppColors.accent.opacity(0.12), lineWidth: 1)
         )
+        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+    }
+
+    private func heroMetric(value: Int, label: String, valueColor: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(value)")
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundColor(value > 0 ? valueColor : AppColors.neutral500)
+            Text(label)
+                .font(.system(size: 9, weight: .medium))
+                .tracking(1.5)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func heroMetricDivider() -> some View {
+        Rectangle()
+            .fill(AppColors.border)
+            .frame(width: 0.5, height: 32)
+            .padding(.horizontal, AppSpacing.sm)
     }
 
     private var activeCount: Int {
@@ -1479,114 +1502,129 @@ struct CatalogPromotionsSubview: View {
     }
 
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Image(systemName: "tag.slash")
-                .font(AppTypography.iconAction)
-                .foregroundColor(AppColors.neutral500)
-            Text("No offers yet")
-                .font(AppTypography.heading3)
-                .foregroundColor(AppColors.textPrimaryDark)
-            Text("Create a promotion for a hero product or category and it will flow into cart, buy now, and checkout pricing.")
-                .font(AppTypography.bodySmall)
-                .foregroundColor(AppColors.textSecondaryDark)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: AppSpacing.md) {
+            ZStack {
+                Circle()
+                    .fill(AppColors.accent.opacity(0.07))
+                    .frame(width: 72, height: 72)
+                Image(systemName: "tag.slash")
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundColor(AppColors.accent.opacity(0.6))
+            }
+            VStack(spacing: 6) {
+                Text("No active offers")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(AppColors.textPrimaryDark)
+                Text("Create a promotion for a product or category\nand it flows into every checkout automatically.")
+                    .font(AppTypography.bodySmall)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .multilineTextAlignment(.center)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.xl)
-        .background(AppColors.backgroundSecondary)
-        .cornerRadius(AppSpacing.radiusLarge)
-        .overlay(
-            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
-                .stroke(AppColors.border, lineWidth: 0.5)
-        )
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppSpacing.xxl)
+        .padding(.horizontal, AppSpacing.xl)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
     }
 
     private func promotionCard(_ promotion: PromotionDTO) -> some View {
         let status = displayStatus(for: promotion)
-        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack(alignment: .top, spacing: AppSpacing.sm) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(promotion.name)
-                        .font(AppTypography.label)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                    Text(targetDescription(for: promotion))
+        return HStack(spacing: 0) {
+            // Left status stripe
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(status.color)
+                .frame(width: 3)
+                .padding(.vertical, AppSpacing.sm)
+                .padding(.leading, AppSpacing.sm)
+
+            VStack(alignment: .leading, spacing: 10) {
+                // Header row
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(promotion.name)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        // Scope chip
+                        Text(targetDescription(for: promotion).uppercased())
+                            .font(.system(size: 9, weight: .medium))
+                            .tracking(1.2)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    Spacer()
+                    // Status pill
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(status.color)
+                            .frame(width: 6, height: 6)
+                        Text(status.label)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(status.color)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(status.color.opacity(0.10))
+                    .clipShape(Capsule())
+                }
+
+                // Discount hero number
+                Text(discountDescription(for: promotion))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundColor(AppColors.accent)
+
+                // Note (if any)
+                if let details = promotion.details, !details.isEmpty {
+                    Text(details)
                         .font(AppTypography.caption)
                         .foregroundColor(AppColors.textSecondaryDark)
+                        .lineLimit(2)
                 }
-                Spacer()
-                statusPill(status)
-            }
 
-            Text(discountDescription(for: promotion))
-                .font(AppTypography.heading3)
-                .foregroundColor(AppColors.accent)
+                // Date range
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppColors.neutral500)
+                    Text("\(shortDate(promotion.startsAt)) – \(shortDate(promotion.endsAt))")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(AppColors.neutral500)
+                }
 
-            if let details = promotion.details, !details.isEmpty {
-                Text(details)
-                    .font(AppTypography.bodySmall)
-                    .foregroundColor(AppColors.textSecondaryDark)
-                    .fixedSize(horizontal: false, vertical: true)
+                // Divider + action
+                Divider()
+                Button(action: { togglePromotionState(promotion) }) {
+                    HStack(spacing: 5) {
+                        Image(systemName: promotion.isActive ? "pause.circle" : "play.circle")
+                            .font(.system(size: 13))
+                        Text(promotion.isActive ? "Pause Offer" : "Resume Offer")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(promotion.isActive ? AppColors.neutral500 : AppColors.success)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
             }
-
-            HStack(spacing: AppSpacing.md) {
-                Label(shortDate(promotion.startsAt), systemImage: "calendar")
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.neutral500)
-                Image(systemName: "arrow.right")
-                    .font(AppTypography.arrowInline)
-                    .foregroundColor(AppColors.neutral600)
-                Label(shortDate(promotion.endsAt), systemImage: "calendar")
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.neutral500)
-            }
-
-            Button(action: { togglePromotionState(promotion) }) {
-                Text(promotion.isActive ? "Pause Offer" : "Resume Offer")
-                    .font(AppTypography.buttonSecondary)
-                    .foregroundColor(AppColors.accent)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(AppColors.accent.opacity(0.08))
-                    .cornerRadius(AppSpacing.radiusMedium)
-            }
+            .padding(AppSpacing.md)
         }
-        .padding(AppSpacing.cardPadding)
-        .background(AppColors.backgroundSecondary)
-        .cornerRadius(AppSpacing.radiusLarge)
-        .overlay(
-            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge)
-                .stroke(AppColors.border, lineWidth: 0.5)
-        )
-    }
-
-    private func metricChip(value: Int, label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("\(value)")
-                .font(AppTypography.heading3)
-                .foregroundColor(AppColors.textPrimaryDark)
-            Text(label.uppercased())
-                .font(AppTypography.pico)
-                .tracking(1)
-                .foregroundColor(AppColors.textSecondaryDark)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.sm)
-        .background(AppColors.backgroundPrimary)
-        .cornerRadius(AppSpacing.radiusMedium)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
+        .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 3)
+        .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
     }
 
     private func errorBanner(message: String) -> some View {
         HStack(spacing: AppSpacing.xs) {
             Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13))
                 .foregroundColor(AppColors.error)
             Text(message)
-                .font(AppTypography.bodySmall)
+                .font(AppTypography.caption)
                 .foregroundColor(AppColors.error)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.sm)
         .background(AppColors.error.opacity(0.08))
-        .cornerRadius(AppSpacing.radiusMedium)
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
     }
 
     private func discountDescription(for promotion: PromotionDTO) -> String {

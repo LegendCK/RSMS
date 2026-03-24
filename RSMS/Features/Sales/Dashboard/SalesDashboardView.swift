@@ -10,6 +10,7 @@ import SwiftData
 
 struct SalesDashboardView: View {
     @Environment(AppState.self) private var appState
+    @State private var activeSheet: ActiveSalesSheet? = nil
     @State private var showAfterSales = false
     @State private var showCreateTicket = false
     @State private var showTicketList = false

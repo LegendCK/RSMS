@@ -18,7 +18,6 @@ struct BuyNowSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @Query private var allAddresses: [SavedAddress]
-    @Query private var allStores: [StoreLocation]
     @Query private var allCategories: [Category]
     @Query private var pricingPolicies: [PricingPolicySettings]
     @Query private var taxRules: [IndianTaxRule]
@@ -29,7 +28,7 @@ struct BuyNowSheetView: View {
 
     // Fulfillment
     @State private var selectedFulfillment: FulfillmentType = .standard
-    @State private var selectedPickupStore: StoreLocation?  = nil
+    @State private var selectedPickupStore: StoreDTO? = nil
     @State private var showStorePicker = false
 
     @State private var selectedAddress: SavedAddress? = nil
@@ -154,10 +153,7 @@ struct BuyNowSheetView: View {
                     }
             }
             .sheet(isPresented: $showStorePicker) {
-                BOPISStorePickerSheet(
-                    stores: allStores.filter { $0.isOperational },
-                    selected: selectedPickupStore
-                ) { store in
+                BOPISStorePickerSheet(selected: selectedPickupStore) { store in
                     selectedPickupStore = store
                 }
             }
@@ -358,7 +354,7 @@ struct BuyNowSheetView: View {
                                 Text(store.name)
                                     .font(AppTypography.label)
                                     .foregroundColor(AppColors.textPrimaryDark)
-                                Text("\(store.addressLine1), \(store.city), \(store.country)")
+                                Text("\(store.address ?? ""), \(store.city ?? ""), \(store.country)")
                                     .font(AppTypography.caption)
                                     .foregroundColor(AppColors.textSecondaryDark)
                                 Text("Ready within 2 hours")
