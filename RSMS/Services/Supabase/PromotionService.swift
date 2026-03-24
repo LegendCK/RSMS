@@ -72,10 +72,10 @@ final class PromotionService {
         let payload = PromotionInsertDTO(
             name: name,
             details: details.isEmpty ? nil : details,
-            scope: scope.rawValue,
+            promotionScope: scope.rawValue,
             targetProductId: targetProductId,
             targetCategoryId: targetCategoryId,
-            discountType: discountType.rawValue,
+            promotionDiscountType: discountType.rawValue,
             discountValue: discountValue,
             startsAt: startsAt,
             endsAt: endsAt,

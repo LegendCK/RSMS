@@ -1,19 +1,6 @@
 import Foundation
 import Supabase
 
-struct AdminInsightsSnapshot {
-    let orders: [OrderDTO]
-    let orderItems: [OrderItemDTO]
-    let stores: [StoreDTO]
-    let users: [UserDTO]
-    let clients: [ClientDTO]
-    let appointments: [AppointmentDTO]
-    let serviceTickets: [ServiceTicketDTO]
-    let inventory: [InventoryDTO]
-    let products: [ProductDTO]
-    let syncedAt: Date
-}
-
 @MainActor
 final class AdminInsightsService {
     static let shared = AdminInsightsService()
@@ -77,14 +64,14 @@ final class AdminInsightsService {
         async let products: [ProductDTO] = CatalogService.shared.fetchProducts()
 
         return try await AdminInsightsSnapshot(
+            stores: stores,
             orders: orders,
             orderItems: orderItems,
-            stores: stores,
-            users: users,
-            clients: clients,
-            appointments: appointments,
-            serviceTickets: serviceTickets,
             inventory: inventory,
+            users: users,
+            appointments: appointments,
+            clients: clients,
+            serviceTickets: serviceTickets,
             products: products,
             syncedAt: Date()
         )

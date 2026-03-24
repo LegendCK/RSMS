@@ -10,7 +10,9 @@ import SwiftData
 
 struct SalesDashboardView: View {
     @Environment(AppState.self) private var appState
-    @State private var activeSheet: ActiveSalesSheet?
+    @State private var showAfterSales = false
+    @State private var showCreateTicket = false
+    @State private var showTicketList = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -61,30 +63,21 @@ struct SalesDashboardView: View {
                         spacing: 12
                     ) {
                         Button {
-                            activeSheet = .newClient
+                            showCreateTicket = true
                         } label: {
-                            quickAction(title: "New Client", icon: "person.badge.plus", color: AppColors.accent)
+                            quickAction(title: "New Ticket", icon: "doc.badge.plus", color: AppColors.accent)
                         }
                         .buttonStyle(.plain)
-
                         Button {
-                            activeSheet = .bookAppointment
+                            showTicketList = true
                         } label: {
-                            quickAction(title: "Book Appointment", icon: "calendar.badge.plus", color: AppColors.info)
+                            quickAction(title: "All Tickets", icon: "wrench.and.screwdriver", color: AppColors.secondary)
                         }
                         .buttonStyle(.plain)
-
                         Button {
-                            activeSheet = .startSale
+                            showAfterSales = true
                         } label: {
-                            quickAction(title: "Start Sale", icon: "bag.badge.plus", color: AppColors.accent)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            activeSheet = .serviceTicket
-                        } label: {
-                            quickAction(title: "Service Ticket", icon: "wrench.and.screwdriver", color: AppColors.secondary)
+                            quickAction(title: "Warranty Check", icon: "checkmark.shield", color: AppColors.info)
                         }
                         .buttonStyle(.plain)
                     }
@@ -140,6 +133,14 @@ struct SalesDashboardView: View {
             case .serviceTicket:
                 SalesAfterSalesView()
             }
+        }
+        .sheet(isPresented: $showCreateTicket) {
+            NavigationStack {
+                CreateServiceTicketView()
+            }
+        }
+        .navigationDestination(isPresented: $showTicketList) {
+            ServiceTicketListView()
         }
     }
 

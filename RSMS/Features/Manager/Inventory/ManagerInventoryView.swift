@@ -2265,9 +2265,10 @@ struct DiscrepancyDetailSheet: View {
         defer { isSubmitting = false }
         do {
             try await DiscrepancyService.shared.approve(
-                id:         discrepancy.id,
-                reviewerId: reviewerId,
-                notes:      nil
+                discrepancy:  discrepancy,
+                reviewedBy:   reviewerId,
+                reviewerName: reviewerName,
+                modelContext: modelContext
             )
             onResolved("✓ Approved — inventory updated to \(discrepancy.reportedQuantity) units")
             dismiss()
@@ -2287,9 +2288,10 @@ struct DiscrepancyDetailSheet: View {
         defer { isSubmitting = false }
         do {
             try await DiscrepancyService.shared.reject(
-                id:         discrepancy.id,
-                reviewerId: reviewerId,
-                notes:      managerNotes
+                discrepancy:  discrepancy,
+                reviewedBy:   reviewerId,
+                reviewerName: reviewerName,
+                notes:        managerNotes
             )
             onResolved("✗ Rejected — inventory unchanged")
             dismiss()

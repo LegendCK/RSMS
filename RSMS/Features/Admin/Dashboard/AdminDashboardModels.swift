@@ -24,5 +24,6 @@ struct AdminInsightsSnapshot {
     var appointments: [AppointmentDTO]
     var clients: [ClientDTO]
     var serviceTickets: [ServiceTicketDTO]
+    var products: [ProductDTO]
     var syncedAt: Date
 }
