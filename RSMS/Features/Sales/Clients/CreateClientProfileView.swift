@@ -73,11 +73,6 @@ struct CreateClientProfileView: View {
                         .foregroundColor(AppColors.textPrimaryDark)
                 }
             }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Cancel") { dismiss() }
-                    .font(AppTypography.buttonSecondary)
-                    .foregroundColor(AppColors.textPrimaryDark)
-            }
         }
         .task { await vm.loadCategories() }
         .alert("Validation Error", isPresented: $vm.showError) {

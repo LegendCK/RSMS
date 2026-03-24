@@ -53,8 +53,8 @@ struct ScanResult: Identifiable, Equatable {
     var formattedPrice: String {
         let f = NumberFormatter()
         f.numberStyle = .currency
-        f.currencyCode = "USD"
-        return f.string(from: NSNumber(value: price)) ?? "$\(price)"
+        f.currencyCode = "INR"
+        return f.string(from: NSNumber(value: price)) ?? "₹\(price)"
     }
 
     var itemStatus: ProductItemStatus {
@@ -87,8 +87,10 @@ struct ScanResult: Identifiable, Equatable {
 /// of callbacks for a single physical scan event.
 @MainActor
 final class ScanManager {
-    static let shared = ScanManager()
-
+    static let shared = ScanManager(
+        processor: RealTimeScanProcessor(service: ScanService.shared),
+        service: ScanService.shared
+    )
     // MARK: - Configuration
 
     /// Rapid-fire guard: ignore re-detection within this interval (AVFoundation stream).
@@ -121,8 +123,8 @@ final class ScanManager {
     // MARK: - Init
 
     private init(
-        processor: ScanProcessor = RealTimeScanProcessor(),
-        service: ScanServiceProtocol = ScanService.shared
+        processor: ScanProcessor,
+        service: ScanServiceProtocol
     ) {
         self.processor = processor
         self.service   = service

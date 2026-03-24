@@ -351,14 +351,7 @@ struct CreateUserSheet: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(AppTypography.closeButton)
-                            .foregroundColor(AppColors.textPrimaryDark)
-                    }
-                    .disabled(isCreating)
-                }
+                // Removed cancel/cross button as per design update
             }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) { }

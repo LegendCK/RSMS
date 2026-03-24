@@ -7,7 +7,7 @@
 //
 
 import SwiftUI
-import Supabase
+@preconcurrency import Supabase
 
 struct ManagerProfileView: View {
     @Environment(AppState.self) var appState
@@ -245,33 +245,31 @@ struct ManagerProfileView: View {
         defer { isLoadingStore = false }
 
         let client = SupabaseManager.shared.client
-        async let fetchedStore: StoreDTO = client
-            .from("stores")
-            .select()
-            .eq("id", value: storeId.uuidString.lowercased())
-            .single()
-            .execute()
-            .value
-        async let fetchedStaff: [UserDTO] = client
-            .from("users")
-            .select()
-            .eq("store_id", value: storeId.uuidString.lowercased())
-            .eq("is_active", value: true)
-            .neq("role", value: "boutique_manager")
-            .neq("role", value: "client")
-            .execute()
-            .value
-        async let fetchedManager: [UserDTO] = client
-            .from("users")
-            .select()
-            .eq("store_id", value: storeId.uuidString.lowercased())
-            .eq("role", value: "boutique_manager")
-            .limit(1)
-            .execute()
-            .value
-
         do {
-            let (store, staff, managers) = try await (fetchedStore, fetchedStaff, fetchedManager)
+            let store: StoreDTO = try await client
+                .from("stores")
+                .select()
+                .eq("id", value: storeId.uuidString.lowercased())
+                .single()
+                .execute()
+                .value
+            let staff: [UserDTO] = try await client
+                .from("users")
+                .select()
+                .eq("store_id", value: storeId.uuidString.lowercased())
+                .eq("is_active", value: true)
+                .neq("role", value: "boutique_manager")
+                .neq("role", value: "client")
+                .execute()
+                .value
+            let managers: [UserDTO] = try await client
+                .from("users")
+                .select()
+                .eq("store_id", value: storeId.uuidString.lowercased())
+                .eq("role", value: "boutique_manager")
+                .limit(1)
+                .execute()
+                .value
             storeDTO = store
             staffList = staff
             boutiqueManager = managers.first

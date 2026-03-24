@@ -14,7 +14,6 @@ struct SACatalogProductDetailSheet: View {
     let vm: SACatalogViewModel
 
     @Environment(SACartViewModel.self) private var cart
-    @Environment(\.dismiss) private var dismiss
     @State private var currentImageIndex = 0
     @State private var addedToCart = false
 
@@ -39,13 +38,6 @@ struct SACatalogProductDetailSheet: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(AppColors.textPrimaryDark)
-                    }
-                }
                 ToolbarItem(placement: .principal) {
                     Text(product.sku)
                         .font(.system(size: 11, weight: .medium))
@@ -306,8 +298,8 @@ struct SACatalogProductDetailSheet: View {
     private func formattedCurrency(_ value: Double) -> String {
         let f = NumberFormatter()
         f.numberStyle = .currency
-        f.currencyCode = "USD"
-        return f.string(from: NSNumber(value: value)) ?? "$\(value)"
+        f.currencyCode = "INR"
+        return f.string(from: NSNumber(value: value)) ?? "₹\(value)"
     }
 
     private func marginString(price: Double, cost: Double) -> String {

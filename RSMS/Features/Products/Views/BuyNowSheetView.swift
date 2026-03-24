@@ -137,12 +137,7 @@ struct BuyNowSheetView: View {
                         .font(AppTypography.navTitle)
                         .foregroundColor(AppColors.textPrimaryDark)
                 }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .foregroundColor(AppColors.textPrimaryDark)
-                    }
-                }
+                // Removed cancel/cross button as per design update
             }
             .sheet(isPresented: $showAddressManager) {
                 AddressManagerView(onSelect: { addr in

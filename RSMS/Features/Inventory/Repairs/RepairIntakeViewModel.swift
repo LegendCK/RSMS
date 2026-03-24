@@ -46,12 +46,25 @@ final class RepairIntakeViewModel {
         scanResult: ScanResult,
         storeId: UUID,
         assignedToUserId: UUID?,
-        service: ServiceTicketServiceProtocol = ServiceTicketService.shared
+        service: ServiceTicketServiceProtocol
     ) {
         self.scanResult          = scanResult
         self.storeId             = storeId
         self.assignedToUserId    = assignedToUserId
         self.service             = service
+    }
+
+    convenience init(
+        scanResult: ScanResult,
+        storeId: UUID,
+        assignedToUserId: UUID?
+    ) {
+        self.init(
+            scanResult: scanResult,
+            storeId: storeId,
+            assignedToUserId: assignedToUserId,
+            service: ServiceTicketService.shared
+        )
     }
 
     // MARK: - Validation

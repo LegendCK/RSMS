@@ -58,7 +58,7 @@ final class AddressSyncService {
                 postalCode: address.zip,
                 country: address.country,
                 segment: client.segment ?? "standard",
-                notes: client.notes,
+                notes: client.notes, gdprConsent: client.gdprConsent,
                 marketingOptIn: client.marketingOptIn
             )
             _ = try await ClientService.shared.updateClient(id: clientId, payload: payload)

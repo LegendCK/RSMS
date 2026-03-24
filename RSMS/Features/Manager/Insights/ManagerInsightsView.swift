@@ -334,7 +334,7 @@ struct MgrRevenueSubview: View {
     }
 
     private func currency(_ v: Double) -> String {
-        let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = "USD"
+        let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = "INR"
         f.maximumFractionDigits = v >= 10_000 ? 0 : 2
         return f.string(from: NSNumber(value: v)) ?? "$\(Int(v))"
     }
@@ -547,7 +547,7 @@ struct MgrProductInsightsSubview: View {
     }
 
     private func currency(_ v: Double) -> String {
-        let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = "USD"
+        let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = "INR"
         f.maximumFractionDigits = 0
         return f.string(from: NSNumber(value: v)) ?? "$\(Int(v))"
     }
@@ -710,7 +710,7 @@ struct MgrStaffInsightsSubview: View {
     }
 
     private func currency(_ v: Double) -> String {
-        let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = "USD"
+        let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = "INR"
         f.maximumFractionDigits = 0
         return f.string(from: NSNumber(value: v)) ?? "$\(Int(v))"
     }

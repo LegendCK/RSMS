@@ -82,6 +82,10 @@ struct ClientEditView: View {
                                     .tint(AppColors.textPrimaryDark)
                                 }
                                 GoldDivider()
+                                Toggle("GDPR Consent", isOn: $vm.editGdprConsent)
+                                    .font(AppTypography.bodyMedium)
+                                    .tint(AppColors.accent)
+                                GoldDivider()
                                 Toggle("Marketing Opt-In", isOn: $vm.editMarketingOptIn)
                                     .font(AppTypography.bodyMedium)
                                     .tint(AppColors.accent)

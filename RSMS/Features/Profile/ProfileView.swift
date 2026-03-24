@@ -6,9 +6,11 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ProfileView: View {
     @Environment(AppState.self) var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var showLogoutConfirmation = false
 
     var body: some View {
@@ -68,6 +70,9 @@ struct ProfileView: View {
                         NavigationLink(destination: AddressManagerView()) {
                             Label("Addresses", systemImage: "mappin.and.ellipse")
                         }
+                        NavigationLink(destination: WishlistView()) {
+                            Label("Wishlist", systemImage: "heart")
+                        }
                     }
                 }
 
@@ -78,9 +83,6 @@ struct ProfileView: View {
                     }
                     NavigationLink(destination: CustomerBookAppointmentView()) {
                         Label("Book an Appointment", systemImage: "calendar")
-                    }
-                    NavigationLink(destination: WishlistView()) {
-                        Label("Wishlist", systemImage: "heart")
                     }
                 }
 
@@ -133,6 +135,18 @@ struct ProfileView: View {
             } message: {
                 Text("Are you sure you want to sign out?")
             }
+            .task {
+                await syncWishlistFromBackend()
+            }
+        }
+    }
+
+    private func syncWishlistFromBackend() async {
+        guard appState.isAuthenticated, !appState.isGuest else { return }
+        do {
+            try await WishlistService.shared.hydrateLocalWishlist(modelContext: modelContext)
+        } catch {
+            print("[ProfileView] Wishlist sync failed: \(error)")
         }
     }
 

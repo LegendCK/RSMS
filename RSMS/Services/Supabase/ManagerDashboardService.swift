@@ -340,9 +340,9 @@ final class ManagerDashboardService {
     private func currency(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
+        formatter.currencyCode = "INR"
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
+        return formatter.string(from: NSNumber(value: value)) ?? "₹\(Int(value))"
     }
 
     private func percent(_ value: Double) -> String {

@@ -49,7 +49,7 @@ final class RepairTicketsListViewModel {
 
     init(
         storeId: UUID,
-        service: ServiceTicketServiceProtocol = ServiceTicketService.shared
+        service: ServiceTicketServiceProtocol
     ) {
         self.storeId = storeId
         self.service = service
@@ -57,6 +57,10 @@ final class RepairTicketsListViewModel {
         NotificationCenter.default.addObserver(forName: .repairTicketCreated, object: nil, queue: .main) { [weak self] _ in
             Task { await self?.load() }
         }
+    }
+
+    convenience init(storeId: UUID) {
+        self.init(storeId: storeId, service: ServiceTicketService.shared)
     }
 
     // MARK: - Load

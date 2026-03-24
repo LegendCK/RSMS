@@ -162,6 +162,7 @@ struct ClientAssociateUpdateDTO: Codable {
     let country: String?
     let segment: String
     let notes: String?
+    let gdprConsent: Bool
     let marketingOptIn: Bool
 
     enum CodingKeys: String, CodingKey {
@@ -176,6 +177,7 @@ struct ClientAssociateUpdateDTO: Codable {
         case city, state
         case postalCode      = "postal_code"
         case country, segment, notes
+        case gdprConsent     = "gdpr_consent"
         case marketingOptIn  = "marketing_opt_in"
     }
 }

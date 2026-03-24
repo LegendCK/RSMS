@@ -231,9 +231,9 @@ struct OrgBoutiquesSubview: View {
     private func formatCurrency(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
+        formatter.currencyCode = "INR"
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
+        return formatter.string(from: NSNumber(value: value)) ?? "₹\(Int(value))"
     }
 
     private func activeStaff(for store: StoreLocation) -> [User] {
@@ -409,9 +409,9 @@ struct OrgBoutiqueDetailView: View {
     private func formatCurrency(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
+        formatter.currencyCode = "INR"
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
+        return formatter.string(from: NSNumber(value: value)) ?? "₹\(Int(value))"
     }
 
     private var assignedStaff: [User] {
