@@ -1590,22 +1590,26 @@ struct CatalogPromotionsSubview: View {
     }
 
     private func discountDescription(for promotion: PromotionDTO) -> String {
-        switch promotion.promotionDiscountType {
+        switch PromotionDiscountType(rawValue: promotion.promotionDiscountType) {
         case .percentage:
             return "\(promotion.discountValue.formatted(.number.precision(.fractionLength(0...1))))% off"
         case .fixedAmount:
             return formatCurrency(promotion.discountValue) + " off"
+        case .bogo, .none:
+            return "Special Offer"
         }
     }
 
     private func targetDescription(for promotion: PromotionDTO) -> String {
-        switch promotion.promotionScope {
+        switch PromotionScope(rawValue: promotion.promotionScope) {
         case .product:
             let productName = remoteProducts.first(where: { $0.id == promotion.targetProductId })?.name ?? "Selected Product"
             return "Product · \(productName)"
         case .category:
             let categoryName = remoteCategories.first(where: { $0.id == promotion.targetCategoryId })?.name ?? "Selected Category"
             return "Category · \(categoryName)"
+        case .storeWide, .none:
+            return "Store-wide Promotion"
         }
     }
 
