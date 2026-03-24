@@ -33,7 +33,7 @@ struct MainTabView: View {
                     // Categories Tab
                     Tab("Categories", systemImage: "square.grid.2x2") {
                         NavigationStack {
-                            CategoriesView()
+                            CategoriesView(showsTabBar: true)
                         }
                     }
 

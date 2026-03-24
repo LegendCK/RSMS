@@ -146,16 +146,12 @@ struct ClientProfileEditView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                HStack(spacing: AppSpacing.xs) {
-                    Image(systemName: "square.and.pencil")
-                        .font(AppTypography.iconSmall)
-                        .foregroundColor(AppColors.accent)
-                    Text("Edit Profile")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                }
+                Text("Edit Profile")
+                    .font(AppTypography.navTitle)
+                    .foregroundColor(AppColors.textPrimaryDark)
             }
         }
         .task {

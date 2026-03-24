@@ -64,6 +64,7 @@ struct MyReservationsView: View {
             }
         }
         .navigationTitle("My Reservations")
+        .toolbar(.hidden, for: .tabBar)
         .navigationBarTitleDisplayMode(.inline)
     }
 

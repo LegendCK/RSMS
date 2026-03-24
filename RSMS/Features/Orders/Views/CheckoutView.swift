@@ -44,6 +44,10 @@ struct CheckoutView: View {
     @State private var cardExpiry  = ""
     @State private var cardCVV     = ""
 
+    // BOPIS store selection
+    @State private var selectedPickupStore: StoreLocation? = nil
+    @State private var showStorePicker = false
+
     // Order
     @State private var createdOrder:      Order? = nil
     @State private var showConfirmation   = false
@@ -97,12 +101,6 @@ struct CheckoutView: View {
         )
     }
 
-    /// The store used for BOPIS pickup — prefers the user's assigned store, falls back to first active.
-    private var pickupStore: StoreLocation? {
-        let storeId = appState.currentStoreId
-        return allStores.first(where: { $0.id == storeId && $0.isOperational })
-            ?? allStores.first(where: { $0.isOperational })
-    }
 
     private var merchandiseSubtotal: Double { pricing.merchandiseSubtotal }
     private var subtotal: Double { pricing.subtotal }
@@ -160,6 +158,19 @@ struct CheckoutView: View {
                         selectedAddress = savedAddresses.first(where: { $0.isDefault }) ?? savedAddresses.first
                     }
                 }
+        }
+        .sheet(isPresented: $showStorePicker) {
+            BOPISStorePickerSheet(
+                stores: allStores.filter { $0.isOperational },
+                selected: selectedPickupStore
+            ) { store in
+                selectedPickupStore = store
+            }
+        }
+        .onChange(of: selectedFulfillment) { _, newValue in
+            if newValue == .bopis && selectedPickupStore == nil {
+                showStorePicker = true
+            }
         }
         .onAppear {
             Task { @MainActor in
@@ -306,17 +317,34 @@ struct CheckoutView: View {
                             .font(.title2)
                             .foregroundColor(AppColors.accent)
                         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                            Text(pickupStore?.name ?? "Boutique Store")
-                                .font(AppTypography.label)
-                                .foregroundColor(AppColors.textPrimaryDark)
-                            Text(pickupStore.map { "\($0.addressLine1), \($0.city), \($0.country)" } ?? "Nearest boutique location")
-                                .font(AppTypography.caption)
-                                .foregroundColor(AppColors.textSecondaryDark)
-                            Text("Ready within 2 hours")
-                                .font(AppTypography.caption)
-                                .foregroundColor(AppColors.success)
+                            if let store = selectedPickupStore {
+                                Text(store.name)
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Text("\(store.addressLine1), \(store.city), \(store.country)")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                                Text("Ready within 2 hours")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.success)
+                            } else {
+                                Text("Select a boutique")
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Text("Tap to choose your pickup location")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            }
                         }
                         Spacer()
+                        Button {
+                            showStorePicker = true
+                        } label: {
+                            Text(selectedPickupStore == nil ? "Select" : "Change")
+                                .font(AppTypography.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.accent)
+                        }
                     }
                     .padding(AppSpacing.cardPadding)
                 }
@@ -531,7 +559,7 @@ struct CheckoutView: View {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 sectionHeader("DELIVERY")
                 if selectedFulfillment == .bopis {
-                    Text("Pick Up In Store — \(pickupStore?.name ?? "Boutique")")
+                    Text("Pick Up In Store — \(selectedPickupStore?.name ?? "Boutique")")
                         .font(AppTypography.bodyMedium)
                         .foregroundColor(AppColors.textPrimaryDark)
                 } else if let addr = selectedAddress {
@@ -677,7 +705,7 @@ struct CheckoutView: View {
     private var canContinue: Bool {
         switch currentStep {
         case 0:
-            if selectedFulfillment == .bopis { return true }
+            if selectedFulfillment == .bopis { return selectedPickupStore != nil }
             if selectedAddress != nil { return true }
             if !savedAddresses.isEmpty { return false }
             return isInlineAddressComplete
@@ -821,7 +849,7 @@ struct CheckoutView: View {
             paymentMethod: selectedPayment.title
         )
         // Set boutique ID for BOPIS orders so the manager dashboard picks them up
-        if selectedFulfillment == .bopis, let store = pickupStore {
+        if selectedFulfillment == .bopis, let store = selectedPickupStore {
             order.boutiqueId = store.code
         }
         modelContext.insert(order)
@@ -859,7 +887,7 @@ struct CheckoutView: View {
                     state: deliveryState
                 )
             } else {
-                nearestStoreId = pickupStore?.id
+                nearestStoreId = selectedPickupStore?.id
             }
 
             print("[CheckoutView] Starting Supabase sync for clientId: \(clientId), storeId: \(nearestStoreId?.uuidString ?? "none")")
@@ -892,6 +920,64 @@ struct CheckoutView: View {
         createdOrder     = order
         isPlacing        = false
         showConfirmation = true
+    }
+}
+
+// MARK: - BOPIS Store Picker Sheet
+
+struct BOPISStorePickerSheet: View {
+    let stores: [StoreLocation]
+    let selected: StoreLocation?
+    let onSelect: (StoreLocation) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(stores) { store in
+                    Button {
+                        onSelect(store)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: AppSpacing.md) {
+                            ZStack {
+                                Circle()
+                                    .fill(AppColors.accent.opacity(0.1))
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: "building.2.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppColors.accent)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(store.name)
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Text("\(store.addressLine1), \(store.city)")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            }
+                            Spacer()
+                            if selected?.id == store.id {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(AppColors.accent)
+                            }
+                        }
+                        .padding(.vertical, AppSpacing.xs)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle("Choose Boutique")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+        }
     }
 }
 

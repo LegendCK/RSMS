@@ -724,7 +724,7 @@ struct OrderFulfillmentCard: View {
                 try await OrderFulfillmentService.shared.updateOrderStatus(
                     orderId: order.id,
                     newStatus: "confirmed",
-                    //notes: "Auto-confirmed on dispatch"
+                    notes: "Auto-confirmed on dispatch"
                 )
             }
 

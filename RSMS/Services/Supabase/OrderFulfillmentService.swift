@@ -3,22 +3,48 @@
 //  RSMS
 //
 //  Handles the backend operations for order fulfillment by Inventory Controllers:
-//  - Updating order status in Supabase
-//  - Decrementing inventory quantities in Supabase
+//  - Updating order status via server-side state machine (transition_order_status RPC)
+//  - Atomically decrementing inventory (decrement_order_inventory RPC)
 //  - Fetching order items for picking/packing
+//
+//  All status transitions go through the transition_order_status() SECURITY DEFINER
+//  function on the server, which validates allowed transitions, enforces store
+//  ownership, and writes an order_events audit row — all in one transaction.
 //
 
 import Foundation
 import Supabase
 
+// MARK: - RPC Param structs (file-level so they are not @MainActor-isolated)
+
+nonisolated private struct TransitionParamsWithActor: Encodable, Sendable {
+    let p_order_id:   String
+    let p_new_status: String
+    let p_actor_id:   String?
+    let p_notes:      String?
+}
+
+nonisolated private struct DecrementParams: Encodable, Sendable {
+    let p_product_id: String
+    let p_store_id:   String
+    let p_quantity:   Int
+}
+
+nonisolated private struct AutoDeliverParams: Encodable, Sendable {
+    let p_store_id:    String
+    let p_hours_stale: Int
+}
+
 enum OrderFulfillmentError: LocalizedError {
-    case statusUpdateRejected(attempted: [String], underlying: Error)
+    case invalidTransition(from: String, to: String)
+    case statusUpdateFailed(String)
 
     var errorDescription: String? {
         switch self {
-        case .statusUpdateRejected(let attempted, let underlying):
-            let attempts = attempted.joined(separator: ", ")
-            return "Status update rejected. Tried: \(attempts). Backend error: \(underlying.localizedDescription)"
+        case .invalidTransition(let from, let to):
+            return "Cannot move order from '\(from)' to '\(to)'. Invalid transition."
+        case .statusUpdateFailed(let msg):
+            return "Order status update failed: \(msg)"
         }
     }
 }
@@ -30,40 +56,36 @@ final class OrderFulfillmentService {
 
     private init() {}
 
-    // MARK: - Update Order Status
+    // MARK: - Update Order Status (server-side state machine)
 
-    /// Moves an order to a new status in Supabase.
-    /// Valid transitions: confirmed → processing → shipped/ready_for_pickup → delivered/completed
-    func updateOrderStatus(orderId: UUID, newStatus: String) async throws {
-        struct StatusUpdate: Encodable {
-            let status: String
-            let updated_at: String
+    /// Transitions an order to a new status via the transition_order_status()
+    /// SECURITY DEFINER RPC. The server validates the transition, enforces store
+    /// ownership, and writes an audit event atomically.
+    func updateOrderStatus(orderId: UUID, newStatus: String, notes: String? = nil) async throws {
+        let canonical = OrderStatusMapper.canonical(newStatus)
+
+        // Get actor ID for the audit trail (best-effort — transition still proceeds if unavailable)
+        var actorIdParam: String? = nil
+        if let session = try? await client.auth.session {
+            actorIdParam = session.user.id.uuidString.lowercased()
         }
 
-        let now = ISO8601DateFormatter().string(from: Date())
-        let candidates = Array(NSOrderedSet(array: OrderStatusMapper.writeCandidates(for: newStatus)).compactMap { $0 as? String })
-        var lastError: Error?
-        var attempted: [String] = []
+        let params = TransitionParamsWithActor(
+            p_order_id:   orderId.uuidString.lowercased(),
+            p_new_status: canonical,
+            p_actor_id:   actorIdParam,
+            p_notes:      notes
+        )
 
-        for candidate in candidates {
-            attempted.append(candidate)
-            do {
-                try await client
-                    .from("orders")
-                    .update(StatusUpdate(status: candidate, updated_at: now))
-                    .eq("id", value: orderId.uuidString.lowercased())
-                    .execute()
-
-                print("[OrderFulfillmentService] ✅ Order \(orderId) → \(candidate)")
-                return
-            } catch {
-                lastError = error
-                print("[OrderFulfillmentService] Status candidate rejected for \(orderId): \(candidate) — \(error.localizedDescription)")
-            }
-        }
-
-        if let lastError {
-            throw OrderFulfillmentError.statusUpdateRejected(attempted: attempted, underlying: lastError)
+        do {
+            try await client
+                .rpc("transition_order_status", params: params)
+                .execute()
+            print("[OrderFulfillmentService] ✅ Order \(orderId) → \(canonical)")
+        } catch {
+            // Surface clear message: the server will throw on invalid transitions
+            print("[OrderFulfillmentService] transition_order_status failed: \(error.localizedDescription)")
+            throw OrderFulfillmentError.statusUpdateFailed(error.localizedDescription)
         }
     }
 
@@ -116,46 +138,28 @@ final class OrderFulfillmentService {
         return try JSONDecoder().decode([OrderItemWithProduct].self, from: response.data)
     }
 
-    // MARK: - Decrement Supabase Inventory
+    // MARK: - Decrement Supabase Inventory (atomic)
 
-    /// Reduces the inventory quantity for a product at a specific store in Supabase.
-    /// Called when IC marks an order as "processing" (items picked from shelves).
+    /// Atomically reduces inventory for a product at a store using a SECURITY DEFINER RPC.
+    /// The server performs UPDATE quantity = GREATEST(0, quantity - n) in a single statement,
+    /// eliminating the read-then-write race condition of the old implementation.
     func decrementInventory(productId: UUID, storeId: UUID, quantity: Int) async throws {
-        // First fetch current inventory
-        let response = try await client
-            .from("inventory")
-            .select("id, quantity")
-            .eq("product_id", value: productId.uuidString.lowercased())
-            .eq("store_id", value: storeId.uuidString.lowercased())
-            .limit(1)
-            .execute()
+        let params = DecrementParams(
+            p_product_id: productId.uuidString.lowercased(),
+            p_store_id:   storeId.uuidString.lowercased(),
+            p_quantity:   quantity
+        )
 
-        struct InventoryRow: Codable {
-            let id: String
-            let quantity: Int
+        do {
+            try await client
+                .rpc("decrement_order_inventory", params: params)
+                .execute()
+            print("[OrderFulfillmentService] ✅ Inventory decremented: product \(productId) −\(quantity) at store \(storeId)")
+        } catch {
+            // Non-fatal: missing inventory row is handled server-side with a WARNING.
+            // We log and continue so fulfillment is never blocked by a missing row.
+            print("[OrderFulfillmentService] decrement_order_inventory warning (non-fatal): \(error.localizedDescription)")
         }
-
-        let rows = try JSONDecoder().decode([InventoryRow].self, from: response.data)
-        guard let row = rows.first else {
-            print("[OrderFulfillmentService] No inventory row for product \(productId) at store \(storeId)")
-            return
-        }
-
-        let newQty = max(0, row.quantity - quantity)
-
-        struct QtyUpdate: Encodable {
-            let quantity: Int
-            let updated_at: String
-        }
-
-        let now = ISO8601DateFormatter().string(from: Date())
-        try await client
-            .from("inventory")
-            .update(QtyUpdate(quantity: newQty, updated_at: now))
-            .eq("id", value: row.id)
-            .execute()
-
-        print("[OrderFulfillmentService] ✅ Inventory for product \(productId): \(row.quantity) → \(newQty)")
     }
 
     // MARK: - Check Inventory Availability
@@ -234,34 +238,25 @@ final class OrderFulfillmentService {
         }
     }
 
-    // MARK: - Auto-deliver stale shipped orders
+    // MARK: - Auto-deliver stale shipped orders (server-side)
 
-    /// Finds "shipped" orders whose updated_at is > 24 hours ago and marks them
-    /// as "delivered" in Supabase. This simulates last-mile delivery automatically.
-    /// Called at the start of `fetchFulfillmentOrders` so the IC's list stays clean.
+    /// Delegates to the auto_deliver_stale_orders() SECURITY DEFINER RPC which
+    /// handles its own locking, state machine transitions, and audit events.
+    /// Called at the start of fetchFulfillmentOrders so the IC's list stays clean.
     func autoDeliverStaleOrders(storeId: UUID) async {
-        let cutoff = Date().addingTimeInterval(-24 * 3_600)
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let cutoffStr = formatter.string(from: cutoff)
+        let params = AutoDeliverParams(
+            p_store_id:    storeId.uuidString.lowercased(),
+            p_hours_stale: 24
+        )
 
-        do {
-            struct ShippedRow: Decodable { let id: UUID }
-            let stale: [ShippedRow] = try await client
-                .from("orders")
-                .select("id")
-                .eq("store_id", value: storeId.uuidString.lowercased())
-                .eq("status", value: "shipped")
-                .lte("updated_at", value: cutoffStr)
-                .execute()
-                .value
-
-            for row in stale {
-                try? await updateOrderStatus(orderId: row.id, newStatus: "delivered")
-                print("[OrderFulfillmentService] ✅ Auto-delivered order \(row.id)")
-            }
-        } catch {
-            print("[OrderFulfillmentService] Auto-delivery check failed (non-fatal): \(error.localizedDescription)")
+        struct CountResult: Decodable { let count: Int? }
+        let result: CountResult? = try? await client
+            .rpc("auto_deliver_stale_orders", params: params)
+            .execute()
+            .value
+        let delivered = result?.count ?? 0
+        if delivered > 0 {
+            print("[OrderFulfillmentService] ✅ Auto-delivered \(delivered) stale order(s) for store \(storeId)")
         }
     }
 
@@ -309,6 +304,21 @@ final class OrderFulfillmentService {
         }
 
         return orders
+    }
+
+    // MARK: - Fetch Audit Trail
+
+    /// Fetches all order_events for a given order, sorted oldest first.
+    /// Used by the IC detail view to show the full status history.
+    func fetchOrderEvents(orderId: UUID) async throws -> [OrderEventDTO] {
+        let events: [OrderEventDTO] = try await client
+            .from("order_events")
+            .select()
+            .eq("order_id", value: orderId.uuidString.lowercased())
+            .order("created_at", ascending: true)
+            .execute()
+            .value
+        return events
     }
 }
 

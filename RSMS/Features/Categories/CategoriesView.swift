@@ -9,11 +9,15 @@ import SwiftUI
 import SwiftData
 
 struct CategoriesView: View {
+    @Environment(AppState.self) private var appState
+    var showsTabBar: Bool = true
     @Query(sort: \Category.displayOrder) private var categories: [Category]
 
     var body: some View {
+        @Bindable var state = appState
+
         ZStack {
-            Color.white.ignoresSafeArea()
+            AppColors.backgroundPrimary.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -26,19 +30,19 @@ struct CategoriesView: View {
                                 .foregroundColor(AppColors.accent)
                             Text("Collections")
                                 .font(.system(size: 34, weight: .black))
-                                .foregroundColor(.black)
+                                .foregroundColor(AppColors.textPrimaryDark)
                         }
                         Spacer()
                         Text("\(categories.count) categories")
                             .font(.system(size: 11, weight: .light))
-                            .foregroundColor(.black.opacity(0.4))
+                            .foregroundColor(AppColors.textSecondaryDark.opacity(0.7))
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
                     .padding(.bottom, 28)
 
                     Rectangle()
-                        .fill(Color.black.opacity(0.08))
+                        .fill(AppColors.dividerLight)
                         .frame(height: 1)
 
                     // Category list — editorial style
@@ -50,7 +54,7 @@ struct CategoriesView: View {
                             .buttonStyle(PlainButtonStyle())
 
                             Rectangle()
-                                .fill(Color.black.opacity(0.06))
+                                .fill(AppColors.dividerLight)
                                 .frame(height: 1)
                                 .padding(.leading, 20)
                         }
@@ -60,13 +64,17 @@ struct CategoriesView: View {
                 }
             }
         }
+        .toolbar(showsTabBar ? .visible : .hidden, for: .tabBar)
+        .navigationDestination(isPresented: $state.showCart) {
+            CartView()
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("CATEGORIES")
                     .font(.system(size: 12, weight: .bold))
                     .tracking(3)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppColors.textPrimaryDark)
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 CartShortcutButton()
@@ -78,10 +86,10 @@ struct CategoriesView: View {
         HStack(spacing: 16) {
             // Icon block
             ZStack {
-                Rectangle()
+                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous)
                     .fill(AppColors.accent.opacity(0.06))
                     .frame(width: 52, height: 52)
-                Image(systemName: category.icon)
+                Image(systemName: sfSymbol(for: category))
                     .font(.system(size: 20, weight: .ultraLight))
                     .foregroundColor(AppColors.accent)
             }
@@ -90,10 +98,10 @@ struct CategoriesView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(category.name)
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(AppColors.textPrimaryDark)
                 Text(category.categoryDescription)
                     .font(.system(size: 12, weight: .light))
-                    .foregroundColor(.black.opacity(0.5))
+                    .foregroundColor(AppColors.textSecondaryDark)
                     .lineLimit(1)
             }
 
@@ -101,12 +109,32 @@ struct CategoriesView: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .ultraLight))
-                .foregroundColor(.black.opacity(0.3))
+                .foregroundColor(AppColors.textSecondaryDark.opacity(0.6))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
-        .background(Color.white)
+        .background(AppColors.backgroundPrimary)
         .contentShape(Rectangle())
+    }
+
+    private func sfSymbol(for category: Category) -> String {
+        let name = category.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch name {
+        case "accessories":
+            return "briefcase.fill"
+        case "clothing":
+            return "hanger"
+        case "handbags":
+            return "handbag.fill"
+        case "limited edition":
+            return "dollarsign.circle.fill"
+        case "watches":
+            return "applewatch.watchface"
+        case "jewelry", "jewellery":
+            return "sparkles"
+        default:
+            return category.icon
+        }
     }
 }
 

@@ -382,7 +382,9 @@ struct BOPISOrderCard: View {
 
     private var nextAction: (label: String, status: String, icon: String)? {
         switch canonicalStatus {
-        case "pending", "confirmed":
+        case "pending":
+            return ("Confirm Order", "confirmed", "checkmark.circle")
+        case "confirmed":
             return ("Start Processing", "processing", "arrow.triangle.2.circlepath")
         case "processing":
             return order.channel == .bopis

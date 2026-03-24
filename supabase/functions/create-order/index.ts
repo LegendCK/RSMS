@@ -25,8 +25,9 @@ interface CreateOrderPayload {
   discountTotal?: number;
   taxTotal: number;
   grandTotal: number;
-  channel: string;   // "online" | "bopis" | "in_store" | "ship_from_store"
-  currency?: string; // defaults to "USD"
+  channel: string;    // "online" | "bopis" | "in_store" | "ship_from_store"
+  currency?: string;  // defaults to "INR"
+  storeId?: string;   // client-resolved store UUID — used directly when present, geo-routing only as fallback
 }
 
 interface StoreRow {
@@ -116,23 +117,21 @@ serve(async (req: Request) => {
       return json({ error: "Missing Authorization header" }, 401);
     }
 
-    // User-scoped client — used only to validate the token
-    const supabaseUser = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
-    if (userError || !user) {
-      return json({ error: "Unauthorized: " + (userError?.message ?? "no user") }, 401);
-    }
+    const jwt = authHeader.replace(/^Bearer\s+/i, "");
 
     // ── 2. Admin client — bypasses RLS ─────────────────────────────────────────
+    // Use admin.auth.getUser(jwt) — the recommended Supabase edge function pattern.
+    // This avoids creating a throwaway user-scoped client and is more reliable.
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    const { data: { user }, error: userError } = await admin.auth.getUser(jwt);
+    if (userError || !user) {
+      console.error("[create-order] JWT validation failed:", userError?.message);
+      return json({ error: "Unauthorized: " + (userError?.message ?? "no user") }, 401);
+    }
 
     // ── 3. Resolve client_id ───────────────────────────────────────────────────
     // Pass 1: clients.id == auth.uid (self-registered customers)
@@ -166,18 +165,34 @@ serve(async (req: Request) => {
       console.log(`[create-order] Resolved client by id: ${clientId}`);
     }
 
-    // ── 4. Resolve store (city → state/region → fallback) ─────────────────────
-    let store: StoreRow;
-    try {
-      store = await resolveStore(admin, clientId);
-    } catch (e) {
-      return json({ error: String(e) }, 400);
-    }
-
-    // ── 5. Parse payload ───────────────────────────────────────────────────────
+    // ── 4. Parse payload ───────────────────────────────────────────────────────
     const payload: CreateOrderPayload = await req.json();
-    const currency = payload.currency ?? "USD";
+    const currency = payload.currency ?? "INR";
     const discountTotal = payload.discountTotal ?? 0;
+
+    // ── 5. Resolve store ───────────────────────────────────────────────────────
+    // Priority:
+    //   1. Client-provided storeId (iOS already ran StoreAssignmentService on the shipping address)
+    //   2. Server geo-routing: clients.city → region → fallback
+    let store: StoreRow;
+    if (payload.storeId) {
+      const { data: storeById } = await admin
+        .from("stores")
+        .select("id, name, city, region")
+        .eq("id", payload.storeId)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (storeById) {
+        store = storeById as StoreRow;
+        console.log(`[create-order] ✅ Store from client hint: ${store.name} (${store.id})`);
+      } else {
+        console.warn(`[create-order] ⚠️ Client storeId ${payload.storeId} not found — falling back to geo-routing`);
+        try { store = await resolveStore(admin, clientId); } catch (e) { return json({ error: String(e) }, 400); }
+      }
+    } else {
+      try { store = await resolveStore(admin, clientId); } catch (e) { return json({ error: String(e) }, 400); }
+    }
 
     // ── 6. Insert order header ─────────────────────────────────────────────────
     const { data: order, error: orderError } = await admin
@@ -188,7 +203,7 @@ serve(async (req: Request) => {
         store_id: store.id,
         associate_id: null,
         channel: payload.channel,
-        status: "confirmed",
+        status: "pending",
         subtotal: payload.subtotal,
         discount_total: discountTotal,
         tax_total: payload.taxTotal,
@@ -205,9 +220,19 @@ serve(async (req: Request) => {
       return json({ error: "Failed to create order: " + orderError?.message }, 500);
     }
 
-    console.log(`[create-order] Order created: ${order.order_number} (${order.id}) → store: ${store.name}`);
+    console.log(`[create-order] Order created: ${order.order_number} (${order.id}) → store: ${store.name} [pending]`);
 
-    // ── 7. Insert order_items (best-effort) ────────────────────────────────────
+    // ── 7. Write initial audit event ──────────────────────────────────────────
+    await admin.from("order_events").insert({
+      order_id:    order.id,
+      from_status: null,
+      to_status:   "pending",
+      actor_id:    user.id,
+      actor_role:  "customer",
+      notes:       `Order placed via ${payload.channel}`,
+    });
+
+    // ── 8. Insert order_items (best-effort) ────────────────────────────────────
     let itemsInserted = 0;
     if (payload.cartItems && payload.cartItems.length > 0) {
       const taxRate = payload.subtotal > 0 ? payload.taxTotal / payload.subtotal : 0.08;
@@ -237,7 +262,7 @@ serve(async (req: Request) => {
       }
     }
 
-    // ── 8. Return success ──────────────────────────────────────────────────────
+    // ── 9. Return success ──────────────────────────────────────────────────────
     return json({
       success: true,
       orderId: order.id,
