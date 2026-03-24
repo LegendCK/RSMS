@@ -161,7 +161,7 @@ class CartViewModel {
     private func formatCurrency(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
+        formatter.currencyCode = "INR"
+        return formatter.string(from: NSNumber(value: value)) ?? "₹\(value)"
     }
 }

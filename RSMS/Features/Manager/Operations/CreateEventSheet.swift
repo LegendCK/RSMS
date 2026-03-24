@@ -25,11 +25,17 @@ struct CreateEventSheet: View {
     @State private var estimatedCost   = ""
     @State private var currency        = "INR"
 
+    @State private var invitedSegment: String? = nil
+    @State private var eligibleCount: Int?     = nil
+    @State private var totalCount: Int?        = nil
+    @State private var loadingEligible         = false
+
     @State private var isSubmitting = false
     @State private var errorMessage = ""
     @State private var showError    = false
 
     private let currencies = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "JPY"]
+    private let segments   = ["gold", "vip"]
 
     private var isValid: Bool {
         !eventName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -125,6 +131,42 @@ struct CreateEventSheet: View {
                             .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
                     }
 
+                    // ── Who to Invite ───────────────────────────────────
+                    formField(label: "WHO TO INVITE (OPTIONAL)") {
+                        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                            // Segment picker
+                            HStack(spacing: AppSpacing.xs) {
+                                segmentChip(label: "None",    selected: invitedSegment == nil) { invitedSegment = nil }
+                                segmentChip(label: "Gold",    selected: invitedSegment == "gold") { invitedSegment = "gold" }
+                                segmentChip(label: "VIP",     selected: invitedSegment == "vip")  { invitedSegment = "vip"  }
+                            }
+
+                            // Eligible count banner
+                            if let seg = invitedSegment {
+                                if loadingEligible {
+                                    ProgressView()
+                                        .tint(AppColors.accent)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                } else if let eligible = eligibleCount {
+                                    let excluded = (totalCount ?? eligible) - eligible
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("\(eligible) client\(eligible == 1 ? "" : "s") in the \(seg.capitalized) segment will receive an invitation.")
+                                            .font(AppTypography.caption)
+                                            .foregroundColor(AppColors.success)
+                                        if excluded > 0 {
+                                            Text("\(excluded) excluded — missing GDPR/marketing consent.")
+                                                .font(AppTypography.micro)
+                                                .foregroundColor(AppColors.warning)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .onChange(of: invitedSegment) { _, newSeg in
+                        Task { await refreshEligibleCount(segment: newSeg) }
+                    }
+
                     // ── Submit ──────────────────────────────────────────
                     Button {
                         Task { await create() }
@@ -166,6 +208,35 @@ struct CreateEventSheet: View {
 
     // MARK: - Helpers
 
+    private func segmentChip(label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(AppTypography.caption)
+                .foregroundColor(selected ? .white : AppColors.textPrimaryDark)
+                .padding(.horizontal, AppSpacing.sm)
+                .padding(.vertical, AppSpacing.xs)
+                .background(selected ? AppColors.accent : AppColors.backgroundSecondary)
+                .cornerRadius(AppSpacing.radiusSmall)
+                .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
+                    .strokeBorder(selected ? Color.clear : AppColors.border, lineWidth: 1))
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private func refreshEligibleCount(segment: String?) async {
+        guard let seg = segment else {
+            eligibleCount = nil
+            totalCount    = nil
+            return
+        }
+        loadingEligible = true
+        defer { loadingEligible = false }
+        async let eligible = EventInvitationService.shared.fetchEligibleClients(segment: seg)
+        async let total    = EventInvitationService.shared.fetchSegmentTotalCount(segment: seg)
+        eligibleCount = (try? await eligible)?.count
+        totalCount    = try? await total
+    }
+
     @ViewBuilder
     private func formField<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
@@ -203,11 +274,17 @@ struct CreateEventSheet: View {
             description:     description.trimmingCharacters(in: .whitespacesAndNewlines),
             relatedCategory: relatedCategory.trimmingCharacters(in: .whitespacesAndNewlines),
             estimatedCost:   cost,
-            currency:        currency
+            currency:        currency,
+            invitedSegment:  invitedSegment
         )
 
         do {
-            _ = try await EventSalesService.shared.createEvent(dto)
+            let created = try await EventSalesService.shared.createEvent(dto)
+            // Dispatch invitations if a segment was selected
+            if let seg = invitedSegment {
+                let clients = (try? await EventInvitationService.shared.fetchEligibleClients(segment: seg)) ?? []
+                _ = try? await EventInvitationService.shared.sendInvitations(event: created, clients: clients, storeId: storeId)
+            }
             onCreated()
             dismiss()
         } catch {

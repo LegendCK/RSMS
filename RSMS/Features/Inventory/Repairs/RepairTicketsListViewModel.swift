@@ -45,10 +45,14 @@ final class RepairTicketsListViewModel {
 
     init(
         storeId: UUID,
-        service: ServiceTicketServiceProtocol = ServiceTicketService.shared
+        service: ServiceTicketServiceProtocol
     ) {
         self.storeId = storeId
         self.service = service
+    }
+
+    convenience init(storeId: UUID) {
+        self.init(storeId: storeId, service: ServiceTicketService.shared)
     }
 
     // MARK: - Load

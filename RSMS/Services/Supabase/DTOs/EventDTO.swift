@@ -24,6 +24,7 @@ struct EventDTO: Codable, Identifiable {
     let relatedCategory: String
     let estimatedCost: Double?
     let currency: String
+    let invitedSegment: String? // "gold" | "vip" | nil
     let createdAt: Date
     let updatedAt: Date
 
@@ -41,13 +42,16 @@ struct EventDTO: Codable, Identifiable {
         case relatedCategory    = "related_category"
         case estimatedCost      = "estimated_cost"
         case currency
+        case invitedSegment     = "invited_segment"
         case createdAt          = "created_at"
         case updatedAt          = "updated_at"
     }
 
     // Convenience
-    var isActive: Bool { status == "Confirmed" || status == "In Progress" }
-    var isPast:   Bool { scheduledDate < Date() }
+    var isActive:      Bool { status == "Confirmed" || status == "In Progress" }
+    var isPast:        Bool { scheduledDate < Date() }
+    var isEditable:    Bool { status == "Planned" || status == "Confirmed" }
+    var isCancellable: Bool { status != "Completed" && status != "Cancelled" }
 }
 
 // MARK: - Event Insert DTO
@@ -65,6 +69,7 @@ struct EventInsertDTO: Codable {
     let relatedCategory: String
     let estimatedCost:   Double?
     let currency:        String
+    let invitedSegment:  String?
 
     enum CodingKeys: String, CodingKey {
         case storeId          = "store_id"
@@ -79,18 +84,37 @@ struct EventInsertDTO: Codable {
         case relatedCategory  = "related_category"
         case estimatedCost    = "estimated_cost"
         case currency
+        case invitedSegment   = "invited_segment"
     }
 }
 
 // MARK: - Event Update DTO
 
 struct EventUpdateDTO: Codable {
-    let status: String?
-    let estimatedCost: Double?
+    let eventName:       String?
+    let eventType:       String?
+    let status:          String?
+    let scheduledDate:   Date?
+    let durationMinutes: Int?
+    let capacity:        Int?
+    let description:     String?
+    let relatedCategory: String?
+    let estimatedCost:   Double?
+    let currency:        String?
+    let invitedSegment:  String?
 
     enum CodingKeys: String, CodingKey {
+        case eventName        = "event_name"
+        case eventType        = "event_type"
         case status
-        case estimatedCost = "estimated_cost"
+        case scheduledDate    = "scheduled_date"
+        case durationMinutes  = "duration_minutes"
+        case capacity
+        case description
+        case relatedCategory  = "related_category"
+        case estimatedCost    = "estimated_cost"
+        case currency
+        case invitedSegment   = "invited_segment"
     }
 }
 
