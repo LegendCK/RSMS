@@ -1,0 +1,999 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild build -project RSMS.xcodeproj -scheme RSMS -destination "generic/platform=iOS Simulator"
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  xctest-dynamic-overlay: https://github.com/pointfreeco/xctest-dynamic-overlay @ 1.9.0
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 4.2.0
+  swift-clocks: https://github.com/pointfreeco/swift-clocks @ 1.0.6
+  Supabase: https://github.com/supabase/supabase-swift @ 2.41.1
+  swift-concurrency-extras: https://github.com/pointfreeco/swift-concurrency-extras @ 1.3.2
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.5.1
+  swift-http-types: https://github.com/apple/swift-http-types.git @ 1.5.1
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (28 targets)
+    Target 'RSMS' in project 'RSMS'
+        ➜ Explicit dependency on target 'PostgREST' in project 'Supabase'
+        ➜ Explicit dependency on target 'Functions' in project 'Supabase'
+        ➜ Explicit dependency on target 'Supabase' in project 'Supabase'
+        ➜ Explicit dependency on target 'Auth' in project 'Supabase'
+        ➜ Explicit dependency on target 'Storage' in project 'Supabase'
+        ➜ Explicit dependency on target 'Realtime' in project 'Supabase'
+    Target 'Realtime' in project 'Supabase'
+        ➜ Explicit dependency on target 'Realtime' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'Storage' in project 'Supabase'
+        ➜ Explicit dependency on target 'Storage' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+    Target 'Auth' in project 'Supabase'
+        ➜ Explicit dependency on target 'Auth' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+    Target 'Supabase' in project 'Supabase'
+        ➜ Explicit dependency on target 'Supabase' in project 'Supabase'
+        ➜ Explicit dependency on target 'Functions' in project 'Supabase'
+        ➜ Explicit dependency on target 'PostgREST' in project 'Supabase'
+        ➜ Explicit dependency on target 'Auth' in project 'Supabase'
+        ➜ Explicit dependency on target 'Realtime' in project 'Supabase'
+        ➜ Explicit dependency on target 'Storage' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'Supabase' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'Auth' in project 'Supabase'
+        ➜ Explicit dependency on target 'Functions' in project 'Supabase'
+        ➜ Explicit dependency on target 'PostgREST' in project 'Supabase'
+        ➜ Explicit dependency on target 'Realtime' in project 'Supabase'
+        ➜ Explicit dependency on target 'Storage' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'Storage' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+    Target 'Realtime' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'Auth' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'Functions' in project 'Supabase'
+        ➜ Explicit dependency on target 'Functions' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+    Target 'Functions' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+    Target 'PostgREST' in project 'Supabase'
+        ➜ Explicit dependency on target 'PostgREST' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+    Target 'PostgREST' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+    Target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+    Target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReportingPackageSupport' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReportingPackageSupport' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'IssueReporting' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReportingPackageSupport' in project 'xctest-dynamic-overlay'
+    Target 'IssueReporting' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReportingPackageSupport' in project 'xctest-dynamic-overlay'
+    Target 'IssueReportingPackageSupport' in project 'xctest-dynamic-overlay' (no dependencies)
+    Target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+    Target 'HTTPTypes' in project 'swift-http-types' (no dependencies)
+    Target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+    Target 'ConcurrencyExtras' in project 'swift-concurrency-extras' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.1.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/user1/Desktop/RSMS/RSMS/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ReadFileContents /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/docc/features.json
+
+Build description signature: f3f0c0312f1a5a0b1d165bfe8665802e
+Build description path: /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/XCBuildData/f3f0c0312f1a5a0b1d165bfe8665802e.xcbuilddata
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.1.sdk /Users/user1/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.1-23B77-90cf18a4295e390e64c810bc6bd7acbc.sdkstatcache
+    cd /Users/user1/Desktop/RSMS/RSMS.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.1.sdk -o /Users/user1/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.1-23B77-90cf18a4295e390e64c810bc6bd7acbc.sdkstatcache
+
+ProcessInfoPlistFile /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto.build/empty-swift-crypto_Crypto.plist (in target 'swift-crypto_Crypto' from project 'swift-crypto')
+    cd /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/SourcePackages/checkouts/swift-crypto
+    builtin-infoPlistUtility /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto.build/empty-swift-crypto_Crypto.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist
+
+WriteAuxiliaryFile /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.LinkFileList (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    write-file /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.LinkFileList
+
+WriteAuxiliaryFile /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.SwiftFileList (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    write-file /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.SwiftFileList
+
+WriteAuxiliaryFile /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.SwiftConstValuesFileList (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    write-file /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.SwiftConstValuesFileList
+
+WriteAuxiliaryFile /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS-OutputFileMap.json (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    write-file /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS-OutputFileMap.json
+
+WriteAuxiliaryFile /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS.SwiftFileList (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    write-file /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS.SwiftFileList
+
+WriteAuxiliaryFile /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS.SwiftConstValuesFileList (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    write-file /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS.SwiftConstValuesFileList
+
+WriteAuxiliaryFile /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS.LinkFileList (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    write-file /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS.LinkFileList
+
+WriteAuxiliaryFile /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS-OutputFileMap.json (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    write-file /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS-OutputFileMap.json
+
+SwiftDriver RSMS normal x86_64 com.apple.xcode.tools.swift.compiler (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name RSMS -Onone -enforce-exclusivity\=checked @/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.SwiftFileList -DDEBUG -default-isolation\=MainActor -enable-bare-slash-regex -enable-upcoming-feature DisableOutwardActorInference -enable-upcoming-feature InferSendableFromCaptures -enable-upcoming-feature GlobalActorIsolatedTypesUsability -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.1.sdk -target x86_64-apple-ios26.0-simulator -g -module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64 -c -j8 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.1-23B77-90cf18a4295e390e64c810bc6bd7acbc.sdkstatcache -output-file-map /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS_const_extract_protocols.json -Xcc -iquote -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-generated-files.hmap -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-own-target-headers.hmap -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS-20c8144d8fc61d4ec82d88f627d29184-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-project-headers.hmap -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources-normal/x86_64 -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources/x86_64 -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS-Swift.h -working-directory /Users/user1/Desktop/RSMS -experimental-emit-module-separately -disable-cmo
+
+SwiftDriver RSMS normal arm64 com.apple.xcode.tools.swift.compiler (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name RSMS -Onone -enforce-exclusivity\=checked @/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS.SwiftFileList -DDEBUG -default-isolation\=MainActor -enable-bare-slash-regex -enable-upcoming-feature DisableOutwardActorInference -enable-upcoming-feature InferSendableFromCaptures -enable-upcoming-feature GlobalActorIsolatedTypesUsability -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.1.sdk -target arm64-apple-ios26.0-simulator -g -module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64 -c -j8 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.1-23B77-90cf18a4295e390e64c810bc6bd7acbc.sdkstatcache -output-file-map /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS_const_extract_protocols.json -Xcc -iquote -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-generated-files.hmap -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-own-target-headers.hmap -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS-20c8144d8fc61d4ec82d88f627d29184-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-project-headers.hmap -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources-normal/arm64 -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources/arm64 -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/arm64/RSMS-Swift.h -working-directory /Users/user1/Desktop/RSMS -experimental-emit-module-separately -disable-cmo
+
+ProcessInfoPlistFile /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/RSMS.app/Info.plist /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/empty-RSMS.plist (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    builtin-infoPlistUtility /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/empty-RSMS.plist -producttype com.apple.product-type.application -genpkginfo /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/RSMS.app/PkgInfo -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/assetcatalog_generated_info.plist -scanforprivacyfile /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/RSMS.app/swift-crypto_Crypto.bundle -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/RSMS.app/Info.plist
+
+SwiftCompile normal x86_64 Compiling\ InventoryAddStockView.swift,\ BarcodeImageScanner.swift,\ ImagePicker.swift,\ ScannerViewModel.swift,\ BarcodeScannerView.swift,\ CameraPermissionManager.swift,\ RecentScansListView.swift,\ ScanFrameView.swift,\ ScannedItemCard.swift,\ ScannerView.swift,\ ManagerDashboardView.swift,\ ManagerInsightsView.swift,\ InventoryByLocation.swift,\ ManagerInventoryView.swift,\ BOPISOrderMonitorView.swift,\ CreateEventSheet.swift,\ EventSalesReportView.swift,\ ManagerOperationsView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/AddStock/InventoryAddStockView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/DevTools/BarcodeImageScanner.swift /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/DevTools/ImagePicker.swift /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/ViewModels/ScannerViewModel.swift /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/BarcodeScannerView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/CameraPermissionManager.swift /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/RecentScansListView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/ScanFrameView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/ScannedItemCard.swift /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/ScannerView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Dashboard/ManagerDashboardView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Insights/ManagerInsightsView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Inventory/InventoryByLocation.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Inventory/ManagerInventoryView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/BOPISOrderMonitorView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/CreateEventSheet.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/EventSalesReportView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/ManagerOperationsView.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/AddStock/InventoryAddStockView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/DevTools/BarcodeImageScanner.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/DevTools/ImagePicker.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/ViewModels/ScannerViewModel.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+/Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/ViewModels/ScannerViewModel.swift:41:34: warning: main actor-isolated static property 'shared' can not be referenced from a nonisolated context; this is an error in the Swift 6 language mode
+    init(manager: ScanManager = .shared) {
+                                 ^
+/Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanManager.swift:90:16: note: static property declared here
+    static let shared = ScanManager()
+               ^
+/Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/ViewModels/ScannerViewModel.swift:143:25: warning: immutable value 'error' was never used; consider replacing with '_' or removing it
+            } catch let error as URLError {
+                        ^~~~~
+                        _
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/BarcodeScannerView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/CameraPermissionManager.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/RecentScansListView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/ScanFrameView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+/Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/ScanFrameView.swift:23:32: warning: 'main' was deprecated in iOS 26.0: Use a UIScreen instance found through context instead (i.e, view.window.windowScene.screen), or for properties like UIScreen.scale with trait equivalents, use a traitCollection found through context.
+        let screenW = UIScreen.main.bounds.width
+                               ^
+/Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/ScanFrameView.swift:26:32: warning: 'main' was deprecated in iOS 26.0: Use a UIScreen instance found through context instead (i.e, view.window.windowScene.screen), or for properties like UIScreen.scale with trait equivalents, use a traitCollection found through context.
+        let screenH = UIScreen.main.bounds.height
+                               ^
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/ScannedItemCard.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/ScannerView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+/Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/ScannerView.swift:217:25: warning: immutable value 'result' was never used; consider replacing with '_' or removing it
+        case .found(let result) where viewModel.currentScanType == .return:
+                    ~~~~^~~~~~
+                    _
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Dashboard/ManagerDashboardView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Insights/ManagerInsightsView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Inventory/InventoryByLocation.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Inventory/ManagerInventoryView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/BOPISOrderMonitorView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/CreateEventSheet.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/EventSalesReportView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/ManagerOperationsView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+/Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/ManagerOperationsView.swift:814:13: error: argument 'systemQuantity' must precede argument 'reportedQuantity'
+            systemQuantity:   product.stockCount,
+~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/ManagerOperationsView.swift:821:53: error: value of type 'DiscrepancyService' has no member 'submitDiscrepancy'
+            _ = try await DiscrepancyService.shared.submitDiscrepancy(dto: dto)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~ ^~~~~~~~~~~~~~~~~
+
+Failed frontend command:
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-frontend -frontend -c -filelist /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/sources-1 -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/AddStock/InventoryAddStockView.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/DevTools/BarcodeImageScanner.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/DevTools/ImagePicker.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/ViewModels/ScannerViewModel.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/BarcodeScannerView.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/CameraPermissionManager.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/RecentScansListView.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/ScanFrameView.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/ScannedItemCard.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/Views/ScannerView.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Dashboard/ManagerDashboardView.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Insights/ManagerInsightsView.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Inventory/InventoryByLocation.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Inventory/ManagerInventoryView.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/BOPISOrderMonitorView.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/CreateEventSheet.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/EventSalesReportView.swift -primary-file /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/ManagerOperationsView.swift -supplementary-output-file-map /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/supplementaryOutputs-3 -emit-localized-strings -emit-localized-strings-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64 -target x86_64-apple-ios26.0-simulator -module-can-import-version DeveloperToolsSupport 23.0.4 23.0.4 -module-can-import-version SwiftUI 7.1.13.1 7.1.13 -module-can-import-version UIKit 9126.1.12.1 9126.1.12 -disable-cross-import-overlay-search -swift-module-cross-import PhotosUI /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/Frameworks/PhotosUI.framework/Modules/PhotosUI.swiftcrossimport/SwiftUI.swiftoverlay -swift-module-cross-import PhotosUI /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/Frameworks/PhotosUI.framework/Modules/PhotosUI.swiftcrossimport/WidgetKit.swiftoverlay -swift-module-cross-import PhotosUI /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.1.sdk/System/Library/Frameworks/PhotosUI.framework/Modules/PhotosUI.swiftcrossimport/SwiftUI.swiftoverlay -swift-module-cross-import PhotosUI /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.1.sdk/System/Library/Frameworks/PhotosUI.framework/Modules/PhotosUI.swiftcrossimport/WidgetKit.swiftoverlay -swift-module-cross-import SwiftData /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.1.sdk/System/Library/Frameworks/SwiftData.framework/Modules/SwiftData.swiftcrossimport/CoreData.swiftoverlay -swift-module-cross-import SwiftData /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.1.sdk/System/Library/Frameworks/SwiftData.framework/Modules/SwiftData.swiftcrossimport/SwiftUI.swiftoverlay -load-resolved-plugin /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/lib/swift/host/plugins/libFoundationMacros.dylib\#/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server\#FoundationMacros -load-resolved-plugin /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/lib/swift/host/plugins/libObservationMacros.dylib\#/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server\#ObservationMacros -load-resolved-plugin /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/lib/swift/host/plugins/libPreviewsMacros.dylib\#/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server\#PreviewsMacros -load-resolved-plugin /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/lib/swift/host/plugins/libSwiftDataMacros.dylib\#/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server\#SwiftDataMacros -load-resolved-plugin /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/lib/swift/host/plugins/libSwiftMacros.dylib\#/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server\#SwiftMacros -load-resolved-plugin /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/lib/swift/host/plugins/libSwiftUIMacros.dylib\#/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server\#SwiftUIMacros -disable-implicit-swift-modules -Xcc -fno-implicit-modules -Xcc -fno-implicit-module-maps -explicit-swift-module-map-file /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS-dependencies-2.json -enable-objc-interop -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.1.sdk -I /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator -no-color-diagnostics -Xcc -fno-color-diagnostics -enable-testing -g -debug-info-format\=dwarf -dwarf-version\=5 -module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -swift-version 5 -enforce-exclusivity\=checked -Onone -D DEBUG -serialize-debugging-options -const-gather-protocols-file /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS_const_extract_protocols.json -enable-upcoming-feature DisableOutwardActorInference -enable-upcoming-feature InferSendableFromCaptures -enable-upcoming-feature GlobalActorIsolatedTypesUsability -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -enable-bare-slash-regex -default-isolation\=MainActor -empty-abi-descriptor -validate-clang-modules-once -clang-build-session-file /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -working-directory -Xcc /Users/user1/Desktop/RSMS -enable-anonymous-context-mangled-names -file-compilation-dir /Users/user1/Desktop/RSMS -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -Xcc -ivfsstatcache -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.1-23B77-90cf18a4295e390e64c810bc6bd7acbc.sdkstatcache -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/swift-overrides.hmap -Xcc -iquote -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-generated-files.hmap -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-own-target-headers.hmap -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS-20c8144d8fc61d4ec82d88f627d29184-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-project-headers.hmap -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources-normal/x86_64 -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources/x86_64 -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources -Xcc -DDEBUG\=1 -no-auto-bridging-header-chaining -module-name RSMS -frontend-parseable-output -disable-clang-spi -target-sdk-version 26.1 -target-sdk-name iphonesimulator26.1 -clang-target x86_64-apple-ios26.1-simulator -in-process-plugin-server-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/libSwiftInProcPluginServer.dylib -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/InventoryAddStockView.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/BarcodeImageScanner.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ImagePicker.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ScannerViewModel.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/BarcodeScannerView.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/CameraPermissionManager.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RecentScansListView.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ScanFrameView.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ScannedItemCard.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ScannerView.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ManagerDashboardView.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ManagerInsightsView.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/InventoryByLocation.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ManagerInventoryView.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/BOPISOrderMonitorView.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/CreateEventSheet.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/EventSalesReportView.o -o /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ManagerOperationsView.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/InventoryAddStockView.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/BarcodeImageScanner.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ImagePicker.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ScannerViewModel.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/BarcodeScannerView.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/CameraPermissionManager.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RecentScansListView.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ScanFrameView.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ScannedItemCard.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ScannerView.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ManagerDashboardView.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ManagerInsightsView.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/InventoryByLocation.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ManagerInventoryView.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/BOPISOrderMonitorView.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/CreateEventSheet.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/EventSalesReportView.o -index-unit-output-path /RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/ManagerOperationsView.o -index-store-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Index.noindex/DataStore -index-system-modules
+SwiftCompile normal x86_64 Compiling\ CreateAppointmentView.swift,\ CreateAppointmentViewModel.swift,\ SalesAppointmentsView.swift,\ SalesAppointmentsViewModel.swift,\ SACatalogView.swift,\ ClientDetailView.swift,\ ClientDetailViewModel.swift,\ ClientEditView.swift,\ CreateClientProfileView.swift,\ CreateClientProfileViewModel.swift,\ SalesClientsView.swift,\ SalesDashboardView.swift,\ SalesProfileView.swift,\ AssistedSellingView.swift,\ SACartViewModel.swift,\ SplashScreenView.swift,\ Transfer.swift,\ WishlistView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Appointments/CreateAppointmentView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Appointments/CreateAppointmentViewModel.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Appointments/SalesAppointmentsView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Appointments/SalesAppointmentsViewModel.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Catalog/SACatalogView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Clients/ClientDetailView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Clients/ClientDetailViewModel.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Clients/ClientEditView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Clients/CreateClientProfileView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Clients/CreateClientProfileViewModel.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Clients/SalesClientsView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Dashboard/SalesDashboardView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Profile/SalesProfileView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Selling/AssistedSellingView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/ViewModels/SACartViewModel.swift /Users/user1/Desktop/RSMS/RSMS/Features/Splash/SplashScreenView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Transfers/Models/Transfer.swift /Users/user1/Desktop/RSMS/RSMS/Features/Wishlist/WishlistView.swift (in target 'RSMS' from project 'RSMS')
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Appointments/CreateAppointmentView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Appointments/CreateAppointmentViewModel.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Appointments/SalesAppointmentsView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Appointments/SalesAppointmentsViewModel.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Catalog/SACatalogView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Clients/ClientDetailView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Clients/ClientDetailViewModel.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Clients/ClientEditView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Clients/CreateClientProfileView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Clients/CreateClientProfileViewModel.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Clients/SalesClientsView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Dashboard/SalesDashboardView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Profile/SalesProfileView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/Selling/AssistedSellingView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/ViewModels/SACartViewModel.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Splash/SplashScreenView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Transfers/Models/Transfer.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Wishlist/WishlistView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 Compiling\ CSVParserService.swift,\ CSVPreviewView.swift,\ AddCategoryView.swift,\ AddProductView.swift,\ CatalogView.swift,\ AdminDashboardModels.swift,\ AdminDashboardView.swift,\ InsightsView.swift,\ OperationsView.swift,\ OrganizationView.swift,\ ProductManagementView.swift,\ AdminProfileView.swift,\ AdminReportsView.swift,\ StoreConfigView.swift,\ StoreLocation.swift,\ UserManagementView.swift,\ AfterSalesTicket.swift,\ Appointment.swift,\ CustomerAppointmentsViewModel.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Catalog/Services/CSVParserService.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Catalog/Views/CSVPreviewView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Catalog/AddCategoryView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Catalog/AddProductView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Catalog/CatalogView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Dashboard/AdminDashboardModels.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Dashboard/AdminDashboardView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Insights/InsightsView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Operations/OperationsView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Organization/OrganizationView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Products/ProductManagementView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Profile/AdminProfileView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Reports/AdminReportsView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Stores/StoreConfigView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Stores/StoreLocation.swift /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Users/UserManagementView.swift /Users/user1/Desktop/RSMS/RSMS/Features/AfterSales/Models/AfterSalesTicket.swift /Users/user1/Desktop/RSMS/RSMS/Features/Appointments/Models/Appointment.swift /Users/user1/Desktop/RSMS/RSMS/Features/Appointments/ViewModels/CustomerAppointmentsViewModel.swift (in target 'RSMS' from project 'RSMS')
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Catalog/Services/CSVParserService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Catalog/Views/CSVPreviewView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Catalog/AddCategoryView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Catalog/AddProductView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Catalog/CatalogView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Dashboard/AdminDashboardModels.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Dashboard/AdminDashboardView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Insights/InsightsView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Operations/OperationsView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Organization/OrganizationView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Products/ProductManagementView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Profile/AdminProfileView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Reports/AdminReportsView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Stores/StoreConfigView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Stores/StoreLocation.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Admin/Users/UserManagementView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/AfterSales/Models/AfterSalesTicket.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Appointments/Models/Appointment.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Appointments/ViewModels/CustomerAppointmentsViewModel.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 Compiling\ CartView.swift,\ CheckoutView.swift,\ OrderConfirmationView.swift,\ OrderDetailView.swift,\ OrdersListView.swift,\ Category.swift,\ Product.swift,\ SeedData.swift,\ BarcodeCardView.swift,\ BuyNowSheetView.swift,\ ProductDetailView.swift,\ ProductImageGalleryView.swift,\ ProductListView.swift,\ AddCardView.swift,\ ClientProfileEditView.swift,\ PaymentMethodsView.swift,\ ProfileView.swift,\ SalesAfterSalesView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/CartView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/CheckoutView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/OrderConfirmationView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/OrderDetailView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/OrdersListView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Models/Category.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Models/Product.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Models/SeedData.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/BarcodeCardView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/BuyNowSheetView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/ProductDetailView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/ProductImageGalleryView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/ProductListView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Profile/AddCardView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Profile/ClientProfileEditView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Profile/PaymentMethodsView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Profile/ProfileView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Sales/AfterSales/SalesAfterSalesView.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/CartView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/CheckoutView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/OrderConfirmationView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/OrderDetailView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/OrdersListView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Models/Category.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Models/Product.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Models/SeedData.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/BarcodeCardView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/BuyNowSheetView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/ProductDetailView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/ProductImageGalleryView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/ProductListView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Profile/AddCardView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Profile/ClientProfileEditView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Profile/PaymentMethodsView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Profile/ProfileView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Sales/AfterSales/SalesAfterSalesView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 Compiling\ AdminTabView.swift,\ MainTabView.swift,\ ManagerTabView.swift,\ SalesTabView.swift,\ AppointmentReminderService.swift,\ AppointmentDTO.swift,\ CategoryDTO.swift,\ ClientDTO.swift,\ DiscrepancyInsertDTO.swift,\ EventDTO.swift,\ InventoryDiscrepancyDTO.swift,\ OrderDTO.swift,\ DiscrepancyService.swift,\ EventSalesService.swift,\ ManagerDashboardService.swift,\ OrderService.swift,\ ProfileService.swift,\ ScanManager.swift /Users/user1/Desktop/RSMS/RSMS/Navigation/AdminTabView.swift /Users/user1/Desktop/RSMS/RSMS/Navigation/MainTabView.swift /Users/user1/Desktop/RSMS/RSMS/Navigation/ManagerTabView.swift /Users/user1/Desktop/RSMS/RSMS/Navigation/SalesTabView.swift /Users/user1/Desktop/RSMS/RSMS/Services/Notifications/AppointmentReminderService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/AppointmentDTO.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/CategoryDTO.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/ClientDTO.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/DiscrepancyInsertDTO.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/EventDTO.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/InventoryDiscrepancyDTO.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/OrderDTO.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DiscrepancyService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/EventSalesService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ManagerDashboardService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/OrderService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ProfileService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanManager.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Navigation/AdminTabView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Navigation/MainTabView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Navigation/ManagerTabView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Navigation/SalesTabView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Notifications/AppointmentReminderService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/AppointmentDTO.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/CategoryDTO.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/ClientDTO.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/DiscrepancyInsertDTO.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/EventDTO.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/InventoryDiscrepancyDTO.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/OrderDTO.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DiscrepancyService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/EventSalesService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ManagerDashboardService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/OrderService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ProfileService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanManager.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+/Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanManager.swift:124:36: warning: call to main actor-isolated initializer 'init(service:)' in a synchronous nonisolated context
+        processor: ScanProcessor = RealTimeScanProcessor(),
+                                   ^
+/Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanManager.swift:29:5: note: calls to initializer 'init(service:)' from outside of its actor context are implicitly asynchronous
+    init(service: ScanServiceProtocol = ScanService.shared) {
+    ^
+/Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanManager.swift:29:5: note: main actor isolation inferred from conformance to protocol 'ScanProcessor'
+    init(service: ScanServiceProtocol = ScanService.shared) {
+    ^
+/Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanManager.swift:125:52: warning: main actor-isolated static property 'shared' can not be referenced from a nonisolated context
+        service: ScanServiceProtocol = ScanService.shared
+                                                   ^
+/Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanService.swift:37:16: note: static property declared here
+    static let shared = ScanService()
+               ^
+
+SwiftEmitModule normal x86_64 Emitting\ module\ for\ RSMS (in target 'RSMS' from project 'RSMS')
+
+EmitSwiftModule normal x86_64 (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+/Users/user1/Desktop/RSMS/RSMS/Features/Inventory/Scanner/ViewModels/ScannerViewModel.swift:41:34: warning: main actor-isolated static property 'shared' can not be referenced from a nonisolated context; this is an error in the Swift 6 language mode
+    init(manager: ScanManager = .shared) {
+                                 ^
+/Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanManager.swift:90:16: note: static property declared here
+    static let shared = ScanManager()
+               ^
+/Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanManager.swift:124:36: warning: call to main actor-isolated initializer 'init(service:)' in a synchronous nonisolated context
+        processor: ScanProcessor = RealTimeScanProcessor(),
+                                   ^
+/Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanManager.swift:29:5: note: calls to initializer 'init(service:)' from outside of its actor context are implicitly asynchronous
+    init(service: ScanServiceProtocol = ScanService.shared) {
+    ^
+/Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanManager.swift:29:5: note: main actor isolation inferred from conformance to protocol 'ScanProcessor'
+    init(service: ScanServiceProtocol = ScanService.shared) {
+    ^
+/Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanManager.swift:125:52: warning: main actor-isolated static property 'shared' can not be referenced from a nonisolated context
+        service: ScanServiceProtocol = ScanService.shared
+                                                   ^
+/Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanService.swift:37:16: note: static property declared here
+    static let shared = ScanService()
+               ^
+
+SwiftCompile normal x86_64 Compiling\ OrderFulfillmentView.swift,\ TagOrderToEventSheet.swift,\ ManagerProfileView.swift,\ RepairTicketsListView.swift,\ ManagerStaffView.swift,\ StaffShift.swift,\ ManagerCardStyle.swift,\ AppNotification.swift,\ OnboardingPageView.swift,\ OnboardingView.swift,\ CartItem.swift,\ Order.swift,\ SavedAddress.swift,\ SavedPaymentCard.swift,\ CartViewModel.swift,\ AddressEditView.swift,\ AddressManagerView.swift,\ CartShortcutButton.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/OrderFulfillmentView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/TagOrderToEventSheet.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Profile/ManagerProfileView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Repairs/RepairTicketsListView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Staff/ManagerStaffView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Staff/StaffShift.swift /Users/user1/Desktop/RSMS/RSMS/Features/Manager/ManagerCardStyle.swift /Users/user1/Desktop/RSMS/RSMS/Features/Notifications/Models/AppNotification.swift /Users/user1/Desktop/RSMS/RSMS/Features/Onboarding/OnboardingPageView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Onboarding/OnboardingView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Models/CartItem.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Models/Order.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Models/SavedAddress.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Models/SavedPaymentCard.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/ViewModels/CartViewModel.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/AddressEditView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/AddressManagerView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/CartShortcutButton.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/OrderFulfillmentView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Operations/TagOrderToEventSheet.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Profile/ManagerProfileView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Repairs/RepairTicketsListView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Staff/ManagerStaffView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/Staff/StaffShift.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Manager/ManagerCardStyle.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Notifications/Models/AppNotification.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Onboarding/OnboardingPageView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Onboarding/OnboardingView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Models/CartItem.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Models/Order.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Models/SavedAddress.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Models/SavedPaymentCard.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/ViewModels/CartViewModel.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/AddressEditView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/AddressManagerView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/CartShortcutButton.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 Compiling\ ScanService.swift,\ ServiceTicketService.swift,\ StaffShiftSyncService.swift,\ StaffSyncService.swift,\ StockService.swift,\ StoreAndInventorySyncService.swift,\ StoreSyncService.swift,\ SupabaseConfig.swift,\ SupabaseManager.swift,\ TransferSyncService.swift,\ BarcodeGeneratorService.swift,\ BarcodePDFService.swift,\ InventoryAnalyticsService.swift,\ ShipmentMatchingService.swift,\ ContentView.swift,\ Item.swift,\ RSMSApp.swift,\ GeneratedAssetSymbols.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ServiceTicketService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/StaffShiftSyncService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/StaffSyncService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/StockService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/StoreAndInventorySyncService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/StoreSyncService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/SupabaseConfig.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/SupabaseManager.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/TransferSyncService.swift /Users/user1/Desktop/RSMS/RSMS/Services/BarcodeGeneratorService.swift /Users/user1/Desktop/RSMS/RSMS/Services/BarcodePDFService.swift /Users/user1/Desktop/RSMS/RSMS/Services/InventoryAnalyticsService.swift /Users/user1/Desktop/RSMS/RSMS/Services/ShipmentMatchingService.swift /Users/user1/Desktop/RSMS/RSMS/ContentView.swift /Users/user1/Desktop/RSMS/RSMS/Item.swift /Users/user1/Desktop/RSMS/RSMS/RSMSApp.swift /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources/GeneratedAssetSymbols.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ScanService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/ServiceTicketService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/StaffShiftSyncService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/StaffSyncService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/StockService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/StoreAndInventorySyncService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/StoreSyncService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/SupabaseConfig.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/SupabaseManager.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/TransferSyncService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/BarcodeGeneratorService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/BarcodePDFService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/InventoryAnalyticsService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/ShipmentMatchingService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/ContentView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Item.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/RSMSApp.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources/GeneratedAssetSymbols.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ RSMS (in target 'RSMS' from project 'RSMS')
+
+EmitSwiftModule normal arm64 (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftDriverJobDiscovery normal x86_64 Compiling ScanService.swift, ServiceTicketService.swift, StaffShiftSyncService.swift, StaffSyncService.swift, StockService.swift, StoreAndInventorySyncService.swift, StoreSyncService.swift, SupabaseConfig.swift, SupabaseManager.swift, TransferSyncService.swift, BarcodeGeneratorService.swift, BarcodePDFService.swift, InventoryAnalyticsService.swift, ShipmentMatchingService.swift, ContentView.swift, Item.swift, RSMSApp.swift, GeneratedAssetSymbols.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 Compiling\ LuxuryDatePicker.swift,\ LuxuryMenuPicker.swift,\ LuxuryTextField.swift /Users/user1/Desktop/RSMS/RSMS/DesignSystem/Components/LuxuryDatePicker.swift /Users/user1/Desktop/RSMS/RSMS/DesignSystem/Components/LuxuryMenuPicker.swift /Users/user1/Desktop/RSMS/RSMS/DesignSystem/Components/LuxuryTextField.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/DesignSystem/Components/LuxuryDatePicker.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/DesignSystem/Components/LuxuryMenuPicker.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/DesignSystem/Components/LuxuryTextField.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftDriverJobDiscovery normal x86_64 Compiling AdminTabView.swift, MainTabView.swift, ManagerTabView.swift, SalesTabView.swift, AppointmentReminderService.swift, AppointmentDTO.swift, CategoryDTO.swift, ClientDTO.swift, DiscrepancyInsertDTO.swift, EventDTO.swift, InventoryDiscrepancyDTO.swift, OrderDTO.swift, DiscrepancyService.swift, EventSalesService.swift, ManagerDashboardService.swift, OrderService.swift, ProfileService.swift, ScanManager.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal arm64 Compiling\ CartShortcutButton.swift,\ CartView.swift,\ CheckoutView.swift,\ OrderConfirmationView.swift,\ OrderDetailView.swift,\ OrdersListView.swift,\ Category.swift,\ Product.swift,\ SeedData.swift,\ BarcodeCardView.swift,\ BuyNowSheetView.swift,\ ProductDetailView.swift,\ ProductImageGalleryView.swift,\ ProductListView.swift,\ AddCardView.swift,\ ClientProfileEditView.swift,\ PaymentMethodsView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/CartShortcutButton.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/CartView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/CheckoutView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/OrderConfirmationView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/OrderDetailView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/OrdersListView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Models/Category.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Models/Product.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Models/SeedData.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/BarcodeCardView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/BuyNowSheetView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/ProductDetailView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/ProductImageGalleryView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/ProductListView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Profile/AddCardView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Profile/ClientProfileEditView.swift /Users/user1/Desktop/RSMS/RSMS/Features/Profile/PaymentMethodsView.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/CartShortcutButton.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/CartView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/CheckoutView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/OrderConfirmationView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/OrderDetailView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Orders/Views/OrdersListView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Models/Category.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Models/Product.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Models/SeedData.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/BarcodeCardView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/BuyNowSheetView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/ProductDetailView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/ProductImageGalleryView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Products/Views/ProductListView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Profile/AddCardView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Profile/ClientProfileEditView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal arm64 /Users/user1/Desktop/RSMS/RSMS/Features/Profile/PaymentMethodsView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftDriverJobDiscovery normal x86_64 Emitting module for RSMS (in target 'RSMS' from project 'RSMS')
+
+SwiftDriver\ Compilation\ Requirements RSMS normal x86_64 com.apple.xcode.tools.swift.compiler (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name RSMS -Onone -enforce-exclusivity\=checked @/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.SwiftFileList -DDEBUG -default-isolation\=MainActor -enable-bare-slash-regex -enable-upcoming-feature DisableOutwardActorInference -enable-upcoming-feature InferSendableFromCaptures -enable-upcoming-feature GlobalActorIsolatedTypesUsability -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.1.sdk -target x86_64-apple-ios26.0-simulator -g -module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64 -c -j8 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.1-23B77-90cf18a4295e390e64c810bc6bd7acbc.sdkstatcache -output-file-map /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/user1/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS_const_extract_protocols.json -Xcc -iquote -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-generated-files.hmap -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-own-target-headers.hmap -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS-20c8144d8fc61d4ec82d88f627d29184-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/RSMS-project-headers.hmap -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources-normal/x86_64 -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources/x86_64 -Xcc -I/Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS-Swift.h -working-directory /Users/user1/Desktop/RSMS -experimental-emit-module-separately -disable-cmo
+
+SwiftDriverJobDiscovery normal x86_64 Compiling LuxuryDatePicker.swift, LuxuryMenuPicker.swift, LuxuryTextField.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 Compiling\ AppState.swift /Users/user1/Desktop/RSMS/RSMS/App/AppState.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/App/AppState.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+Copy /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/RSMS.swiftmodule/x86_64-apple-ios-simulator.swiftmodule /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.swiftmodule (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.swiftmodule /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/RSMS.swiftmodule/x86_64-apple-ios-simulator.swiftmodule
+
+SwiftDriverJobDiscovery normal x86_64 Compiling AppState.swift (in target 'RSMS' from project 'RSMS')
+
+Copy /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/RSMS.swiftmodule/x86_64-apple-ios-simulator.swiftdoc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.swiftdoc (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.swiftdoc /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/RSMS.swiftmodule/x86_64-apple-ios-simulator.swiftdoc
+
+Copy /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/RSMS.swiftmodule/x86_64-apple-ios-simulator.abi.json /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.abi.json (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.abi.json /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/RSMS.swiftmodule/x86_64-apple-ios-simulator.abi.json
+
+Copy /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/RSMS.swiftmodule/Project/x86_64-apple-ios-simulator.swiftsourceinfo /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.swiftsourceinfo (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Intermediates.noindex/RSMS.build/Debug-iphonesimulator/RSMS.build/Objects-normal/x86_64/RSMS.swiftsourceinfo /Users/user1/Library/Developer/Xcode/DerivedData/RSMS-cklfcrgtrbfagybwuwpozuyakywc/Build/Products/Debug-iphonesimulator/RSMS.swiftmodule/Project/x86_64-apple-ios-simulator.swiftsourceinfo
+
+SwiftCompile normal x86_64 Compiling\ AppointmentService.swift,\ AuthService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/AppointmentService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/AuthService.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/AppointmentService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/AuthService.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 Compiling\ UserDTO.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/UserDTO.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/DTOs/UserDTO.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftDriverJobDiscovery normal x86_64 Compiling AppointmentService.swift, AuthService.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 Compiling\ RootView.swift /Users/user1/Desktop/RSMS/RSMS/App/RootView.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/App/RootView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftDriverJobDiscovery normal x86_64 Compiling UserDTO.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 Compiling\ ModernCardView.swift,\ ModernHeaderView.swift,\ PrimaryButton.swift /Users/user1/Desktop/RSMS/RSMS/DesignSystem/Components/ModernCardView.swift /Users/user1/Desktop/RSMS/RSMS/DesignSystem/Components/ModernHeaderView.swift /Users/user1/Desktop/RSMS/RSMS/DesignSystem/Components/PrimaryButton.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/DesignSystem/Components/ModernCardView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/DesignSystem/Components/ModernHeaderView.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftCompile normal x86_64 /Users/user1/Desktop/RSMS/RSMS/DesignSystem/Components/PrimaryButton.swift (in target 'RSMS' from project 'RSMS')
+    cd /Users/user1/Desktop/RSMS
+    
+
+SwiftDriverJobDiscovery normal x86_64 Compiling RootView.swift (in target 'RSMS' from project 'RSMS')
+
+SwiftCompile normal x86_64 Compiling\ CustomerCatalogSyncService.swift /Users/user1/Desktop/RSMS/RSMS/Services/Supabase/CustomerCatalogSyncService.swift (in target 'RSMS' from project 'RSMS')
+
