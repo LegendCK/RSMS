@@ -29,6 +29,15 @@ struct ServiceTicketDTO: Codable, Identifiable {
     let intakePhotos: [String]?
     let estimatedCost: Double?
     let finalCost: Double?
+    let estimateBreakdown: [RepairEstimateLineItem]?
+    let estimateSubtotal: Double?
+    let estimateTax: Double?
+    let estimateTotal: Double?
+    let estimateSentAt: Date?
+    let clientApprovalStatusRaw: String?
+    let clientApprovedAt: Date?
+    let clientRejectedAt: Date?
+    let approvedEstimateSnapshot: RepairEstimateSnapshot?
     let currency: String
     let slaDueDate: String?
     let notes: String?
@@ -48,6 +57,15 @@ struct ServiceTicketDTO: Codable, Identifiable {
         case intakePhotos   = "intake_photos"
         case estimatedCost  = "estimated_cost"
         case finalCost      = "final_cost"
+        case estimateBreakdown = "estimate_breakdown"
+        case estimateSubtotal = "estimate_subtotal"
+        case estimateTax = "estimate_tax"
+        case estimateTotal = "estimate_total"
+        case estimateSentAt = "estimate_sent_at"
+        case clientApprovalStatusRaw = "client_approval_status"
+        case clientApprovedAt = "client_approved_at"
+        case clientRejectedAt = "client_rejected_at"
+        case approvedEstimateSnapshot = "approved_estimate_snapshot"
         case slaDueDate     = "sla_due_date"
         case createdAt      = "created_at"
         case updatedAt      = "updated_at"
@@ -68,6 +86,16 @@ struct ServiceTicketDTO: Codable, Identifiable {
 
     var ticketType: RepairType {
         RepairType(rawValue: type) ?? .repair
+    }
+
+    var clientApprovalStatus: ClientApprovalStatus {
+        ClientApprovalStatus(rawValue: clientApprovalStatusRaw ?? "") ?? .pending
+    }
+
+    var hasRepairEstimate: Bool {
+        if let estimateTotal, estimateTotal > 0 { return true }
+        if let estimatedCost, estimatedCost > 0 { return true }
+        return !(estimateBreakdown ?? []).isEmpty
     }
 
     var isOverdue: Bool {
@@ -123,6 +151,47 @@ struct ServiceTicketUpdatePatch: Encodable {
     let estimatedCost: Double?
     let finalCost: Double?
     let assignedTo: UUID?
+    let estimateBreakdown: [RepairEstimateLineItem]?
+    let estimateSubtotal: Double?
+    let estimateTax: Double?
+    let estimateTotal: Double?
+    let estimateSentAt: Date?
+    let clientApprovalStatus: String?
+    let clientApprovedAt: Date?
+    let clientRejectedAt: Date?
+    let approvedEstimateSnapshot: RepairEstimateSnapshot?
+
+    init(
+        status: String? = nil,
+        notes: String? = nil,
+        estimatedCost: Double? = nil,
+        finalCost: Double? = nil,
+        assignedTo: UUID? = nil,
+        estimateBreakdown: [RepairEstimateLineItem]? = nil,
+        estimateSubtotal: Double? = nil,
+        estimateTax: Double? = nil,
+        estimateTotal: Double? = nil,
+        estimateSentAt: Date? = nil,
+        clientApprovalStatus: String? = nil,
+        clientApprovedAt: Date? = nil,
+        clientRejectedAt: Date? = nil,
+        approvedEstimateSnapshot: RepairEstimateSnapshot? = nil
+    ) {
+        self.status = status
+        self.notes = notes
+        self.estimatedCost = estimatedCost
+        self.finalCost = finalCost
+        self.assignedTo = assignedTo
+        self.estimateBreakdown = estimateBreakdown
+        self.estimateSubtotal = estimateSubtotal
+        self.estimateTax = estimateTax
+        self.estimateTotal = estimateTotal
+        self.estimateSentAt = estimateSentAt
+        self.clientApprovalStatus = clientApprovalStatus
+        self.clientApprovedAt = clientApprovedAt
+        self.clientRejectedAt = clientRejectedAt
+        self.approvedEstimateSnapshot = approvedEstimateSnapshot
+    }
 
     enum CodingKeys: String, CodingKey {
         case status
@@ -130,6 +199,60 @@ struct ServiceTicketUpdatePatch: Encodable {
         case estimatedCost = "estimated_cost"
         case finalCost = "final_cost"
         case assignedTo = "assigned_to"
+        case estimateBreakdown = "estimate_breakdown"
+        case estimateSubtotal = "estimate_subtotal"
+        case estimateTax = "estimate_tax"
+        case estimateTotal = "estimate_total"
+        case estimateSentAt = "estimate_sent_at"
+        case clientApprovalStatus = "client_approval_status"
+        case clientApprovedAt = "client_approved_at"
+        case clientRejectedAt = "client_rejected_at"
+        case approvedEstimateSnapshot = "approved_estimate_snapshot"
+    }
+}
+
+struct RepairEstimateLineItem: Codable, Hashable, Identifiable {
+    var id: UUID
+    var title: String
+    var amount: Double
+
+    init(id: UUID = UUID(), title: String, amount: Double) {
+        self.id = id
+        self.title = title
+        self.amount = amount
+    }
+}
+
+struct RepairEstimateSnapshot: Codable, Hashable {
+    var lines: [RepairEstimateLineItem]
+    var subtotal: Double
+    var tax: Double
+    var total: Double
+    var currency: String
+    var approvedAt: Date
+}
+
+enum ClientApprovalStatus: String, CaseIterable, Identifiable {
+    case pending
+    case approved
+    case rejected
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .pending: return "Pending"
+        case .approved: return "Approved"
+        case .rejected: return "Rejected"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .pending: return AppColors.warning
+        case .approved: return AppColors.success
+        case .rejected: return AppColors.error
+        }
     }
 }
 

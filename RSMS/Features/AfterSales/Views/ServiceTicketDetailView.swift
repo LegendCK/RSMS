@@ -8,6 +8,18 @@
 
 import SwiftUI
 
+fileprivate struct RepairEstimateLineDraft: Identifiable, Hashable {
+    var id: UUID
+    var title: String
+    var amountText: String
+
+    init(id: UUID = UUID(), title: String = "", amountText: String = "") {
+        self.id = id
+        self.title = title
+        self.amountText = amountText
+    }
+}
+
 @Observable
 @MainActor
 final class ServiceTicketDetailViewModel {
@@ -18,6 +30,10 @@ final class ServiceTicketDetailViewModel {
     var product: ProductDTO?
     var isLoadingDetails: Bool = false
     var showPartsSheet: Bool = false
+    fileprivate var estimateDraftLines: [RepairEstimateLineDraft] = []
+    var estimateTaxText: String = "0"
+    var isSubmittingEstimate: Bool = false
+    var isUpdatingApproval: Bool = false
 
     private let ticketService: ServiceTicketServiceProtocol
     private let catalogService: CatalogService
@@ -33,6 +49,7 @@ final class ServiceTicketDetailViewModel {
         self.ticketService = ticketService
         self.catalogService = catalogService
         self.clientService = clientService
+        hydrateEstimateDraftFromTicket()
     }
 
     convenience init(ticket: ServiceTicketDTO) {
@@ -69,25 +86,216 @@ final class ServiceTicketDetailViewModel {
     }
 
     func updateStatus(to newStatus: RepairStatus) async {
+        if newStatus == .inProgress,
+           ticket.hasRepairEstimate,
+           ticket.clientApprovalStatus != .approved {
+            errorMessage = "Repair cannot start until client approval is recorded."
+            return
+        }
+
         isUpdatingStatus = true
         errorMessage = nil
         do {
             try await ticketService.updateStatus(ticketId: ticket.id, status: newStatus.rawValue)
             ticket = try await ticketService.fetchTicket(id: ticket.id)
+            hydrateEstimateDraftFromTicket()
         } catch {
             errorMessage = "Status update failed: \(error.localizedDescription)"
         }
         isUpdatingStatus = false
     }
 
+    var estimateSubtotal: Double {
+        estimateDraftLines.reduce(0) { $0 + parseAmount($1.amountText) }
+    }
+
+    var estimateTax: Double {
+        parseAmount(estimateTaxText)
+    }
+
+    var estimateTotal: Double {
+        estimateSubtotal + estimateTax
+    }
+
+    var canSendEstimate: Bool {
+        !isSubmittingEstimate
+        && estimateDraftLines.contains {
+            !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && parseAmount($0.amountText) > 0
+        }
+    }
+
+    func addEstimateLine() {
+        estimateDraftLines.append(RepairEstimateLineDraft())
+    }
+
+    func addQuickLineItem(title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        if let emptyIndex = estimateDraftLines.firstIndex(where: {
+            $0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && parseAmount($0.amountText) == 0
+        }) {
+            estimateDraftLines[emptyIndex].title = trimmed
+            return
+        }
+
+        estimateDraftLines.append(RepairEstimateLineDraft(title: trimmed, amountText: ""))
+    }
+
+    func removeEstimateLine(id: UUID) {
+        estimateDraftLines.removeAll { $0.id == id }
+    }
+
+    func sendEstimateForApproval() async {
+        guard canSendEstimate else {
+            errorMessage = "Add at least one valid estimate line before sending to client."
+            return
+        }
+
+        isSubmittingEstimate = true
+        errorMessage = nil
+        defer { isSubmittingEstimate = false }
+
+        let normalized = estimateDraftLines.compactMap { line -> RepairEstimateLineItem? in
+            let title = line.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let amount = parseAmount(line.amountText)
+            guard !title.isEmpty, amount > 0 else { return nil }
+            return RepairEstimateLineItem(id: line.id, title: title, amount: amount)
+        }
+
+        do {
+            let notesLine = "Estimate sent to client at \(Date().formatted(date: .abbreviated, time: .shortened))."
+            let updatedNotes = appendNote(base: ticket.notes, line: notesLine)
+
+            ticket = try await ticketService.updateTicket(
+                ticketId: ticket.id,
+                patch: ServiceTicketUpdatePatch(
+                    status: RepairStatus.estimatePending.rawValue,
+                    notes: updatedNotes,
+                    estimatedCost: estimateTotal,
+                    finalCost: nil,
+                    assignedTo: nil,
+                    estimateBreakdown: normalized,
+                    estimateSubtotal: estimateSubtotal,
+                    estimateTax: estimateTax,
+                    estimateTotal: estimateTotal,
+                    estimateSentAt: Date(),
+                    clientApprovalStatus: ClientApprovalStatus.pending.rawValue,
+                    clientApprovedAt: nil,
+                    clientRejectedAt: nil,
+                    approvedEstimateSnapshot: nil
+                )
+            )
+            hydrateEstimateDraftFromTicket()
+        } catch {
+            errorMessage = "Failed to send estimate: \(error.localizedDescription)"
+        }
+    }
+
+    func recordClientApproval(_ status: ClientApprovalStatus) async {
+        guard status == .approved || status == .rejected else { return }
+
+        isUpdatingApproval = true
+        errorMessage = nil
+        defer { isUpdatingApproval = false }
+
+        let approvedSnapshot: RepairEstimateSnapshot? = {
+            guard status == .approved else { return nil }
+            return RepairEstimateSnapshot(
+                lines: ticket.estimateBreakdown ?? [],
+                subtotal: ticket.estimateSubtotal ?? 0,
+                tax: ticket.estimateTax ?? 0,
+                total: ticket.estimateTotal ?? ticket.estimatedCost ?? 0,
+                currency: ticket.currency,
+                approvedAt: Date()
+            )
+        }()
+
+        let approvalLine = status == .approved
+            ? "Client approved estimate at \(Date().formatted(date: .abbreviated, time: .shortened))."
+            : "Client rejected estimate at \(Date().formatted(date: .abbreviated, time: .shortened))."
+
+        do {
+            ticket = try await ticketService.updateTicket(
+                ticketId: ticket.id,
+                patch: ServiceTicketUpdatePatch(
+                    status: status == .approved ? RepairStatus.estimateApproved.rawValue : RepairStatus.estimatePending.rawValue,
+                    notes: appendNote(base: ticket.notes, line: approvalLine),
+                    estimatedCost: ticket.estimateTotal ?? ticket.estimatedCost,
+                    finalCost: nil,
+                    assignedTo: nil,
+                    estimateBreakdown: ticket.estimateBreakdown,
+                    estimateSubtotal: ticket.estimateSubtotal,
+                    estimateTax: ticket.estimateTax,
+                    estimateTotal: ticket.estimateTotal,
+                    estimateSentAt: ticket.estimateSentAt,
+                    clientApprovalStatus: status.rawValue,
+                    clientApprovedAt: status == .approved ? Date() : nil,
+                    clientRejectedAt: status == .rejected ? Date() : nil,
+                    approvedEstimateSnapshot: approvedSnapshot
+                )
+            )
+            hydrateEstimateDraftFromTicket()
+        } catch {
+            errorMessage = "Failed to update client approval: \(error.localizedDescription)"
+        }
+    }
+
+    private func hydrateEstimateDraftFromTicket() {
+        if let breakdown = ticket.estimateBreakdown, !breakdown.isEmpty {
+            estimateDraftLines = breakdown.map {
+                RepairEstimateLineDraft(
+                    id: $0.id,
+                    title: $0.title,
+                    amountText: Self.decimalFormatter.string(from: NSNumber(value: $0.amount)) ?? "\($0.amount)"
+                )
+            }
+        } else if let estimate = ticket.estimatedCost, estimate > 0 {
+            estimateDraftLines = [
+                RepairEstimateLineDraft(
+                    title: "Repair Service",
+                    amountText: Self.decimalFormatter.string(from: NSNumber(value: estimate)) ?? "\(estimate)"
+                )
+            ]
+        } else {
+            estimateDraftLines = [RepairEstimateLineDraft(title: "", amountText: "")]
+        }
+
+        let tax = ticket.estimateTax ?? 0
+        estimateTaxText = Self.decimalFormatter.string(from: NSNumber(value: tax)) ?? "0"
+    }
+
+    private func parseAmount(_ value: String) -> Double {
+        let cleaned = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: ",", with: "")
+        return Double(cleaned) ?? 0
+    }
+
+    private func appendNote(base: String?, line: String) -> String {
+        let existing = (base ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if existing.isEmpty { return line }
+        return existing + "\n" + line
+    }
+
+    private static let decimalFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        return formatter
+    }()
+
     var nextStatuses: [RepairStatus] {
         switch ticket.ticketStatus {
         case .intake:
-            return [.inProgress, .estimatePending, .cancelled]
+            return [.inProgress, .cancelled]
         case .inProgress:
-            return [.estimatePending, .completed, .cancelled]
+            return [.completed, .cancelled]
         case .estimatePending:
-            return [.estimateApproved, .cancelled]
+            return [.cancelled]
         case .estimateApproved:
             return [.inProgress, .completed]
         case .completed, .cancelled:
@@ -117,6 +325,7 @@ struct ServiceTicketDetailView: View {
                 if vm.client != nil { clientCard }
                 if vm.product != nil { productCard }
                 detailsCard
+                estimateCard
                 if let photos = vm.ticket.intakePhotos, !photos.isEmpty {
                     photosCard(photos)
                 }
@@ -350,6 +559,7 @@ private extension ServiceTicketDetailView {
             if let finalCost = vm.ticket.finalCost {
                 detailRow(title: "Final Cost", value: "INR \(String(format: "%.2f", finalCost))")
             }
+            detailRow(title: "Client Approval", value: vm.ticket.clientApprovalStatus.displayName)
             if let sla = vm.ticket.slaDueDate {
                 detailRow(title: "SLA Due", value: sla)
             }
@@ -358,6 +568,224 @@ private extension ServiceTicketDetailView {
         .padding(AppSpacing.cardPadding)
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+    }
+
+    var estimateCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack {
+                Text("REPAIR ESTIMATE")
+                    .font(AppTypography.overline)
+                    .tracking(1.8)
+                    .foregroundColor(.secondary)
+                Spacer()
+                approvalPill(vm.ticket.clientApprovalStatus)
+            }
+
+            if isCustomerView {
+                readOnlyEstimateBreakdown
+            } else {
+                editableEstimateBreakdown
+            }
+        }
+        .padding(AppSpacing.cardPadding)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+    }
+
+    var readOnlyEstimateBreakdown: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            if let lines = vm.ticket.estimateBreakdown, !lines.isEmpty {
+                ForEach(lines) { line in
+                    HStack {
+                        Text(line.title)
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Text(currency(line.amount))
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(.primary)
+                    }
+                }
+            } else {
+                Text("Estimate is not yet shared.")
+                    .font(AppTypography.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Divider()
+
+            HStack {
+                Text("Total")
+                    .font(AppTypography.label)
+                    .foregroundColor(.primary)
+                Spacer()
+                Text(currency(vm.ticket.estimateTotal ?? vm.ticket.estimatedCost ?? 0))
+                    .font(AppTypography.label)
+                    .foregroundColor(.primary)
+            }
+        }
+    }
+
+    var editableEstimateBreakdown: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text("Quick Add")
+                    .font(AppTypography.caption)
+                    .foregroundColor(.secondary)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppSpacing.xs) {
+                        ForEach(commonEstimateLineItems, id: \.self) { option in
+                            Button {
+                                vm.addQuickLineItem(title: option)
+                            } label: {
+                                Text(option)
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.accent)
+                                    .padding(.horizontal, AppSpacing.sm)
+                                    .padding(.vertical, 7)
+                                    .background(
+                                        Capsule()
+                                            .fill(AppColors.accent.opacity(0.12))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
+            ForEach(vm.estimateDraftLines.indices, id: \.self) { index in
+                HStack(spacing: AppSpacing.xs) {
+                    TextField(
+                        "Line item",
+                        text: Binding(
+                            get: { vm.estimateDraftLines[index].title },
+                            set: { vm.estimateDraftLines[index].title = $0 }
+                        )
+                    )
+                    .textInputAutocapitalization(.words)
+                    .font(AppTypography.bodySmall)
+
+                    TextField(
+                        "Amount",
+                        text: Binding(
+                            get: { vm.estimateDraftLines[index].amountText },
+                            set: { vm.estimateDraftLines[index].amountText = $0 }
+                        )
+                    )
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 90)
+                    .font(AppTypography.bodySmall)
+
+                    Button {
+                        let id = vm.estimateDraftLines[index].id
+                        vm.removeEstimateLine(id: id)
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .foregroundColor(AppColors.error)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(vm.estimateDraftLines.count <= 1)
+                }
+                .padding(.horizontal, AppSpacing.xs)
+                .padding(.vertical, AppSpacing.xs)
+                .background(
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
+                        .fill(Color(.systemGray6))
+                )
+            }
+
+            Button {
+                vm.addEstimateLine()
+            } label: {
+                Label("Add Line Item", systemImage: "plus")
+                    .font(AppTypography.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(AppColors.accent)
+
+            HStack {
+                Text("Tax")
+                    .font(AppTypography.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                TextField("0", text: $vm.estimateTaxText)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 100)
+                    .font(AppTypography.bodySmall)
+            }
+
+            Divider()
+
+            summaryRow(title: "Subtotal", amount: vm.estimateSubtotal, emphasize: false)
+            summaryRow(title: "Tax", amount: vm.estimateTax, emphasize: false)
+            summaryRow(title: "Total", amount: vm.estimateTotal, emphasize: true)
+
+            Button {
+                Task { await vm.sendEstimateForApproval() }
+            } label: {
+                HStack(spacing: AppSpacing.xs) {
+                    if vm.isSubmittingEstimate {
+                        ProgressView().tint(.white)
+                    }
+                    Text(vm.ticket.estimateSentAt == nil ? "Send Estimate For Approval" : "Resend Estimate For Approval")
+                        .font(AppTypography.buttonSecondary)
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                        .fill(AppColors.accent)
+                )
+                .opacity(vm.canSendEstimate ? 1 : 0.45)
+            }
+            .buttonStyle(.plain)
+            .disabled(!vm.canSendEstimate)
+
+            HStack(spacing: AppSpacing.xs) {
+                Button {
+                    Task { await vm.recordClientApproval(.approved) }
+                } label: {
+                    Text("Mark Approved")
+                        .font(AppTypography.caption)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                                .fill(AppColors.success)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    Task { await vm.recordClientApproval(.rejected) }
+                } label: {
+                    Text("Mark Rejected")
+                        .font(AppTypography.caption)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                                .fill(AppColors.error)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .opacity((vm.ticket.estimateSentAt != nil && !vm.isUpdatingApproval) ? 1 : 0.45)
+            .disabled(vm.ticket.estimateSentAt == nil || vm.isUpdatingApproval)
+
+            if vm.ticket.hasRepairEstimate && vm.ticket.clientApprovalStatus != .approved {
+                Text("Repairs are blocked until approval is recorded as Approved.")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.warning)
+            }
+        }
     }
 
     func photosCard(_ photos: [String]) -> some View {
@@ -431,9 +859,22 @@ private extension ServiceTicketDetailView {
                             RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
                                 .fill(status == .cancelled ? AppColors.error : AppColors.accent)
                         )
+                        .opacity(statusActionDisabled(status) ? 0.45 : 1)
                     }
                     .buttonStyle(.plain)
-                    .disabled(vm.isUpdatingStatus)
+                    .disabled(vm.isUpdatingStatus || statusActionDisabled(status))
+                }
+
+                if vm.ticket.hasRepairEstimate && vm.ticket.clientApprovalStatus != .approved {
+                    Text("Cannot move to In Progress until estimate is approved by client.")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.warning)
+                }
+
+                if vm.ticket.ticketStatus == .estimatePending {
+                    Text("Use the estimate approval controls above to mark Approved or Rejected.")
+                        .font(AppTypography.caption)
+                        .foregroundColor(.secondary)
                 }
 
                 // ── Spare Parts ──────────────────────────────────────────────
@@ -484,6 +925,31 @@ private extension ServiceTicketDetailView {
         }
     }
 
+    func approvalPill(_ status: ClientApprovalStatus) -> some View {
+        Text(status.displayName.uppercased())
+            .font(AppTypography.nano)
+            .foregroundColor(status.color)
+            .padding(.horizontal, AppSpacing.xs)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(status.color.opacity(0.15)))
+    }
+
+    func summaryRow(title: String, amount: Double, emphasize: Bool) -> some View {
+        HStack {
+            Text(title)
+                .font(emphasize ? AppTypography.label : AppTypography.caption)
+                .foregroundColor(.primary)
+            Spacer()
+            Text(currency(amount))
+                .font(emphasize ? AppTypography.label : AppTypography.caption)
+                .foregroundColor(.primary)
+        }
+    }
+
+    func currency(_ amount: Double) -> String {
+        "INR \(String(format: "%.2f", amount))"
+    }
+
     func errorBanner(_ message: String) -> some View {
         HStack(spacing: AppSpacing.xs) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -510,6 +976,20 @@ private extension ServiceTicketDetailView {
         case .completed: return 4
         case .cancelled: return 5
         }
+    }
+
+    func statusActionDisabled(_ status: RepairStatus) -> Bool {
+        status == .inProgress && vm.ticket.hasRepairEstimate && vm.ticket.clientApprovalStatus != .approved
+    }
+
+    var commonEstimateLineItems: [String] {
+        [
+            "Diagnostic Inspection",
+            "Labor Charge",
+            "Spare Part",
+            "Polishing and Cleaning",
+            "Pickup and Delivery"
+        ]
     }
 
     func resolvePhotoURL(_ path: String) -> URL? {

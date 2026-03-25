@@ -288,6 +288,9 @@ private extension ServiceTicketListView {
                 Text(ticket.ticketType.displayName)
                     .font(AppTypography.bodySmall)
                     .foregroundColor(.primary)
+                if ticket.hasRepairEstimate {
+                    approvalPill(ticket.clientApprovalStatus)
+                }
             }
 
             if let notes = ticket.conditionNotes, !notes.isEmpty {
@@ -329,5 +332,15 @@ private extension ServiceTicketListView {
             .background(
                 Capsule().fill(status.statusColor.opacity(0.14))
             )
+    }
+
+    func approvalPill(_ status: ClientApprovalStatus) -> some View {
+        Text("EST: \(status.displayName.uppercased())")
+            .font(AppTypography.nano)
+            .tracking(0.6)
+            .foregroundColor(status.color)
+            .padding(.horizontal, AppSpacing.xs)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(status.color.opacity(0.14)))
     }
 }
