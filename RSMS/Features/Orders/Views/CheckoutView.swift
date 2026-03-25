@@ -908,7 +908,7 @@ struct CheckoutView: View {
                             sku: product.sku.isEmpty ? product.id.uuidString : product.sku,
                             productName: product.name,
                             categoryName: product.categoryName,
-                            quantity: max(0, product.stockCount),
+                            quantity: 0,
                             reorderPoint: 2,
                             updatedAt: Date()
                         )
