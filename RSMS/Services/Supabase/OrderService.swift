@@ -34,6 +34,25 @@ final class OrderService {
 
     private init() {}
 
+    struct PaymentSplitInput {
+        let method: String
+        let amount: Double
+        let paymentReference: String?
+        let status: String
+
+        init(
+            method: String,
+            amount: Double,
+            paymentReference: String? = nil,
+            status: String = "completed"
+        ) {
+            self.method = method
+            self.amount = amount
+            self.paymentReference = paymentReference
+            self.status = status
+        }
+    }
+
     // MARK: - Sync order to Supabase via Edge Function
 
     /// Sends the order to the `create-order` Edge Function which uses the service role
@@ -52,7 +71,8 @@ final class OrderService {
         taxFreeReason: String = "",
         notes: String? = nil,
         deliveryCity: String? = nil,
-        deliveryState: String? = nil
+        deliveryState: String? = nil,
+        paymentSplits: [PaymentSplitInput]? = nil
     ) async throws {
 
         struct CartItemPayload: Encodable {
@@ -63,6 +83,13 @@ final class OrderService {
         }
 
         struct CreateOrderPayload: Encodable {
+            struct PaymentSplitPayload: Encodable {
+                let method: String
+                let amount: Double
+                let paymentReference: String?
+                let status: String
+            }
+
             let clientId: String?  // explicit client UUID; nil for walk-in POS sales
             let orderNumber: String
             let cartItems: [CartItemPayload]
@@ -78,6 +105,7 @@ final class OrderService {
             let notes: String?
             let deliveryCity: String?
             let deliveryState: String?
+            let paymentSplits: [PaymentSplitPayload]?
         }
 
         struct EdgeResponse: Decodable {
@@ -118,7 +146,15 @@ final class OrderService {
                 : deliveryCity?.trimmingCharacters(in: .whitespacesAndNewlines),
             deliveryState: deliveryState?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
                 ? nil
-                : deliveryState?.trimmingCharacters(in: .whitespacesAndNewlines)
+                : deliveryState?.trimmingCharacters(in: .whitespacesAndNewlines),
+            paymentSplits: paymentSplits?.map {
+                CreateOrderPayload.PaymentSplitPayload(
+                    method: $0.method,
+                    amount: $0.amount,
+                    paymentReference: $0.paymentReference,
+                    status: $0.status
+                )
+            }
         )
 
         print("[OrderService] Calling create-order edge function for order: \(orderNumber)")

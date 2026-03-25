@@ -585,12 +585,14 @@ struct OrderDetailView: View {
     }
 
     private var paymentIcon: String {
-        switch order.paymentMethod {
-        case "Credit Card": return "creditcard.fill"
-        case "Apple Pay": return "apple.logo"
-        case "Pay In Store": return "banknote.fill"
-        default: return "creditcard"
-        }
+        let payment = order.paymentMethod.lowercased()
+        if payment.contains("split:") { return "rectangle.3.group.fill" }
+        if payment.contains("cash") { return "banknote.fill" }
+        if payment.contains("bank") || payment.contains("transfer") { return "building.columns.fill" }
+        if payment.contains("apple") { return "apple.logo" }
+        if payment.contains("complimentary") || payment.contains("voucher") { return "gift.fill" }
+        if payment.contains("card") { return "creditcard.fill" }
+        return "creditcard"
     }
 
     private var selectedExchangeItem: ParsedItem? {

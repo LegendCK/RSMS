@@ -88,13 +88,25 @@ struct ProfileView: View {
 
                 // Preferences
                 Section("Preferences") {
-                    Label("Notifications", systemImage: "bell")
-                    Label("Privacy & Security", systemImage: "lock.shield")
+                    NavigationLink(destination: NotificationCenterView()) {
+                        Label("Notifications", systemImage: "bell")
+                    }
+                    NavigationLink(destination: ProfileInfoView(
+                        title: "Privacy & Security",
+                        message: "Manage your privacy preferences, account protection, and secure account behavior."
+                    )) {
+                        Label("Privacy & Security", systemImage: "lock.shield")
+                    }
                 }
 
                 // Support
                 Section("Support") {
-                    Label("Help & Support", systemImage: "questionmark.circle")
+                    NavigationLink(destination: ProfileInfoView(
+                        title: "Help & Support",
+                        message: "Get help with orders, account questions, and support contact guidance."
+                    )) {
+                        Label("Help & Support", systemImage: "questionmark.circle")
+                    }
                 }
 
                 // Sign out
@@ -158,6 +170,32 @@ struct ProfileView: View {
             return String(first.prefix(2)).uppercased()
         }
         return "G"
+    }
+}
+
+private struct ProfileInfoView: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        List {
+            Section {
+                Text(message)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .padding(.vertical, 4)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(title.uppercased())
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+            }
+        }
     }
 }
 

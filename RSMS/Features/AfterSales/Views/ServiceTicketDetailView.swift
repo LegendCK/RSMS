@@ -17,6 +17,7 @@ final class ServiceTicketDetailViewModel {
     var client: ClientDTO?
     var product: ProductDTO?
     var isLoadingDetails: Bool = false
+    var showPartsSheet: Bool = false
 
     private let ticketService: ServiceTicketServiceProtocol
     private let catalogService: CatalogService
@@ -141,6 +142,13 @@ struct ServiceTicketDetailView: View {
         }
         .task { await vm.loadRelatedData() }
         .refreshable { await vm.refreshTicket() }
+        .sheet(isPresented: $vm.showPartsSheet) {
+            TicketPartsView(
+                ticketId: vm.ticket.id,
+                storeId: vm.ticket.storeId,
+                allocatedByUserId: appState.currentUserProfile?.id
+            )
+        }
     }
 }
 
@@ -396,42 +404,61 @@ private extension ServiceTicketDetailView {
     }
 
     var actionsCard: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("UPDATE STATUS")
-                .font(AppTypography.overline)
-                .tracking(1.8)
-                .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                Text("UPDATE STATUS")
+                    .font(AppTypography.overline)
+                    .tracking(1.8)
+                    .foregroundColor(.secondary)
 
-            ForEach(vm.nextStatuses) { status in
+                ForEach(vm.nextStatuses) { status in
+                    Button {
+                        Task { await vm.updateStatus(to: status) }
+                    } label: {
+                        HStack(spacing: AppSpacing.xs) {
+                            if vm.isUpdatingStatus {
+                                ProgressView().tint(.white)
+                            }
+                            Circle()
+                                .fill(status.statusColor)
+                                .frame(width: 8, height: 8)
+                            Text("Move to \(status.displayName)")
+                                .font(AppTypography.buttonSecondary)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                                .fill(status == .cancelled ? AppColors.error : AppColors.accent)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(vm.isUpdatingStatus)
+                }
+
+                // ── Spare Parts ──────────────────────────────────────────────
                 Button {
-                    Task { await vm.updateStatus(to: status) }
+                    vm.showPartsSheet = true
                 } label: {
                     HStack(spacing: AppSpacing.xs) {
-                        if vm.isUpdatingStatus {
-                            ProgressView().tint(.white)
-                        }
-                        Circle()
-                            .fill(status.statusColor)
-                            .frame(width: 8, height: 8)
-                        Text("Move to \(status.displayName)")
+                        Image(systemName: "wrench.and.screwdriver.fill")
+                        Text("Manage Spare Parts")
                             .font(AppTypography.buttonSecondary)
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.accent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                            .fill(status == .cancelled ? AppColors.error : AppColors.accent)
+                            .stroke(AppColors.accent, lineWidth: 1.2)
                     )
                 }
                 .buttonStyle(.plain)
-                .disabled(vm.isUpdatingStatus)
             }
+            .padding(AppSpacing.cardPadding)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
         }
-        .padding(AppSpacing.cardPadding)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
-    }
 
     // MARK: - Helpers
 
