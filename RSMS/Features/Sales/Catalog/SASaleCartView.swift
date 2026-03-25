@@ -139,7 +139,7 @@ struct SASaleCartView: View {
                 }
             }
 
-            // Name + brand
+            // Name + brand + variant
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.productName)
                     .font(AppTypography.label)
@@ -148,6 +148,11 @@ struct SASaleCartView: View {
                 Text(item.productBrand)
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
+                if let variant = item.variantLabel {
+                    Text(variant)
+                        .font(AppTypography.micro)
+                        .foregroundColor(AppColors.accent.opacity(0.8))
+                }
                 Text(item.formattedLineTotal)
                     .font(AppTypography.label)
                     .foregroundColor(AppColors.accent)

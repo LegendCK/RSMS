@@ -54,9 +54,9 @@ struct ManagerOrderDetailSheet: View {
                             row(label: "Date", value: order.createdAt.formatted(date: .long, time: .omitted))
                             Divider()
                             row(label: "Time", value: order.createdAt.formatted(date: .omitted, time: .shortened))
-                            if !order.isTaxFree {
+                            if order.isTaxFree {
                                 Divider()
-                                row(label: "Tax Exempt", value: "No")
+                                row(label: "Tax Status", value: "Tax-Free ✓")
                             }
                         }
 

@@ -2,8 +2,9 @@
 //  SASaleConfirmationView.swift
 //  RSMS
 //
-//  Shown after a successful in-store POS sale is completed.
-//  Displays order number, totals, and lets the SA start a new sale.
+//  Shown after a successful in-store POS sale.
+//  Displays animated confirmation, order summary receipt, and receipt actions
+//  (share digital PDF, print, gift receipt).
 //
 
 import SwiftUI
@@ -17,6 +18,14 @@ struct SASaleConfirmationView: View {
     @State private var ringOpacity: Double = 0
     @State private var checkScale: CGFloat = 0.2
     @State private var contentOpacity: Double = 0
+
+    // Receipt state
+    @State private var receiptURL: URL?     = nil
+    @State private var giftReceiptURL: URL? = nil
+    @State private var showShareSheet       = false
+    @State private var showGiftShareSheet   = false
+    @State private var showPrintDialog      = false
+    @State private var receiptError: String? = nil
 
     var body: some View {
         ZStack {
@@ -56,6 +65,16 @@ struct SASaleConfirmationView: View {
                                 .tracking(1)
                                 .foregroundColor(AppColors.accent)
                         }
+
+                        if cart.isTaxFree {
+                            Label("Tax-Free Sale", systemImage: "checkmark.seal.fill")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(AppColors.warning)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(AppColors.warning.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
                     }
                     .opacity(contentOpacity)
 
@@ -63,7 +82,11 @@ struct SASaleConfirmationView: View {
                     receiptCard
                         .opacity(contentOpacity)
 
-                    // Actions
+                    // Receipt actions
+                    receiptActions
+                        .opacity(contentOpacity)
+
+                    // Navigation actions
                     VStack(spacing: AppSpacing.sm) {
                         Button {
                             cart.clearCart()
@@ -94,7 +117,25 @@ struct SASaleConfirmationView: View {
                 .padding(.horizontal, AppSpacing.screenHorizontal)
             }
         }
-        .onAppear { runEntryAnimation() }
+        .onAppear {
+            runEntryAnimation()
+            buildReceipt()
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let url = receiptURL {
+                ShareSheet(activityItems: [url])
+            }
+        }
+        .sheet(isPresented: $showGiftShareSheet) {
+            if let url = giftReceiptURL {
+                ShareSheet(activityItems: [url])
+            }
+        }
+        .alert("Receipt Error", isPresented: .constant(receiptError != nil)) {
+            Button("OK") { receiptError = nil }
+        } message: {
+            Text(receiptError ?? "")
+        }
     }
 
     // MARK: - Receipt Card
@@ -150,7 +191,29 @@ struct SASaleConfirmationView: View {
             if cart.discountAmount > 0 {
                 receiptRow("Discount", "−\(cart.formattedDiscount)", color: AppColors.success)
             }
-            receiptRow("Tax (8%)", cart.formattedTax)
+            if cart.isTaxFree {
+                HStack {
+                    Text("Tax")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    Text("TAX-FREE")
+                        .font(.system(size: 8, weight: .bold))
+                        .tracking(1)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(AppColors.warning)
+                        .clipShape(Capsule())
+                    Spacer()
+                    Text(cart.formattedTax) // "₹0.00"
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, 8)
+            } else {
+                receiptRow("Tax (\(Int(cart.taxRate * 100))%)", cart.formattedTax)
+            }
 
             Divider().padding(.horizontal, AppSpacing.md)
 
@@ -166,6 +229,135 @@ struct SASaleConfirmationView: View {
                 .stroke(AppColors.success.opacity(0.25), lineWidth: 1)
         )
     }
+
+    // MARK: - Receipt Actions
+
+    private var receiptActions: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text("RECEIPT")
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.accent)
+
+            HStack(spacing: AppSpacing.sm) {
+                // Share digital receipt
+                receiptActionButton(
+                    icon: "square.and.arrow.up",
+                    label: "Share"
+                ) {
+                    showShareSheet = true
+                }
+
+                // Print
+                receiptActionButton(
+                    icon: "printer",
+                    label: "Print"
+                ) {
+                    printReceipt()
+                }
+
+                // Gift receipt
+                receiptActionButton(
+                    icon: "gift",
+                    label: "Gift"
+                ) {
+                    buildGiftReceipt()
+                    showGiftShareSheet = true
+                }
+            }
+        }
+    }
+
+    private func receiptActionButton(
+        icon: String,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(AppColors.accent.opacity(0.10))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .light))
+                        .foregroundColor(AppColors.accent)
+                }
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppSpacing.sm)
+            .background(AppColors.backgroundSecondary)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Receipt Generation
+
+    private func buildReceipt() {
+        let snapshot = makeSnapshot(isGift: false)
+        receiptURL = try? InvoicePDFService.generatePOSReceipt(for: snapshot, isGift: false)
+    }
+
+    private func buildGiftReceipt() {
+        let snapshot = makeSnapshot(isGift: true)
+        giftReceiptURL = try? InvoicePDFService.generatePOSReceipt(for: snapshot, isGift: true)
+    }
+
+    private func makeSnapshot(isGift: Bool) -> InvoiceSnapshot {
+        let lineItems = cart.items.map {
+            InvoiceLineItem(
+                name:      $0.productName,
+                brand:     $0.productBrand,
+                quantity:  $0.quantity,
+                unitPrice: $0.unitPrice
+            )
+        }
+        let taxTotal = cart.tax
+        let taxBreakdown = InvoiceTaxBreakdown(
+            cgst: taxTotal / 2,
+            sgst: taxTotal / 2,
+            igst: 0,
+            cess: 0,
+            other: 0
+        )
+        return InvoiceSnapshot(
+            invoiceNumber:  cart.completedOrderNumber ?? "—",
+            orderNumber:    cart.completedOrderNumber ?? "—",
+            issuedAt:       Date(),
+            customerName:   cart.selectedClient?.fullName ?? "Walk-in Customer",
+            customerEmail:  cart.selectedClient?.email   ?? "—",
+            storeName:      "Maison Luxe",
+            storeAddress:   "In-Store Purchase",
+            shippingAddress: "—",
+            fulfillmentLabel: "In-Store",
+            paymentMethod:  cart.completedPaymentMethod,
+            currencyCode:   "INR",
+            items:          lineItems,
+            subtotal:       cart.subtotal,
+            discountTotal:  cart.discountAmount,
+            taxBreakdown:   taxBreakdown,
+            total:          cart.total,
+            isTaxFree:      cart.isTaxFree,
+            taxFreeReason:  cart.taxFreeReason
+        )
+    }
+
+    private func printReceipt() {
+        guard let url = receiptURL else { return }
+        let printController = UIPrintInteractionController.shared
+        let printInfo = UIPrintInfo(dictionary: nil)
+        printInfo.outputType = .general
+        printInfo.jobName = "Receipt \(cart.completedOrderNumber ?? "")"
+        printController.printInfo = printInfo
+        printController.printingItem = url
+        printController.present(animated: true)
+    }
+
+    // MARK: - Helpers
 
     private func receiptRow(
         _ label: String,
@@ -197,3 +389,4 @@ struct SASaleConfirmationView: View {
         }
     }
 }
+

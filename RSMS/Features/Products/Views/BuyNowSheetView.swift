@@ -854,7 +854,17 @@ struct BuyNowSheetView: View {
 
         // Determine channel and storeId from fulfillment type
         let channel: String = selectedFulfillment == .bopis ? "bopis" : "online"
-        let storeId: UUID? = selectedPickupStore?.id
+        let deliveryCity = selectedAddress?.city ?? inlineCity
+        let deliveryState = selectedAddress?.state ?? inlineAddrState
+        let storeId: UUID?
+        if selectedFulfillment == .bopis {
+            storeId = selectedPickupStore?.id
+        } else {
+            storeId = try? await StoreAssignmentService.shared.findNearestStore(
+                city: deliveryCity,
+                state: deliveryState
+            )
+        }
 
         // 1. Save locally (always — source of truth for customer order history UI)
         let order = Order(
@@ -893,7 +903,9 @@ struct BuyNowSheetView: View {
                     taxTotal: tax,
                     grandTotal: total,
                     channel: channel,
-                    storeId: storeId
+                    storeId: storeId,
+                    deliveryCity: deliveryCity,
+                    deliveryState: deliveryState
                 )
                 print("[BuyNowSheetView] ✅ Supabase sync succeeded for order: \(orderNum)")
             } catch {

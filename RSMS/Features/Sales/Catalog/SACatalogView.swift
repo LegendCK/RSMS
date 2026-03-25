@@ -2,7 +2,7 @@
 //  SACatalogView.swift
 //  RSMS
 //
-//  Sales Associate catalog view — viewing products.
+//  Sales Associate catalog view — modern card layout with luxurious feel.
 //
 
 import SwiftUI
@@ -20,7 +20,6 @@ struct SACatalogView: View {
                 VStack(spacing: 0) {
                     categoryChips
                     filterBar
-                    Divider().background(AppColors.border)
                     productList
                 }
             }
@@ -28,18 +27,17 @@ struct SACatalogView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("CATALOG")
-                        .font(AppTypography.overline)
-                        .tracking(2)
-                        .foregroundColor(AppColors.accent)
+                        .font(.system(size: 11, weight: .black))
+                        .tracking(4)
+                        .foregroundColor(.primary)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: AppSpacing.md) {
-
+                    HStack(spacing: 16) {
                         // Cart button with item-count badge
                         Button { cart.showCart = true } label: {
                             ZStack(alignment: .topTrailing) {
                                 Image(systemName: "cart")
-                                    .font(AppTypography.toolbarIcon)
+                                    .font(.system(size: 17, weight: .light))
                                     .foregroundColor(AppColors.accent)
                                 if cart.itemCount > 0 {
                                     Text("\(cart.itemCount)")
@@ -58,7 +56,7 @@ struct SACatalogView: View {
                         Button { vm.showFilters = true } label: {
                             ZStack(alignment: .topTrailing) {
                                 Image(systemName: "slider.horizontal.3")
-                                    .font(AppTypography.toolbarIcon)
+                                    .font(.system(size: 17, weight: .light))
                                     .foregroundColor(AppColors.accent)
                                 if vm.activeFilterCount > 0 {
                                     Text("\(vm.activeFilterCount)")
@@ -106,7 +104,7 @@ struct SACatalogView: View {
 
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: AppSpacing.xs) {
+            HStack(spacing: 8) {
                 chip(label: "All", selected: vm.selectedCategoryId == nil) {
                     vm.selectedCategoryId = nil
                 }
@@ -116,30 +114,31 @@ struct SACatalogView: View {
                     }
                 }
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
-            .padding(.vertical, AppSpacing.sm)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
+        .background(AppColors.backgroundPrimary)
     }
 
     private func chip(label: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.footnote.weight(selected ? .semibold : .regular))
-                .foregroundColor(selected ? AppColors.accent : AppColors.textPrimaryDark)
+                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                .foregroundColor(selected ? AppColors.accent : .secondary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
                 .background(
                     Capsule()
                         .fill(selected
-                              ? AppColors.accent.opacity(0.12)
+                              ? AppColors.accent.opacity(0.10)
                               : AppColors.backgroundSecondary)
                 )
                 .overlay(
                     Capsule()
                         .stroke(selected
-                                ? AppColors.accent.opacity(0.4)
+                                ? AppColors.accent.opacity(0.35)
                                 : AppColors.border,
-                                lineWidth: 0.6)
+                                lineWidth: 0.8)
                 )
         }
         .buttonStyle(.plain)
@@ -149,24 +148,21 @@ struct SACatalogView: View {
     // MARK: - Filter Summary Bar
 
     private var filterBar: some View {
-        HStack(spacing: AppSpacing.sm) {
-            // Result count
+        HStack(spacing: 8) {
             let count = vm.filtered.count
             Text("\(count) product\(count == 1 ? "" : "s")")
-                .font(AppTypography.caption)
-                .foregroundColor(AppColors.textSecondaryDark)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(.secondary)
 
             Spacer()
 
-            // Active filter pills
             if vm.availabilityFilter != .all {
                 filterPill(vm.availabilityFilter.rawValue) {
                     vm.availabilityFilter = .all
                 }
             }
             if !vm.minPriceText.isEmpty || !vm.maxPriceText.isEmpty {
-                let label = priceRangeLabel()
-                filterPill(label) {
+                filterPill(priceRangeLabel()) {
                     vm.minPriceText = ""
                     vm.maxPriceText = ""
                 }
@@ -177,8 +173,9 @@ struct SACatalogView: View {
                 }
             }
         }
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-        .padding(.vertical, AppSpacing.xs)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(AppColors.backgroundPrimary)
     }
 
     // MARK: - Product List
@@ -189,56 +186,107 @@ struct SACatalogView: View {
                 ProgressView()
                     .tint(AppColors.accent)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.top, AppSpacing.xxxl)
+                    .padding(.top, 80)
             } else if vm.filtered.isEmpty {
-                VStack(spacing: AppSpacing.md) {
+                VStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 36, weight: .ultraLight))
-                        .foregroundColor(AppColors.neutral300)
+                        .foregroundColor(.secondary.opacity(0.4))
                     Text("No products found")
-                        .font(AppTypography.bodyMedium)
-                        .foregroundColor(AppColors.textSecondaryDark)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, AppSpacing.xxxl)
+                .padding(.top, 80)
             } else {
-                List(vm.filtered) { product in
-                    Button { selectedProduct = product } label: {
-                        HStack(spacing: AppSpacing.md) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(product.name)
-                                    .font(AppTypography.bodyMedium)
-                                    .foregroundColor(AppColors.textPrimaryDark)
-                                    .lineLimit(1)
-                                if let brand = product.brand {
-                                    Text(brand)
-                                        .font(AppTypography.caption)
-                                        .foregroundColor(AppColors.textSecondaryDark)
-                                }
-                                Text(product.sku)
-                                    .font(AppTypography.micro)
-                                    .foregroundColor(AppColors.neutral300)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 4) {
-                                Text("₹\(product.price, specifier: "%.0f")")
-                                    .font(AppTypography.label)
-                                    .foregroundColor(AppColors.textPrimaryDark)
-                                let (label, color) = vm.stockInfo(for: product.id)
-                                Text(label)
-                                    .font(AppTypography.micro)
-                                    .foregroundColor(color)
-                            }
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: 10) {
+                        ForEach(vm.filtered) { product in
+                            productCard(product)
                         }
-                        .padding(.vertical, AppSpacing.xs)
                     }
-                    .buttonStyle(.plain)
-                    .listRowBackground(AppColors.backgroundPrimary)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
         }
+    }
+
+    private func productCard(_ product: ProductDTO) -> some View {
+        Button { selectedProduct = product } label: {
+            HStack(spacing: 14) {
+
+                // Thumbnail
+                Group {
+                    if let url = product.resolvedImageURLs.first {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let img):
+                                img.resizable().scaledToFill()
+                            default:
+                                ZStack {
+                                    AppColors.backgroundTertiary
+                                    ProgressView().scaleEffect(0.6).tint(AppColors.accent)
+                                }
+                            }
+                        }
+                    } else {
+                        ZStack {
+                            AppColors.backgroundTertiary
+                            Image(systemName: "bag.fill")
+                                .font(.system(size: 20, weight: .ultraLight))
+                                .foregroundColor(.secondary.opacity(0.4))
+                        }
+                    }
+                }
+                .frame(width: 72, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                // Text content
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(product.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+
+                    if let brand = product.brand {
+                        Text(brand.uppercased())
+                            .font(.system(size: 9, weight: .semibold))
+                            .tracking(1.5)
+                            .foregroundColor(AppColors.accent.opacity(0.8))
+                    }
+
+                    Text(product.sku)
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
+
+                Spacer(minLength: 0)
+
+                // Price + stock
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text("₹\(product.price, specifier: "%.0f")")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.primary)
+
+                    let (label, color) = vm.stockInfo(for: product.id)
+                    Text(label)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(color)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(color.opacity(0.10))
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(14)
+            .background(AppColors.backgroundSecondary)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Filter Pill Helper
@@ -246,7 +294,7 @@ struct SACatalogView: View {
     private func filterPill(_ label: String, onRemove: @escaping () -> Void) -> some View {
         HStack(spacing: 4) {
             Text(label)
-                .font(AppTypography.micro)
+                .font(.system(size: 10, weight: .medium))
                 .foregroundColor(AppColors.accent)
             Button { onRemove() } label: {
                 Image(systemName: "xmark")
@@ -256,7 +304,7 @@ struct SACatalogView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(AppColors.accent.opacity(0.1))
+        .background(AppColors.accent.opacity(0.10))
         .clipShape(Capsule())
     }
 

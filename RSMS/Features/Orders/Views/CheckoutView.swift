@@ -875,15 +875,21 @@ struct CheckoutView: View {
             // Determine the nearest store for online delivery so the IC can fulfil it.
             // BOPIS already uses the pickup store; for online we resolve by address.
             let nearestStoreId: UUID?
+            let deliveryCity: String?
+            let deliveryState: String?
             if channel == "online" || channel == "ship_from_store" {
-                let deliveryCity  = selectedAddress?.city  ?? city
-                let deliveryState = selectedAddress?.state ?? addrState
+                let cityValue  = selectedAddress?.city  ?? city
+                let stateValue = selectedAddress?.state ?? addrState
+                deliveryCity = cityValue
+                deliveryState = stateValue
                 nearestStoreId = try? await StoreAssignmentService.shared.findNearestStore(
-                    city: deliveryCity,
-                    state: deliveryState
+                    city: cityValue,
+                    state: stateValue
                 )
             } else {
                 nearestStoreId = selectedPickupStore?.id
+                deliveryCity = nil
+                deliveryState = nil
             }
 
             print("[CheckoutView] Starting Supabase sync for clientId: \(clientId), storeId: \(nearestStoreId?.uuidString ?? "none")")
@@ -897,7 +903,9 @@ struct CheckoutView: View {
                     taxTotal: snapshotTax,
                     grandTotal: snapshotTotal,
                     channel: channel,
-                    storeId: nearestStoreId
+                    storeId: nearestStoreId,
+                    deliveryCity: deliveryCity,
+                    deliveryState: deliveryState
                 )
                 print("[CheckoutView] Supabase sync succeeded for order: \(num)")
             } catch {
