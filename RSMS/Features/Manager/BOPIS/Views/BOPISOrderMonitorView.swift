@@ -76,19 +76,6 @@ struct BOPISOrderMonitorView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            VStack(spacing: 1) {
-                Text("OMNICHANNEL ORDERS")
-                    .font(.system(size: 11, weight: .black))
-                    .tracking(3)
-                    .foregroundColor(AppColors.textPrimaryDark)
-                Text("BOPIS & SHIP-FROM-STORE")
-                    .font(.system(size: 9, weight: .medium))
-                    .tracking(2)
-                    .foregroundColor(AppColors.textSecondaryDark)
-            }
-        }
-
         ToolbarItem(placement: .navigationBarTrailing) {
             HStack(spacing: AppSpacing.xs) {
                 if viewModel.totalAlerts > 0 {

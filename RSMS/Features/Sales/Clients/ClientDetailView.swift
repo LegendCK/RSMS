@@ -126,9 +126,9 @@ struct ClientDetailView: View {
     private var formattedLTV: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
+        formatter.currencyCode = "INR"
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: vm.lifetimeValue)) ?? "$0"
+        return formatter.string(from: NSNumber(value: vm.lifetimeValue)) ?? "₹0"
     }
 
     // MARK: - Tab Bar

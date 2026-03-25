@@ -18,15 +18,6 @@ struct ScanFrameGeometry {
     let cornerRadius: CGFloat = 18
     let cornerLength: CGFloat = 28
     let cornerLineWidth: CGFloat = 3.5
-
-    var frameRect: CGRect {
-        let screenW = UIScreen.main.bounds.width
-        let width   = screenW - inset * 2
-        let height  = width * 0.62
-        let screenH = UIScreen.main.bounds.height
-        let y       = screenH * 0.5 - height * 0.5 - 30  // slightly above center
-        return CGRect(x: inset, y: y, width: width, height: height)
-    }
 }
 
 // MARK: - ScanFrameView

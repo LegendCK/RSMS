@@ -56,6 +56,8 @@ struct HomeView: View {
     @State private var showAllCategories = false
     @State private var showAllFeatured = false
     @State private var showAllArrivals = false
+    @State private var showNotifications = false
+    @State private var unreadCount = 0
 
     private let banners: [BannerData] = [
         BannerData(label: "NEW SEASON", title: "Spring\n2026", subtitle: "Curated luxury for the modern connoisseur.", buttonText: "Shop Now"),
@@ -116,21 +118,52 @@ struct HomeView: View {
             // Trailing: bell and cart at identical visual height
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(alignment: .center, spacing: 20) {
-                    Button(action: {}) {
-                        Image(systemName: "bell")
-                            .font(.system(size: 17, weight: .light))
-                            .foregroundStyle(.primary)
+                    Button { showNotifications = true } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: unreadCount > 0 ? "bell.badge" : "bell")
+                                .font(.system(size: 17, weight: .light))
+                                .foregroundStyle(.primary)
+                            if unreadCount > 0 {
+                                Text(unreadCount > 9 ? "9+" : "\(unreadCount)")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 2)
+                                    .background(AppColors.accent)
+                                    .clipShape(Capsule())
+                                    .offset(x: 8, y: -6)
+                            }
+                        }
                     }
                     CartShortcutButton()
                 }
             }
         }
-        .navigationDestination(isPresented: $showAllCategories) { CategoriesView() }
-        .navigationDestination(isPresented: $showAllFeatured) { ProductListView(categoryFilter: nil) }
-        .navigationDestination(isPresented: $showAllArrivals) { ProductListView(categoryFilter: nil) }
+        .navigationDestination(isPresented: $showAllCategories) { CategoriesView(showsTabBar: false) }
+        .navigationDestination(isPresented: $showAllFeatured) { ProductListView(categoryFilter: nil, showsTabBar: false) }
+        .navigationDestination(isPresented: $showAllArrivals) { ProductListView(categoryFilter: nil, showsTabBar: false) }
         .navigationDestination(isPresented: $state.showCart) {
             CartView()
         }
+        .sheet(isPresented: $showNotifications, onDismiss: { Task { await refreshUnreadCount() } }) {
+            NotificationCenterView()
+                .environment(appState)
+        }
+        .task {
+            await NotificationService.shared.requestPermission()
+            await refreshUnreadCount()
+            if let clientId = appState.currentUserProfile?.id {
+                NotificationService.shared.subscribeToRealtime(clientId: clientId) { _ in
+                    Task { await refreshUnreadCount() }
+                }
+            }
+        }
+    }
+
+    private func refreshUnreadCount() async {
+        guard let clientId = appState.currentUserProfile?.id else { return }
+        let dtos = (try? await NotificationService.shared.fetchNotifications(clientId: clientId)) ?? []
+        unreadCount = dtos.filter { !$0.isRead }.count
     }
 
     // MARK: - Banner Carousel

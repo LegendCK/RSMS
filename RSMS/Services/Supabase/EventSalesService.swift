@@ -1,28 +1,22 @@
-//
-//  EventSalesService.swift
-//  RSMS
-//
-//  Supabase operations for boutique event management and event-linked sales reporting.
-//  Managers can create/sync events, tag orders to events, and read event ROI summaries.
-//
-
 import Foundation
 import Supabase
-
-// MARK: - Service
 
 @MainActor
 final class EventSalesService {
     static let shared = EventSalesService()
     private let client = SupabaseManager.shared.client
-
     private init() {}
 
     // MARK: - Events CRUD
 
     /// Fetch all events for a store, newest first.
+    /// Auto-transitions statuses (Planned→In Progress→Completed) before returning.
     func fetchEvents(storeId: UUID) async throws -> [EventDTO] {
-        try await client
+        _ = try? await client
+            .rpc("auto_transition_event_statuses",
+                 params: ["p_store_id": storeId.uuidString.lowercased()])
+            .execute()
+        return try await client
             .from("boutique_events")
             .select()
             .eq("store_id", value: storeId.uuidString.lowercased())
@@ -31,11 +25,33 @@ final class EventSalesService {
             .value
     }
 
+    /// Cancel an event. Only allowed for non-Completed, non-Cancelled events.
+    func cancelEvent(eventId: UUID) async throws {
+        struct CancelPatch: Encodable { let status: String }
+        try await client
+            .from("boutique_events")
+            .update(CancelPatch(status: "Cancelled"))
+            .eq("id", value: eventId.uuidString.lowercased())
+            .execute()
+    }
+
     /// Create a new event in Supabase and return the created row.
     func createEvent(_ dto: EventInsertDTO) async throws -> EventDTO {
         try await client
             .from("boutique_events")
             .insert(dto)
+            .select()
+            .single()
+            .execute()
+            .value
+    }
+
+    /// Update an existing event and return the updated row.
+    func updateEvent(eventId: UUID, dto: EventUpdateDTO) async throws -> EventDTO {
+        try await client
+            .from("boutique_events")
+            .update(dto)
+            .eq("id", value: eventId.uuidString.lowercased())
             .select()
             .single()
             .execute()
@@ -56,7 +72,8 @@ final class EventSalesService {
             description:     localEvent.eventDescription,
             relatedCategory: localEvent.relatedCategory,
             estimatedCost:   nil,
-            currency:        "INR"
+            currency:        "INR",
+            invitedSegment:  nil
         )
         return try await client
             .from("boutique_events")
@@ -65,15 +82,6 @@ final class EventSalesService {
             .single()
             .execute()
             .value
-    }
-
-    /// Update an event's status or estimated cost.
-    func updateEvent(eventId: UUID, dto: EventUpdateDTO) async throws {
-        try await client
-            .from("boutique_events")
-            .update(dto)
-            .eq("id", value: eventId.uuidString.lowercased())
-            .execute()
     }
 
     // MARK: - Order Tagging
@@ -111,8 +119,7 @@ final class EventSalesService {
             .value
     }
 
-    /// Fetch the aggregated sales summary for an event (one row per currency)
-    /// from the `event_sales_summary` view.
+    /// Fetch the aggregated sales summary for an event (one row per currency).
     func fetchEventSummary(eventId: UUID) async throws -> [EventSalesSummaryDTO] {
         try await client
             .from("event_sales_summary")
@@ -122,7 +129,7 @@ final class EventSalesService {
             .value
     }
 
-    /// Fetch summary rows for ALL events in a store (for the manager overview).
+    /// Fetch summary rows for ALL events in a store (manager overview).
     func fetchAllEventSummaries(storeId: UUID) async throws -> [EventSalesSummaryDTO] {
         try await client
             .from("event_sales_summary")
@@ -131,17 +138,5 @@ final class EventSalesService {
             .order("scheduled_date", ascending: false)
             .execute()
             .value
-    }
-}
-
-// MARK: - Currency Helpers
-
-extension EventSalesSummaryDTO {
-    /// Returns a locale-aware formatted string for any amount in this summary's currency.
-    func formatted(_ amount: Double) -> String {
-        let fmt = NumberFormatter()
-        fmt.numberStyle = .currency
-        fmt.currencyCode = currency
-        return fmt.string(from: NSNumber(value: amount)) ?? "\(currency) \(String(format: "%.2f", amount))"
     }
 }

@@ -91,6 +91,7 @@ struct ServiceTicketInsertDTO: Codable {
     let type: String
     let status: String
     let conditionNotes: String?
+    let intakePhotos: [String]?
     let estimatedCost: Double?
     let currency: String
     let slaDueDate: String?
@@ -104,6 +105,7 @@ struct ServiceTicketInsertDTO: Codable {
         case orderId        = "order_id"
         case type, status, currency, notes
         case conditionNotes = "condition_notes"
+        case intakePhotos   = "intake_photos"
         case estimatedCost  = "estimated_cost"
         case slaDueDate     = "sla_due_date"
     }

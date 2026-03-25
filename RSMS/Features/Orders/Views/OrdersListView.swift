@@ -77,6 +77,7 @@ struct OrdersListView: View {
             }
         }
         .navigationTitle("My Orders")
+        .toolbar(.hidden, for: .tabBar)
         .navigationBarTitleDisplayMode(.large)
         .refreshable { await syncOrderStatuses() }
         .task { await syncOrderStatuses() }

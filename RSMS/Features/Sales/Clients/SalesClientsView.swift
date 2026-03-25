@@ -37,7 +37,6 @@ struct SalesClientsView: View {
     }
 
     var body: some View {
-        NavigationStack {
             ZStack {
                 AppColors.backgroundPrimary.ignoresSafeArea()
 
@@ -105,7 +104,7 @@ struct SalesClientsView: View {
                         List {
                             ForEach(filteredClients) { client in
                                 ZStack {
-                                    NavigationLink(destination: ClientDetailView(client: client)) {
+                                    NavigationLink(destination: ClientDetailView(client: client).toolbar(.hidden, for: .tabBar)) {
                                         EmptyView()
                                     }
                                     .opacity(0)
@@ -139,8 +138,10 @@ struct SalesClientsView: View {
                     }
                 }
             }
-            .navigationDestination(isPresented: $showingCreateClient) {
-                CreateClientProfileView()
+            .sheet(isPresented: $showingCreateClient) {
+                NavigationStack {
+                    CreateClientProfileView()
+                }
             }
             .task {
                 await loadClients()
@@ -151,7 +152,6 @@ struct SalesClientsView: View {
                     Task { await loadClients() }
                 }
             }
-        }
     }
     
     @MainActor
@@ -210,7 +210,7 @@ struct SalesClientsView: View {
             Spacer()
             
             if let segment = client.segment, !segment.isEmpty {
-                Text(segment.capitalized.replacingOccurrences(of: "_", with: " "))
+                Text(displaySegment(segment))
                     .font(AppTypography.micro)
                     .padding(.horizontal, AppSpacing.xs)
                     .padding(.vertical, 4)
@@ -226,5 +226,16 @@ struct SalesClientsView: View {
         .padding(AppSpacing.md)
         .background(AppColors.backgroundSecondary)
         .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func displaySegment(_ segment: String) -> String {
+        switch segment.lowercased() {
+        case "vip":
+            return "VIP"
+        case "ultra_vip":
+            return "Ultra VIP"
+        default:
+            return segment.capitalized.replacingOccurrences(of: "_", with: " ")
+        }
     }
 }

@@ -211,6 +211,67 @@ struct SASaleCheckoutView: View {
                     .background(AppColors.backgroundSecondary)
                     .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
             }
+
+            // Tax-free toggle
+            taxFreeSection
+        }
+    }
+
+    // MARK: - Tax-Free Section
+
+    @ViewBuilder
+    private var taxFreeSection: some View {
+        @Bindable var cartBinding = cart
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            sectionLabel("TAX-FREE SALE")
+            VStack(spacing: 0) {
+                HStack(spacing: AppSpacing.md) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(cart.isTaxFree
+                                  ? AppColors.warning.opacity(0.12)
+                                  : AppColors.backgroundTertiary)
+                            .frame(width: 40, height: 40)
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: 16, weight: .light))
+                            .foregroundColor(cart.isTaxFree ? AppColors.warning : AppColors.neutral500)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("International / Tax-Exempt")
+                            .font(AppTypography.label)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        Text("Eligibility must be verified — tax zeroed on toggle")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $cartBinding.isTaxFree)
+                        .tint(AppColors.warning)
+                }
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, 12)
+
+                if cart.isTaxFree {
+                    Divider().padding(.leading, 60)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("ELIGIBILITY VERIFICATION")
+                            .font(.system(size: 9, weight: .semibold))
+                            .tracking(1.5)
+                            .foregroundColor(AppColors.warning)
+                        TextField("Passport / ID reference or reason…", text: $cartBinding.taxFreeReason)
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                    }
+                    .padding(.horizontal, AppSpacing.md)
+                    .padding(.vertical, 10)
+                }
+            }
+            .background(AppColors.backgroundSecondary)
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
+                    .stroke(cart.isTaxFree ? AppColors.warning.opacity(0.4) : Color.clear, lineWidth: 1)
+            )
         }
     }
 
@@ -291,7 +352,29 @@ struct SASaleCheckoutView: View {
                         reviewRow("Discount", "−\(cart.formattedDiscount)", color: AppColors.success)
                     }
                     Divider().padding(.horizontal, AppSpacing.md)
-                    reviewRow("Tax (8%)",   cart.formattedTax)
+                    if cart.isTaxFree {
+                        HStack {
+                            Text("Tax")
+                                .font(AppTypography.bodySmall)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                            Text("TAX-FREE")
+                                .font(.system(size: 9, weight: .bold))
+                                .tracking(1)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(AppColors.warning)
+                                .clipShape(Capsule())
+                            Spacer()
+                            Text(cart.formattedTax)
+                                .font(AppTypography.label)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                        }
+                        .padding(.horizontal, AppSpacing.md)
+                        .padding(.vertical, 12)
+                    } else {
+                        reviewRow("Tax (\(Int(cart.taxRate * 100))%)", cart.formattedTax)
+                    }
                     Divider().padding(.horizontal, AppSpacing.md)
                     reviewRow("Total",      cart.formattedTotal,
                               font: .system(size: 17, weight: .black),

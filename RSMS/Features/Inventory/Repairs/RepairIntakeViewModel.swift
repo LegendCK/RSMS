@@ -46,12 +46,25 @@ final class RepairIntakeViewModel {
         scanResult: ScanResult,
         storeId: UUID,
         assignedToUserId: UUID?,
-        service: ServiceTicketServiceProtocol = ServiceTicketService.shared
+        service: ServiceTicketServiceProtocol
     ) {
         self.scanResult          = scanResult
         self.storeId             = storeId
         self.assignedToUserId    = assignedToUserId
         self.service             = service
+    }
+
+    convenience init(
+        scanResult: ScanResult,
+        storeId: UUID,
+        assignedToUserId: UUID?
+    ) {
+        self.init(
+            scanResult: scanResult,
+            storeId: storeId,
+            assignedToUserId: assignedToUserId,
+            service: ServiceTicketService.shared
+        )
     }
 
     // MARK: - Validation
@@ -91,6 +104,7 @@ final class RepairIntakeViewModel {
                 type:          selectedType.rawValue,
                 status:        RepairStatus.intake.rawValue,
                 conditionNotes: conditionNotes.trimmingCharacters(in: .whitespaces),
+                intakePhotos:  nil,
                 estimatedCost: parsedCost,
                 currency:      "USD",
                 slaDueDate:    slaString,
@@ -101,6 +115,7 @@ final class RepairIntakeViewModel {
 
             // Step 4 — write to Supabase
             submittedTicket = try await service.createTicket(payload)
+            NotificationCenter.default.post(name: .repairTicketCreated, object: nil)
 
         } catch {
             errorMessage = "Could not create ticket: \(error.localizedDescription)"

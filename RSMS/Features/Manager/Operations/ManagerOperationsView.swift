@@ -23,17 +23,23 @@ struct ManagerOperationsView: View {
     @State private var liveDiscrepancies: [InventoryDiscrepancyDTO] = []
     @State private var isLoadingDiscrepancies = false
     @State private var discrepancyLoadError: String? = nil
+    @State private var selectedDiscrepancyForReview: InventoryDiscrepancyDTO? = nil
 
     // Live events data
     @State private var liveEvents: [EventDTO] = []
     @State private var isLoadingEvents = false
     @State private var selectedEventForReport: EventDTO? = nil
+    @State private var eventForEdit: EventDTO? = nil
     @State private var showCreateEvent = false
+
+    // RSVP counts cache keyed by event UUID
+    @State private var rsvpCountsCache: [UUID: RSVPCounts] = [:]
 
     // Live orders data
     @State private var liveOrders: [OrderDTO] = []
     @State private var isLoadingOrders = false
     @State private var orderToTag: OrderDTO? = nil       // drives Tag to Event sheet
+    @State private var selectedOrder: OrderDTO? = nil    // drives Order Detail sheet
 
     var body: some View {
         ZStack {
@@ -92,41 +98,7 @@ struct ManagerOperationsView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("Operations").font(AppTypography.navTitle).foregroundColor(AppColors.textPrimaryDark)
-            }
-            // Report Discrepancy button — visible only on the Discrepancies tab
-            if selectedSection == 2 {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showReportDiscrepancy = true } label: {
-                        Image(systemName: "plus.circle")
-                            .font(AppTypography.iconMedium)
-                            .foregroundColor(AppColors.accent)
-                    }
-                    .accessibilityLabel("Report Discrepancy")
-                }
-            } else if selectedSection == 3 {
-                // Create Event button on the VIP Events tab
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showCreateEvent = true } label: {
-                        Image(systemName: "plus.circle")
-                            .font(AppTypography.iconMedium)
-                            .foregroundColor(AppColors.accent)
-                    }
-                    .accessibilityLabel("Create Event")
-                }
-            } else {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showInventoryWorkspace = true } label: {
-                        Image(systemName: "shippingbox")
-                            .font(AppTypography.iconMedium)
-                            .foregroundColor(AppColors.accent)
-                    }
-                    .accessibilityLabel("Open Inventory Workspace")
-                }
-            }
-        }
+        .toolbar { operationsToolbar }
         .navigationDestination(isPresented: $showInventoryWorkspace) {
             ManagerInventoryView()
         }
@@ -140,6 +112,11 @@ struct ManagerOperationsView: View {
         }
         .sheet(isPresented: $showCreateEvent) {
             CreateEventSheet {
+                Task { await loadLiveEvents() }
+            }
+        }
+        .sheet(item: $eventForEdit) { event in
+            EditEventSheet(event: event) {
                 Task { await loadLiveEvents() }
             }
         }
@@ -159,6 +136,60 @@ struct ManagerOperationsView: View {
                     await loadLiveEvents()
                 }
             }
+        }
+        .sheet(item: $selectedOrder) { order in
+            ManagerOrderDetailSheet(order: order, events: liveEvents) {
+                Task { await loadLiveOrders() }
+            }
+        }
+        .sheet(item: $selectedDiscrepancyForReview) { disc in
+            DiscrepancyDetailSheet(discrepancy: disc) { _ in
+                Task { await loadLiveDiscrepancies() }
+            }
+        }
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var operationsToolbar: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            Text("Operations")
+                .font(AppTypography.navTitle)
+                .foregroundColor(AppColors.textPrimaryDark)
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            trailingToolbarButton
+        }
+    }
+
+    @ViewBuilder
+    private var trailingToolbarButton: some View {
+        switch selectedSection {
+        case 2:
+            Button { showReportDiscrepancy = true } label: {
+                Image(systemName: "plus.circle")
+                    .font(AppTypography.iconMedium)
+                    .foregroundColor(AppColors.accent)
+            }
+            .accessibilityLabel("Report Discrepancy")
+        case 3:
+            Button { showCreateEvent = true } label: {
+                Image(systemName: "plus.circle")
+                    .font(AppTypography.iconMedium)
+                    .foregroundColor(AppColors.accent)
+            }
+            .accessibilityLabel("Create Event")
+        case 1:
+            // BOPIS tab — BOPISOrderMonitorView provides its own bell + refresh; show nothing here
+            EmptyView()
+        default:
+            Button { showInventoryWorkspace = true } label: {
+                Image(systemName: "shippingbox")
+                    .font(AppTypography.iconMedium)
+                    .foregroundColor(AppColors.accent)
+            }
+            .accessibilityLabel("Open Inventory Workspace")
         }
     }
 
@@ -211,54 +242,76 @@ struct ManagerOperationsView: View {
     }
 
     private func liveOrderRow(_ order: OrderDTO) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            HStack {
-                Text(order.orderNumber ?? order.id.uuidString.prefix(8).description)
-                    .font(AppTypography.monoID)
-                    .foregroundColor(AppColors.neutral500)
-                Spacer()
-                // Event tag indicator
-                if order.eventId != nil {
-                    Label("Event", systemImage: "star.fill")
-                        .font(AppTypography.nano)
-                        .foregroundColor(AppColors.secondary)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(AppColors.secondary.opacity(0.1))
-                        .cornerRadius(4)
-                } else if !liveEvents.isEmpty {
-                    Button {
-                        orderToTag = order
-                    } label: {
-                        Label("Tag Event", systemImage: "star")
-                            .font(AppTypography.nano)
-                            .foregroundColor(AppColors.accent)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(AppColors.accent.opacity(0.08))
-                            .cornerRadius(4)
+        Button { selectedOrder = order } label: {
+            HStack(spacing: AppSpacing.sm) {
+                // Channel icon
+                Image(systemName: orderChannelIcon(order.channel))
+                    .font(.system(size: 18, weight: .light))
+                    .foregroundColor(AppColors.accent)
+                    .frame(width: 36, height: 36)
+                    .background(AppColors.accent.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                // Order info
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: AppSpacing.xs) {
+                        Text(order.orderNumber ?? "#\(order.id.uuidString.prefix(8))")
+                            .font(AppTypography.monoID)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        if order.eventId != nil {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 9))
+                                .foregroundColor(AppColors.secondary)
+                        }
                     }
-                }
-                Text(order.createdAt.formatted(date: .omitted, time: .shortened))
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.neutral500)
-            }
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(order.channel.replacingOccurrences(of: "_", with: " ").capitalized)
-                        .font(AppTypography.label)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                    Text(order.createdAt.formatted(date: .abbreviated, time: .omitted))
-                        .font(AppTypography.micro)
+                    Text(orderChannelLabel(order.channel))
+                        .font(AppTypography.caption)
                         .foregroundColor(AppColors.textSecondaryDark)
                 }
+
                 Spacer()
-                Text(order.formattedTotal)
-                    .font(AppTypography.label)
-                    .foregroundColor(AppColors.accent)
+
+                // Amount + time
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(order.formattedTotal)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(order.createdAt.formatted(date: .omitted, time: .shortened))
+                        .font(AppTypography.micro)
+                        .foregroundColor(AppColors.neutral500)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppColors.neutral500)
             }
+            .padding(.horizontal, AppSpacing.sm)
+            .padding(.vertical, AppSpacing.xs + 2)
+            .contentShape(Rectangle())
         }
-        .padding(AppSpacing.sm)
+        .buttonStyle(.plain)
         .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
         .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    private func orderChannelLabel(_ channel: String) -> String {
+        switch channel {
+        case "bopis":           return "Pick Up In Store"
+        case "ship_from_store": return "Ship from Store"
+        case "in_store":        return "In-Store"
+        case "online":          return "Online"
+        default:                return channel.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    private func orderChannelIcon(_ channel: String) -> String {
+        switch channel {
+        case "bopis":           return "building.2"
+        case "ship_from_store": return "shippingbox"
+        case "in_store":        return "cart"
+        case "online":          return "globe"
+        default:                return "bag"
+        }
     }
 
     private func loadLiveOrders() async {
@@ -426,10 +479,18 @@ struct ManagerOperationsView: View {
                     .font(AppTypography.caption).foregroundColor(AppColors.neutral500)
                 Spacer()
                 if item.status == "pending" && appState.currentUserRole == .boutiqueManager {
-                    Text("Review in Inventory → Requests")
-                        .font(AppTypography.nano)
-                        .foregroundColor(AppColors.accent)
-                        .italic()
+                    Button {
+                        selectedDiscrepancyForReview = item
+                    } label: {
+                        Text("Review")
+                            .font(AppTypography.nano)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(AppColors.accent)
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -521,6 +582,15 @@ struct ManagerOperationsView: View {
                     .font(AppTypography.nano).foregroundColor(sc)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(sc.opacity(0.12)).cornerRadius(4)
+                // Edit/Cancel button — pencil for editable, xmark for In Progress
+                if event.isCancellable {
+                    Button { eventForEdit = event } label: {
+                        Image(systemName: event.isEditable ? "pencil.circle" : "xmark.circle")
+                            .font(.system(size: 18, weight: .light))
+                            .foregroundColor(event.isEditable ? AppColors.accent : AppColors.error)
+                    }
+                    .padding(.leading, AppSpacing.xs)
+                }
             }
             Divider().background(AppColors.border)
             HStack(spacing: AppSpacing.md) {
@@ -534,6 +604,30 @@ struct ManagerOperationsView: View {
                 Label(event.relatedCategory, systemImage: "tag")
                     .font(AppTypography.micro).foregroundColor(AppColors.textSecondaryDark)
             }
+
+            // Invited segment + RSVP counts
+            if let seg = event.invitedSegment {
+                let counts = rsvpCountsCache[event.id]
+                HStack(spacing: AppSpacing.sm) {
+                    Label(seg.capitalized, systemImage: "person.2.fill")
+                        .font(AppTypography.micro)
+                        .foregroundColor(AppColors.secondary)
+                    Spacer()
+                    if let c = counts {
+                        HStack(spacing: 6) {
+                            rsvpPill(value: c.yes,     label: "Yes",     color: AppColors.success)
+                            rsvpPill(value: c.no,      label: "No",      color: AppColors.error)
+                            rsvpPill(value: c.pending, label: "Pending", color: AppColors.warning)
+                        }
+                    } else {
+                        ProgressView().scaleEffect(0.7)
+                            .tint(AppColors.accent)
+                            .task { await loadRSVPCounts(for: event) }
+                    }
+                }
+                .padding(.top, AppSpacing.xxs)
+            }
+
             // View Sales Report button
             Button {
                 selectedEventForReport = event
@@ -553,6 +647,28 @@ struct ManagerOperationsView: View {
         .padding(AppSpacing.cardPadding)
         .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
         .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    private func rsvpPill(value: Int, label: String, color: Color) -> some View {
+        HStack(spacing: 2) {
+            Text("\(value)")
+                .font(AppTypography.nano)
+                .fontWeight(.semibold)
+                .foregroundColor(color)
+            Text(label)
+                .font(AppTypography.nano)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(color.opacity(0.10))
+        .cornerRadius(4)
+    }
+
+    private func loadRSVPCounts(for event: EventDTO) async {
+        guard event.invitedSegment != nil else { return }
+        let counts = try? await EventInvitationService.shared.fetchRSVPCounts(eventId: event.id)
+        rsvpCountsCache[event.id] = counts ?? RSVPCounts()
     }
 
     private func loadLiveEvents() async {

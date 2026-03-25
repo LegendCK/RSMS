@@ -123,6 +123,24 @@ struct ProductDetailView: View {
                                  AppColors.error
     }
 
+    private func toggleWishlist() {
+        let targetState = !product.isWishlisted
+        product.isWishlisted = targetState
+        try? modelContext.save()
+
+        guard appState.isAuthenticated, !appState.isGuest else { return }
+
+        Task { @MainActor in
+            do {
+                try await WishlistService.shared.setWishlisted(productId: product.id, isWishlisted: targetState)
+            } catch {
+                product.isWishlisted = !targetState
+                try? modelContext.save()
+                print("[ProductDetailView] Wishlist sync failed for \(product.id): \(error)")
+            }
+        }
+    }
+
     private var cartItemQuantity: Int {
         allCartItems
             .first(where: { $0.customerEmail == appState.currentUserEmail && $0.productId == product.id })?
@@ -201,15 +219,14 @@ struct ProductDetailView: View {
                     .padding(.bottom, AppSpacing.md)
                     .background(
                         RoundedRectangle(cornerRadius: 30, style: .continuous)
-                            .fill(Color.white.opacity(0.94))
+                            .fill(AppColors.backgroundPrimary)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                    .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                                    .stroke(AppColors.border.opacity(0.25), lineWidth: 1)
                             )
                             .shadow(color: .black.opacity(0.08), radius: 16, y: 6)
                     )
                     .padding(.horizontal, 12)
-                    .offset(y: -24)
                 }
             }
         }
@@ -232,8 +249,7 @@ struct ProductDetailView: View {
                     HStack(spacing: 16) {
                         Button(action: {
                             withAnimation(.spring(response: 0.3)) {
-                                product.isWishlisted.toggle()
-                                try? modelContext.save()
+                                toggleWishlist()
                             }
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         }) {
@@ -473,7 +489,7 @@ struct ProductDetailView: View {
 
             Text(product.name)
                 .font(.system(size: 26, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(AppColors.textPrimaryDark)
 
             HStack(spacing: 4) {
                 ForEach(0..<5) { i in
@@ -483,7 +499,7 @@ struct ProductDetailView: View {
                 }
                 Text(String(format: "%.1f", product.rating))
                     .font(.system(size: 11, weight: .light))
-                    .foregroundColor(.black.opacity(0.5))
+                    .foregroundColor(AppColors.textSecondaryDark)
             }
         }
     }
@@ -1212,133 +1228,210 @@ private struct AdminProductManageSheet: View {
     @State private var errorMessage: String?
     @State private var showDeleteConfirm = false
     @State private var isDeleting = false
+    @State private var isSaving = false
 
     var body: some View {
         NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: AppSpacing.lg) {
-                    LuxuryTextField(placeholder: "Product Name", text: $name)
-                    LuxuryTextField(placeholder: "Brand", text: $brand)
-                    LuxuryTextField(placeholder: "Price (INR)", text: $priceText)
-                        .keyboardType(.decimalPad)
-                    LuxuryTextField(placeholder: "Stock Count", text: $stockText)
-                        .keyboardType(.numberPad)
+            ZStack {
+                Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
 
-                    Menu {
-                        ForEach(categories) { category in
-                            Button(category.name) { selectedCategoryName = category.name }
-                        }
-                    } label: {
-                        HStack {
-                            Text(selectedCategoryName.isEmpty ? "Select Category" : selectedCategoryName)
-                                .foregroundColor(selectedCategoryName.isEmpty ? AppColors.neutral500 : AppColors.textPrimaryDark)
-                            Spacer()
-                            Image(systemName: "chevron.up.chevron.down")
-                                .foregroundColor(AppColors.neutral500)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(AppColors.backgroundSecondary)
-                        .cornerRadius(AppSpacing.radiusMedium)
-                    }
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: AppSpacing.md) {
 
-                    Menu {
-                        Button("No Collection") { selectedCollectionId = nil }
-                        Divider()
-                        ForEach(remoteCollections.filter(\.isActive)) { collection in
-                            Button(collection.name) { selectedCollectionId = collection.id }
-                        }
-                    } label: {
-                        HStack {
-                            Text(selectedCollectionName)
-                                .foregroundColor(selectedCollectionId == nil ? AppColors.neutral500 : AppColors.textPrimaryDark)
-                            Spacer()
-                            Image(systemName: "chevron.up.chevron.down")
-                                .foregroundColor(AppColors.neutral500)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(AppColors.backgroundSecondary)
-                        .cornerRadius(AppSpacing.radiusMedium)
-                    }
-
-                    TextField("Description", text: $descriptionText, axis: .vertical)
-                        .lineLimit(4...8)
-                        .padding(AppSpacing.sm)
-                        .background(AppColors.backgroundSecondary)
-                        .cornerRadius(AppSpacing.radiusMedium)
-
-                    Toggle("Limited Edition", isOn: $isLimitedEdition)
-                        .tint(AppColors.accent)
-                    Toggle("Featured", isOn: $isFeatured)
-                        .tint(AppColors.accent)
-
-                    LuxuryTextField(placeholder: "Warranty Coverage (months)", text: $warrantyCoverageMonthsText)
-                        .keyboardType(.numberPad)
-
-                    TextField("Eligible services (comma separated)", text: $warrantyEligibleServicesText, axis: .vertical)
-                        .lineLimit(2...4)
-                        .padding(AppSpacing.sm)
-                        .background(AppColors.backgroundSecondary)
-                        .cornerRadius(AppSpacing.radiusMedium)
-
-                    Button(action: saveChanges) {
-                        Text("Save Changes")
-                            .font(AppTypography.buttonPrimary)
-                            .foregroundColor(AppColors.textPrimaryLight)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, AppSpacing.md)
-                            .background(AppColors.accent)
-                            .cornerRadius(AppSpacing.radiusMedium)
-                    }
-
-                    Button(role: .destructive) {
-                        showDeleteConfirm = true
-                    } label: {
-                        Group {
-                            if isDeleting {
-                                ProgressView().tint(.white)
-                            } else {
-                                Label("Delete Product", systemImage: "trash")
-                                    .font(AppTypography.buttonPrimary)
-                                    .foregroundColor(.white)
+                        // ── Basic Info ───────────────────────────────────────
+                        formSection(title: "PRODUCT INFO") {
+                            formRow(label: "Name") {
+                                TextField("Product name", text: $name)
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                            Divider().padding(.leading, AppSpacing.md)
+                            formRow(label: "Brand") {
+                                TextField("Brand", text: $brand)
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                            Divider().padding(.leading, AppSpacing.md)
+                            formRow(label: "Price (INR)") {
+                                TextField("0.00", text: $priceText)
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                            Divider().padding(.leading, AppSpacing.md)
+                            formRow(label: "Stock") {
+                                TextField("0", text: $stockText)
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
                             }
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppSpacing.md)
-                        .background(AppColors.error)
-                        .cornerRadius(AppSpacing.radiusMedium)
-                    }
-                    .disabled(isDeleting)
-                    .confirmationDialog(
-                        "Delete \"\(product.name)\"?",
-                        isPresented: $showDeleteConfirm,
-                        titleVisibility: .visible
-                    ) {
-                        Button("Delete Product", role: .destructive) { deleteProduct() }
-                        Button("Cancel", role: .cancel) {}
-                    } message: {
-                        Text("This will remove the product from the catalog. Existing orders will not be affected.")
-                    }
 
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(AppTypography.bodySmall)
+                        // ── Classification ───────────────────────────────────
+                        formSection(title: "CLASSIFICATION") {
+                            formRow(label: "Category") {
+                                Menu {
+                                    ForEach(categories) { cat in
+                                        Button(cat.name) { selectedCategoryName = cat.name }
+                                    }
+                                } label: {
+                                    Text(selectedCategoryName.isEmpty ? "Select…" : selectedCategoryName)
+                                        .font(AppTypography.bodyMedium)
+                                        .foregroundColor(selectedCategoryName.isEmpty ? AppColors.neutral500 : AppColors.textPrimaryDark)
+                                }
+                            }
+                            Divider().padding(.leading, AppSpacing.md)
+                            formRow(label: "Collection") {
+                                Menu {
+                                    Button("No Collection") { selectedCollectionId = nil }
+                                    Divider()
+                                    ForEach(remoteCollections.filter(\.isActive)) { col in
+                                        Button(col.name) { selectedCollectionId = col.id }
+                                    }
+                                } label: {
+                                    Text(selectedCollectionName)
+                                        .font(AppTypography.bodyMedium)
+                                        .foregroundColor(selectedCollectionId == nil ? AppColors.neutral500 : AppColors.textPrimaryDark)
+                                }
+                            }
+                        }
+
+                        // ── Description ──────────────────────────────────────
+                        formSection(title: "DESCRIPTION") {
+                            TextField("Product description…", text: $descriptionText, axis: .vertical)
+                                .font(AppTypography.bodySmall)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                                .lineLimit(3...8)
+                                .padding(AppSpacing.md)
+                        }
+
+                        // ── Flags ────────────────────────────────────────────
+                        formSection(title: "LABELS") {
+                            HStack {
+                                Label("Limited Edition", systemImage: "sparkles")
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Spacer()
+                                Toggle("", isOn: $isLimitedEdition).tint(AppColors.accent).labelsHidden()
+                            }
+                            .padding(AppSpacing.md)
+                            Divider().padding(.leading, AppSpacing.md)
+                            HStack {
+                                Label("Featured", systemImage: "star")
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Spacer()
+                                Toggle("", isOn: $isFeatured).tint(AppColors.accent).labelsHidden()
+                            }
+                            .padding(AppSpacing.md)
+                        }
+
+                        // ── Warranty ─────────────────────────────────────────
+                        formSection(title: "WARRANTY") {
+                            formRow(label: "Coverage (months)") {
+                                TextField("0", text: $warrantyCoverageMonthsText)
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                            Divider().padding(.leading, AppSpacing.md)
+                            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                                Text("ELIGIBLE SERVICES")
+                                    .font(AppTypography.overline)
+                                    .tracking(1.5)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                                TextField("Servicing, Polishing, Strap replacement…", text: $warrantyEligibleServicesText, axis: .vertical)
+                                    .font(AppTypography.bodySmall)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                    .lineLimit(2...4)
+                                Text("Comma-separated list of covered services.")
+                                    .font(AppTypography.micro)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            }
+                            .padding(AppSpacing.md)
+                        }
+
+                        // ── Error ────────────────────────────────────────────
+                        if let errorMessage {
+                            HStack(spacing: AppSpacing.xs) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 14))
+                                Text(errorMessage)
+                                    .font(AppTypography.caption)
+                            }
                             .foregroundColor(AppColors.error)
+                            .padding(AppSpacing.sm)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(AppColors.error.opacity(0.08))
+                            .cornerRadius(AppSpacing.radiusMedium)
+                            .padding(.horizontal, AppSpacing.screenHorizontal)
+                        }
+
+                        // ── Actions ──────────────────────────────────────────
+                        VStack(spacing: AppSpacing.sm) {
+                            Button(action: saveChanges) {
+                                Group {
+                                    if isSaving {
+                                        ProgressView().tint(.white)
+                                    } else {
+                                        Text("Save Changes")
+                                            .font(AppTypography.buttonPrimary)
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                            }
+                            .background(AppColors.accent)
+                            .cornerRadius(AppSpacing.radiusMedium)
+                            .disabled(isSaving || isDeleting)
+
+                            Button(role: .destructive) {
+                                showDeleteConfirm = true
+                            } label: {
+                                Group {
+                                    if isDeleting {
+                                        ProgressView().tint(AppColors.error)
+                                    } else {
+                                        Label("Delete Product", systemImage: "trash")
+                                            .font(AppTypography.buttonPrimary)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(AppColors.error)
+                            .disabled(isSaving || isDeleting)
+                            .confirmationDialog(
+                                "Delete \"\(product.name)\"?",
+                                isPresented: $showDeleteConfirm,
+                                titleVisibility: .visible
+                            ) {
+                                Button("Delete Product", role: .destructive) { deleteProduct() }
+                                Button("Keep Product", role: .cancel) {}
+                            } message: {
+                                Text("This removes the product from the catalog. Existing orders are not affected.")
+                            }
+                        }
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+
+                        Spacer().frame(height: AppSpacing.xxxl)
                     }
+                    .padding(.top, AppSpacing.md)
                 }
-                .padding(AppSpacing.screenHorizontal)
-                .padding(.top, AppSpacing.md)
-                .padding(.bottom, AppSpacing.xxxl)
             }
-            .background(AppColors.backgroundPrimary.ignoresSafeArea())
             .navigationTitle("Manage Product")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundColor(AppColors.accent)
+                        .foregroundColor(AppColors.textPrimaryDark)
                 }
             }
             .onAppear {
@@ -1356,6 +1449,38 @@ private struct AdminProductManageSheet: View {
         }
     }
 
+    // MARK: - Form helpers
+
+    @ViewBuilder
+    private func formSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(AppTypography.overline)
+                .tracking(1.5)
+                .foregroundColor(AppColors.textSecondaryDark)
+                .padding(.leading, AppSpacing.screenHorizontal)
+                .padding(.bottom, AppSpacing.xs)
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+        }
+    }
+
+    private func formRow<Content: View>(label: String, @ViewBuilder trailing: () -> Content) -> some View {
+        HStack {
+            Text(label)
+                .font(AppTypography.bodyMedium)
+                .foregroundColor(AppColors.textPrimaryDark)
+            Spacer()
+            trailing()
+        }
+        .padding(.horizontal, AppSpacing.md)
+        .padding(.vertical, 13)
+    }
+
     private func saveChanges() {
         let parsedPrice = Double(priceText.replacingOccurrences(of: ",", with: ".")) ?? product.price
         let parsedStock = Int(stockText) ?? product.stockCount
@@ -1363,7 +1488,9 @@ private struct AdminProductManageSheet: View {
         let trimmedBrand = brand.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDescription = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        isSaving = true
         Task {
+            defer { isSaving = false }
             do {
                 _ = try await CatalogService.shared.updateProduct(
                     id: product.id,

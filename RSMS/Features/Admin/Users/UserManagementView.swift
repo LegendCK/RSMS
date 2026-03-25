@@ -281,83 +281,124 @@ struct CreateUserSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppColors.backgroundPrimary
+                Color(uiColor: .systemGroupedBackground)
                     .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppSpacing.xl) {
+                    VStack(spacing: 24) {
+
                         // Header
-                        VStack(spacing: AppSpacing.xs) {
+                        VStack(spacing: 8) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(AppColors.accent.opacity(0.10))
+                                    .frame(width: 56, height: 56)
+                                Image(systemName: "person.badge.plus")
+                                    .font(.system(size: 24, weight: .light))
+                                    .foregroundColor(AppColors.accent)
+                            }
                             Text("Create Staff Account")
-                                .font(AppTypography.displaySmall)
-                                .foregroundColor(AppColors.textPrimaryDark)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.primary)
                             Text("Provision a new employee account")
-                                .font(AppTypography.bodyMedium)
-                                .foregroundColor(AppColors.textSecondaryDark)
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
                         }
-                        .padding(.top, AppSpacing.xl)
+                        .padding(.top, 24)
 
                         // Role picker
-                        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        VStack(alignment: .leading, spacing: 8) {
                             Text("ROLE")
-                                .font(AppTypography.overline)
+                                .font(.system(size: 11, weight: .semibold))
                                 .tracking(2)
                                 .foregroundColor(AppColors.accent)
-                                .padding(.horizontal, AppSpacing.screenHorizontal)
+                                .padding(.horizontal, 20)
 
                             ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: AppSpacing.xs) {
+                                HStack(spacing: 8) {
                                     ForEach(creatableRoles, id: \.self) { role in
                                         Button(action: { selectedRole = role }) {
                                             Text(role.rawValue)
-                                                .font(AppTypography.caption)
-                                                .fontWeight(selectedRole == role ? .semibold : .regular)
-                                                .foregroundColor(selectedRole == role ? .white : AppColors.textSecondaryDark)
-                                                .padding(.horizontal, AppSpacing.md)
-                                                .padding(.vertical, AppSpacing.xs)
-                                                .background(selectedRole == role ? AppColors.accent : AppColors.backgroundTertiary)
+                                                .font(.system(size: 13, weight: selectedRole == role ? .semibold : .regular))
+                                                .foregroundColor(selectedRole == role ? .white : .primary)
+                                                .padding(.horizontal, 16)
+                                                .padding(.vertical, 9)
+                                                .background(selectedRole == role ? AppColors.accent : Color(uiColor: .secondarySystemGroupedBackground))
                                                 .clipShape(Capsule())
-                                                .overlay(
-                                                    Capsule()
-                                                        .stroke(selectedRole == role ? Color.clear : AppColors.divider, lineWidth: 0.75)
-                                                )
+                                                .overlay(Capsule().strokeBorder(selectedRole == role ? Color.clear : Color(uiColor: .systemGray4), lineWidth: 1))
                                         }
                                         .buttonStyle(.plain)
                                     }
                                 }
-                                .padding(.horizontal, AppSpacing.screenHorizontal)
+                                .padding(.horizontal, 20)
                             }
                         }
 
                         // Fields
-                        VStack(spacing: AppSpacing.lg) {
-                            LuxuryTextField(placeholder: "Full Name", text: $name, icon: "person")
-                            LuxuryTextField(placeholder: "Email Address", text: $email, icon: "envelope")
-                            LuxuryTextField(placeholder: "Phone Number", text: $phone, icon: "phone")
-                            LuxuryTextField(placeholder: "Temporary Password", text: $password, isSecure: true, icon: "lock")
+                        formSection {
+                            fieldRow(label: "Full Name", icon: "person") {
+                                TextField("Required", text: $name)
+                                    .multilineTextAlignment(.trailing)
+                                    .autocorrectionDisabled()
+                            }
+                            Divider().padding(.leading, 52)
+                            fieldRow(label: "Email Address", icon: "envelope") {
+                                TextField("Required", text: $email)
+                                    .multilineTextAlignment(.trailing)
+                                    .keyboardType(.emailAddress)
+                                    .autocapitalization(.none)
+                                    .autocorrectionDisabled()
+                            }
+                            Divider().padding(.leading, 52)
+                            fieldRow(label: "Phone Number", icon: "phone") {
+                                TextField("Optional", text: $phone)
+                                    .multilineTextAlignment(.trailing)
+                                    .keyboardType(.phonePad)
+                            }
+                            Divider().padding(.leading, 52)
+                            fieldRow(label: "Temporary Password", icon: "lock") {
+                                SecureField("Min 6 characters", text: $password)
+                                    .multilineTextAlignment(.trailing)
+                            }
                         }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
 
                         // Create button
-                        PrimaryButton(title: isCreating ? "Creating…" : "Create Account") {
+                        Button {
                             Task { await createUser() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isCreating {
+                                    ProgressView()
+                                        .progressViewStyle(.circular)
+                                        .tint(.white)
+                                        .scaleEffect(0.85)
+                                }
+                                Text(isCreating ? "Creating…" : "Create Account")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(isCreating ? AppColors.accent.opacity(0.6) : AppColors.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                         .disabled(isCreating)
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-                        .padding(.top, AppSpacing.md)
-                        .padding(.bottom, AppSpacing.xxxl)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 40)
                     }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(AppTypography.closeButton)
-                            .foregroundColor(AppColors.textPrimaryDark)
-                    }
-                    .disabled(isCreating)
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(.primary)
+                }
+                ToolbarItem(placement: .principal) {
+                    Text("NEW ACCOUNT")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(2)
+                        .foregroundColor(AppColors.accent)
                 }
             }
             .alert("Error", isPresented: $showError) {
@@ -371,6 +412,36 @@ struct CreateUserSheet: View {
                 Text("\(createdName)'s account has been provisioned. Share the temporary password so they can log in.")
             }
         }
+    }
+
+    @ViewBuilder
+    private func formSection<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
+        .shadow(color: .black.opacity(0.02), radius: 2, x: 0, y: 1)
+        .padding(.horizontal, 20)
+    }
+
+    private func fieldRow<Content: View>(label: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .light))
+                .foregroundColor(AppColors.accent)
+                .frame(width: 24)
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundColor(.primary)
+            Spacer()
+            content()
+                .font(.system(size: 15))
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
     @MainActor

@@ -171,6 +171,7 @@ final class SalesAfterSalesViewModel {
                 type: ticketTypeRaw,
                 status: RepairStatus.intake.rawValue,
                 conditionNotes: conditionSummary(for: result),
+                intakePhotos: nil,
                 estimatedCost: nil,
                 currency: "INR",
                 slaDueDate: nil,

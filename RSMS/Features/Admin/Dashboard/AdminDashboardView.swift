@@ -18,6 +18,7 @@ enum ActiveAdminSheet: Identifiable {
     case addStore
     case addPromotion
     case export
+    case clientActivity
     case salesInsights
     case inventoryInsights
     case shareFile(URL)
@@ -30,6 +31,7 @@ enum ActiveAdminSheet: Identifiable {
         case .addStore: return "addStore"
         case .addPromotion: return "addPromotion"
         case .export: return "export"
+        case .clientActivity: return "clientActivity"
         case .salesInsights: return "salesInsights"
         case .inventoryInsights: return "inventoryInsights"
         case .shareFile(let url): return "shareFile-\(url.absoluteString)"
@@ -46,7 +48,7 @@ private enum SharpCorners {
 // MARK: - Main Dashboard View
 
 /// AdminDashboardView is the primary interface for corporate administrators.
-/// 
+///
 /// Key Features:
 /// - Real-time KPI metrics and system health monitoring
 /// - Low stock alerts and inventory management
@@ -97,6 +99,7 @@ struct AdminDashboardView: View {
     private var remoteAppointments: [AppointmentDTO]? { remoteSnapshot?.appointments }
     private var remoteClients: [ClientDTO]? { remoteSnapshot?.clients }
     private var remoteServiceTickets: [ServiceTicketDTO]? { remoteSnapshot?.serviceTickets }
+    private var remoteReservations: [ReservationDTO]? { remoteSnapshot?.reservations }
     private var remoteInventory: [InventoryDTO]? { remoteSnapshot?.inventory }
 
     private var staffCount: Int {
@@ -201,24 +204,14 @@ struct AdminDashboardView: View {
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 14) {
-                    Button(action: {}) {
+                    Button(action: { activeSheet = .clientActivity }) {
                         Image(systemName: "bell.badge")
                             .font(.system(size: 16, weight: .light))
                             .foregroundColor(.primary)
                             .frame(width: 32, height: 32)
-                            .liquidGlass(config: .ultraThin, cornerRadius: SharpCorners.control)
-                    }
-                    Button(action: { activeSheet = .profile }) {
-                        ZStack {
-                            Circle()
-                                .fill(AppColors.accent.opacity(0.12))
-                                .frame(width: 30, height: 30)
-                            Text(adminInitials)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(AppColors.accent)
-                        }
-                        .frame(width: 32, height: 32)
-                        .liquidGlass(config: .ultraThin, cornerRadius: SharpCorners.control)
+                        Text(adminInitials)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(AppColors.accent)
                     }
                 }
             }
@@ -244,6 +237,11 @@ struct AdminDashboardView: View {
                         Task { await exportReports() }
                     }
                 )
+            case .clientActivity:
+                NavigationStack {
+                    CorporateAdminClientActivityView()
+                        .environment(appState)
+                }
             case .salesInsights:
                 DashboardSalesInsightsSheet(
                     associateRating: associateRatingFeedback,
@@ -292,23 +290,26 @@ struct AdminDashboardView: View {
     // MARK: - Welcome Header
 
     private var welcomeHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("GOOD \(greeting.uppercased())")
-                .font(.system(size: 9, weight: .semibold))
-                .tracking(3)
-                .foregroundColor(AppColors.accent)
-            Text(appState.currentUserName.split(separator: " ").first.map(String.init) ?? "Admin")
-                .font(.system(size: 34, weight: .black))
-                .foregroundColor(.primary)
-            Text(Date(), style: .date)
-                .font(.system(size: 12, weight: .light))
-                .foregroundColor(.secondary)
+        HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("GOOD \(greeting.uppercased())")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(2.5)
+                    .foregroundColor(AppColors.accent)
+                Text(appState.currentUserName.split(separator: " ").first.map(String.init) ?? "Admin")
+                    .font(.system(size: 36, weight: .bold, design: .serif))
+                    .foregroundColor(.primary)
+                Text(Date(), style: .date)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
-        .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
-        .liquidShadow(LiquidShadow.subtle)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 20)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 2)
         .padding(.horizontal, 20)
         .padding(.top, 8)
     }
@@ -509,30 +510,42 @@ struct AdminDashboardView: View {
     }
 
     private func metricCardBody(icon: String, iconColor: Color, value: String, label: String, badge: String, badgePositive: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .ultraLight))
-                    .foregroundColor(iconColor)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                // Icon in a soft rounded square
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(iconColor.opacity(0.10))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundColor(iconColor)
+                }
                 Spacer()
+                // Badge pill
                 Text(badge)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.system(size: 9, weight: .semibold))
                     .foregroundColor(badgePositive ? AppColors.success : AppColors.warning)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background((badgePositive ? AppColors.success : AppColors.warning).opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: SharpCorners.badge, style: .continuous))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background((badgePositive ? AppColors.success : AppColors.warning).opacity(0.10))
+                    .clipShape(Capsule())
             }
             Text(value)
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundColor(.primary)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
             Text(label)
-                .font(.system(size: 11, weight: .light))
+                .font(.system(size: 12, weight: .regular))
                 .foregroundColor(.secondary)
         }
-        .padding(14)
-        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
-        .liquidShadow(LiquidShadow.subtle)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
     }
 
     // MARK: - System Health
@@ -553,15 +566,16 @@ struct AdminDashboardView: View {
                                 .tint(AppColors.accent)
                         } else {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: 11, weight: .medium))
                         }
                         Text(isSyncingLiveData ? "Syncing…" : "Sync Now")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: 12, weight: .medium))
                     }
                     .foregroundColor(AppColors.accent)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .liquidGlass(config: .ultraThin, backgroundColor: AppColors.accent.opacity(0.08), cornerRadius: SharpCorners.control)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(AppColors.accent.opacity(0.08))
+                    .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -597,13 +611,14 @@ struct AdminDashboardView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(color)
             Text(text)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.primary)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .liquidGlass(config: .ultraThin, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.control)
-        .liquidShadow(LiquidShadow.subtle)
+        .padding(.vertical, 9)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(Capsule())
+        .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 1)
     }
 
     // MARK: - Low Stock Section
@@ -621,14 +636,19 @@ struct AdminDashboardView: View {
             }
             
             if lowStockAlerts.isEmpty && !isLoadingAlerts {
-                Text("No low stock items")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 20)
-                    .padding(.horizontal, 20)
-                    .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundSecondary, cornerRadius: 16)
-                    .padding(.horizontal, 20)
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundColor(AppColors.success)
+                    Text("No low stock items")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 18)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.horizontal, 20)
             } else {
                 LazyVStack(spacing: 10) {
                     ForEach(lowStockAlerts) { alert in
@@ -645,33 +665,31 @@ struct AdminDashboardView: View {
         let badgeColor = isCritical ? AppColors.error : AppColors.warning
         
         return HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 2)
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
                 .fill(badgeColor)
-                .frame(width: 3, height: 40)
-            
+                .frame(width: 3, height: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text(alert.productName)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.primary)
-                
                 Text(alert.brand)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 12))
                     .foregroundColor(.secondary)
             }
             Spacer()
-            
-            Text("\(alert.stockCount) Units Left")
-                .font(.system(size: 10, weight: .bold))
+            Text("\(alert.stockCount) left")
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(badgeColor)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 9)
                 .padding(.vertical, 4)
-                .background(badgeColor.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: SharpCorners.badge, style: .continuous))
+                .background(badgeColor.opacity(0.10))
+                .clipShape(Capsule())
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
-        .liquidShadow(LiquidShadow.subtle)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
     }
 
     // MARK: - Alerts
@@ -705,34 +723,35 @@ struct AdminDashboardView: View {
 
     private func alertRow(icon: String, color: Color, title: String, detail: String, time: String) -> some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(color)
-                .frame(width: 3, height: 40)
-
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(color)
-                .frame(width: 22)
-
+            // Icon badge
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(color.opacity(0.10))
+                    .frame(width: 36, height: 36)
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(color)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 Text(detail)
-                    .font(.system(size: 11, weight: .light))
+                    .font(.system(size: 12))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }
             Spacer()
             Text(time)
-                .font(.system(size: 10, weight: .light))
+                .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
-        .liquidShadow(LiquidShadow.subtle)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
     }
 
     // MARK: - Quick Actions
@@ -752,8 +771,8 @@ struct AdminDashboardView: View {
                 actionTile(icon: "building.2.fill", label: "Add Store", color: AppColors.info) {
                     impact.impactOccurred(); activeSheet = .addStore
                 }
-                actionTile(icon: "arrow.left.arrow.right", label: "Transfer", color: AppColors.success) {
-                    impact.impactOccurred()
+                actionTile(icon: "person.text.rectangle.fill", label: "Activity", color: AppColors.success) {
+                    impact.impactOccurred(); activeSheet = .clientActivity
                 }
                 actionTile(icon: "percent", label: "Promotion", color: AppColors.warning) {
                     impact.impactOccurred(); activeSheet = .addPromotion
@@ -774,23 +793,29 @@ struct AdminDashboardView: View {
 
     private func actionTile(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .ultraLight))
-                    .foregroundColor(color)
+            VStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(color.opacity(0.10))
+                        .frame(width: 42, height: 42)
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundColor(color)
+                }
                 Text(label)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.primary)
-                    .multilineTextAlignment(.leading)
+                    .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 80)
-            .padding(14)
-            .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
-            .liquidShadow(LiquidShadow.subtle)
+            .frame(maxWidth: .infinity)
+            .frame(height: 96)
+            .padding(.horizontal, 8)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
         }
-        .buttonStyle(LiquidPressButtonStyle())
+        .buttonStyle(.plain)
     }
 
     // MARK: - Activity Feed
@@ -800,7 +825,7 @@ struct AdminDashboardView: View {
             HStack {
                 sectionHeader("ACTIVITY")
                 Spacer()
-                Button(action: {}) {
+                Button(action: { activeSheet = .clientActivity }) {
                     HStack(spacing: 3) {
                         Text("View All")
                             .font(.system(size: 12, weight: .medium))
@@ -815,50 +840,50 @@ struct AdminDashboardView: View {
 
             VStack(spacing: 0) {
                 activityItem(action: "SKU Created", detail: "Artisan Timepiece — Limited Edition", by: "V. Sterling", time: "10m")
-                Divider().padding(.horizontal, 14)
+                Divider().padding(.leading, 52)
                 activityItem(action: "Price Override", detail: "Diamond Pendant — $15,800 → $16,200", by: "V. Sterling", time: "1h")
-                Divider().padding(.horizontal, 14)
+                Divider().padding(.leading, 52)
                 activityItem(action: "Staff Provisioned", detail: "Isabella Moreau → Sales Associate", by: "J. Beaumont", time: "3h")
-                Divider().padding(.horizontal, 14)
+                Divider().padding(.leading, 52)
                 activityItem(action: "Stock Transfer", detail: "Classic Flap Bag — NYC → Paris (2 units)", by: "D. Park", time: "6h")
             }
-            .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: SharpCorners.panel)
-            .liquidShadow(LiquidShadow.subtle)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 2)
             .padding(.horizontal, 20)
         }
     }
 
     private func activityItem(action: String, detail: String, by: String, time: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(AppColors.accent.opacity(0.12))
-                    .frame(width: 8, height: 8)
+                    .fill(AppColors.accent.opacity(0.10))
+                    .frame(width: 32, height: 32)
                 Circle()
                     .fill(AppColors.accent)
-                    .frame(width: 5, height: 5)
+                    .frame(width: 8, height: 8)
             }
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline) {
                     Text(action)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.primary)
                     Spacer()
                     Text(time)
-                        .font(.system(size: 10, weight: .light))
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
                 Text(detail)
-                    .font(.system(size: 11, weight: .light))
+                    .font(.system(size: 12))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                 Text("by \(by)")
-                    .font(.system(size: 10, weight: .light))
-                    .foregroundColor(AppColors.accent.opacity(0.8))
+                    .font(.system(size: 11))
+                    .foregroundColor(AppColors.accent.opacity(0.75))
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .padding(.vertical, 14)
     }
 
@@ -961,9 +986,9 @@ struct AdminDashboardView: View {
 
     private func sectionHeader(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 9, weight: .semibold))
-            .tracking(3)
-            .foregroundColor(.primary.opacity(0.45))
+            .font(.system(size: 11, weight: .semibold))
+            .tracking(2)
+            .foregroundColor(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
     }
@@ -2459,7 +2484,9 @@ struct CreateStoreSheet: View {
     @State private var storeName = ""
     @State private var storeCity = ""
     @State private var storeCountry = ""
-    @State private var storeManager = ""
+    @State private var selectedManager: UserDTO? = nil
+    @State private var unassignedManagers: [UserDTO] = []
+    @State private var isLoadingManagers = false
     @State private var storeType: StoreType = .boutique
     @State private var isCreating = false
     @State private var showError = false
@@ -2488,33 +2515,36 @@ struct CreateStoreSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.systemGroupedBackground).ignoresSafeArea()
+                Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
-                        VStack(spacing: 6) {
+
+                        // Header
+                        VStack(spacing: 8) {
                             ZStack {
-                                Circle()
-                                    .fill(AppColors.info.opacity(0.12))
-                                    .frame(width: 64, height: 64)
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(AppColors.info.opacity(0.10))
+                                    .frame(width: 56, height: 56)
                                 Image(systemName: "building.2.fill")
-                                    .font(.system(size: 28, weight: .semibold))
+                                    .font(.system(size: 24, weight: .light))
                                     .foregroundColor(AppColors.info)
                             }
                             Text("Add New Store")
-                                .font(.system(size: 24, weight: .black))
+                                .font(.system(size: 22, weight: .bold))
                                 .foregroundColor(.primary)
                             Text("Register a boutique or distribution center")
-                                .font(.system(size: 14, weight: .light))
+                                .font(.system(size: 14))
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
                         }
                         .padding(.top, 24)
 
-                        VStack(alignment: .leading, spacing: 10) {
+                        // Store type
+                        VStack(alignment: .leading, spacing: 8) {
                             Text("STORE TYPE")
-                                .font(.system(size: 9, weight: .semibold))
-                                .tracking(3)
+                                .font(.system(size: 11, weight: .semibold))
+                                .tracking(2)
                                 .foregroundColor(AppColors.accent)
                                 .padding(.horizontal, 20)
 
@@ -2527,27 +2557,47 @@ struct CreateStoreSheet: View {
                                                 .foregroundColor(storeType == type ? .white : .primary)
                                                 .padding(.horizontal, 16)
                                                 .padding(.vertical, 9)
-                                                .background(storeType == type ? AppColors.accent : Color(.secondarySystemGroupedBackground))
-                                                .clipShape(RoundedRectangle(cornerRadius: SharpCorners.control, style: .continuous))
-                                                .overlay(RoundedRectangle(cornerRadius: SharpCorners.control, style: .continuous).strokeBorder(storeType == type ? Color.clear : Color(.systemGray4), lineWidth: 1))
+                                                .background(storeType == type ? AppColors.accent : Color(uiColor: .secondarySystemGroupedBackground))
+                                                .clipShape(Capsule())
+                                                .overlay(Capsule().strokeBorder(storeType == type ? Color.clear : Color(uiColor: .systemGray4), lineWidth: 1))
                                         }
-                                        .buttonStyle(PlainButtonStyle())
+                                        .buttonStyle(.plain)
                                     }
                                 }
                                 .padding(.horizontal, 20)
                             }
                         }
 
-                        VStack(spacing: 16) {
-                            LuxuryTextField(placeholder: "Store Name", text: $storeName, icon: "building.2")
-                            LuxuryTextField(placeholder: "City", text: $storeCity, icon: "mappin")
-                            LuxuryTextField(placeholder: "Country", text: $storeCountry, icon: "globe")
-                            LuxuryTextField(placeholder: "Manager Name (optional)", text: $storeManager, icon: "person")
+                        // Fields
+                        storeFormSection {
+                            storeFieldRow(label: "Store Name", icon: "building.2", placeholder: "Required", text: $storeName)
+                            Divider().padding(.leading, 52)
+                            storeFieldRow(label: "City", icon: "mappin", placeholder: "Required", text: $storeCity)
+                            Divider().padding(.leading, 52)
+                            storeFieldRow(label: "Country", icon: "globe", placeholder: "Required", text: $storeCountry)
+                            Divider().padding(.leading, 52)
+                            managerPickerRow
                         }
-                        .padding(.horizontal, 20)
 
-                        PrimaryButton(title: isCreating ? "Creating…" : "Create Store") {
+                        // Create button
+                        Button {
                             Task { await createStore() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isCreating {
+                                    ProgressView()
+                                        .progressViewStyle(.circular)
+                                        .tint(.white)
+                                        .scaleEffect(0.85)
+                                }
+                                Text(isCreating ? "Creating…" : "Create Store")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(isCreating ? AppColors.accent.opacity(0.6) : AppColors.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                         .disabled(isCreating)
                         .padding(.horizontal, 20)
@@ -2557,15 +2607,19 @@ struct CreateStoreSheet: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.primary)
-                    }
-                    .disabled(isCreating)
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(.primary)
+                        .disabled(isCreating)
+                }
+                ToolbarItem(placement: .principal) {
+                    Text("NEW STORE")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(2)
+                        .foregroundColor(AppColors.accent)
                 }
             }
+            .task { await loadUnassignedManagers() }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) { }
             } message: { Text(errorMessage) }
@@ -2575,12 +2629,98 @@ struct CreateStoreSheet: View {
         }
     }
 
+    // MARK: - Manager picker row
+
+    private var managerPickerRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "person.badge.shield.checkmark")
+                .font(.system(size: 15, weight: .light))
+                .foregroundColor(AppColors.accent)
+                .frame(width: 24)
+            Text("Manager")
+                .font(.system(size: 15))
+                .foregroundColor(.primary)
+            Spacer()
+            if isLoadingManagers {
+                ProgressView()
+                    .scaleEffect(0.75)
+            } else {
+                Menu {
+                    Button("None") { selectedManager = nil }
+                    Divider()
+                    ForEach(unassignedManagers) { manager in
+                        Button(manager.fullName) { selectedManager = manager }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(selectedManager?.fullName ?? "Optional")
+                            .font(.system(size: 15))
+                            .foregroundColor(selectedManager == nil ? .secondary : .primary)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .menuOrder(.fixed)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
+
+    // MARK: - Load unassigned managers
+
+    private func loadUnassignedManagers() async {
+        isLoadingManagers = true
+        defer { isLoadingManagers = false }
+        let managers: [UserDTO]? = try? await SupabaseManager.shared.client
+            .from("users")
+            .select()
+            .eq("role", value: "boutique_manager")
+            .eq("is_active", value: true)
+            .order("first_name", ascending: true)
+            .execute()
+            .value
+        unassignedManagers = (managers ?? []).filter { $0.storeId == nil }
+    }
+
+    @ViewBuilder
+    private func storeFormSection<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
+        .shadow(color: .black.opacity(0.02), radius: 2, x: 0, y: 1)
+        .padding(.horizontal, 20)
+    }
+
+    private func storeFieldRow(label: String, icon: String, placeholder: String, text: Binding<String>) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .light))
+                .foregroundColor(AppColors.accent)
+                .frame(width: 24)
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundColor(.primary)
+            Spacer()
+            TextField(placeholder, text: text)
+                .font(.system(size: 15))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
+
     @MainActor
     private func createStore() async {
         let trimmedName    = storeName.trimmingCharacters(in: .whitespaces)
         let trimmedCity    = storeCity.trimmingCharacters(in: .whitespaces)
         let trimmedCountry = storeCountry.trimmingCharacters(in: .whitespaces)
-        let trimmedManager = storeManager.trimmingCharacters(in: .whitespaces)
+        let managerName    = selectedManager?.fullName ?? ""
 
         guard !trimmedName.isEmpty, !trimmedCity.isEmpty, !trimmedCountry.isEmpty else {
             errorMessage = "Please fill in the store name, city, and country."
@@ -2606,7 +2746,7 @@ struct CreateStoreSheet: View {
             currency: "INR",
             timezone: "Asia/Kolkata",
             region: trimmedCity,
-            managerName: trimmedManager,
+            managerName: managerName,
             capacityUnits: 0,
             monthlySalesTarget: nil,
             isActive: true
@@ -2621,7 +2761,17 @@ struct CreateStoreSheet: View {
                 .execute()
                 .value
 
-            // 2 — Mirror into local SwiftData so StoreConfigView refreshes instantly
+            // 2 — Assign the selected manager to this store
+            if let manager = selectedManager {
+                struct StoreAssignPatch: Encodable { let store_id: UUID }
+                try? await SupabaseManager.shared.client
+                    .from("users")
+                    .update(StoreAssignPatch(store_id: newId))
+                    .eq("id", value: manager.id.uuidString.lowercased())
+                    .execute()
+            }
+
+            // 3 — Mirror into local SwiftData so StoreConfigView refreshes instantly
             let local = StoreLocation(
                 code: code,
                 name: trimmedName,
@@ -2632,7 +2782,7 @@ struct CreateStoreSheet: View {
                 postalCode: "",
                 country: trimmedCountry,
                 region: trimmedCity,
-                managerName: trimmedManager,
+                managerName: managerName,
                 capacityUnits: 0,
                 isOperational: true
             )
@@ -3032,10 +3182,10 @@ struct CreatePromotionSheet: View {
                 id: dto.id,
                 name: dto.name,
                 details: dto.details ?? "",
-                scope: dto.promotionScope,
+                scope: PromotionScope(rawValue: dto.promotionScope) ?? .product,
                 targetProductId: dto.targetProductId,
                 targetCategoryId: dto.targetCategoryId,
-                discountType: dto.promotionDiscountType,
+                discountType: PromotionDiscountType(rawValue: dto.promotionDiscountType) ?? .percentage,
                 discountValue: dto.discountValue,
                 startsAt: dto.startsAt,
                 endsAt: dto.endsAt,
@@ -3053,6 +3203,759 @@ struct CreatePromotionSheet: View {
             showError = true
         }
     }
+}
+
+private struct AdminClientActivityMonitorView: View {
+    let snapshot: AdminInsightsSnapshot?
+    let isSyncing: Bool
+    let lastSyncedAt: Date?
+    let generatedBy: String
+    let onRefresh: () async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedTab: AdminClientActivityTab = .orders
+    @State private var searchText = ""
+    @State private var shareFile: ShareFile?
+    @State private var exportErrorMessage = ""
+    @State private var showExportError = false
+    @State private var isExporting = false
+
+    private var portalOrders: [OrderDTO] {
+        guard let snapshot else { return [] }
+        return snapshot.orders.filter { order in
+            let channel = order.channel.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return channel == "online" || channel == "bopis" || channel == "ship_from_store"
+        }
+    }
+
+    private var reservations: [ReservationDTO] {
+        snapshot?.reservations ?? []
+    }
+
+    private var returnTickets: [ServiceTicketDTO] {
+        guard let snapshot else { return [] }
+        return snapshot.serviceTickets.filter { ticket in
+            let type = ticket.type.lowercased()
+            let notes = ticket.notes?.lowercased() ?? ""
+            return type == RepairType.warrantyClaim.rawValue || notes.contains("exchange") || notes.contains("return")
+        }
+    }
+
+    private var activePortalOrders: [OrderDTO] {
+        portalOrders.filter { !["completed", "cancelled", "delivered"].contains($0.status.lowercased()) }
+    }
+
+    private var activeReservationsCount: Int {
+        reservations.filter { !$0.status.lowercased().contains("cancel") && $0.expiresAt > Date() }.count
+    }
+
+    private var openReturnsCount: Int {
+        returnTickets.filter { !["completed", "cancelled"].contains($0.status.lowercased()) }.count
+    }
+
+    private var clientsById: [UUID: ClientDTO] {
+        Dictionary(uniqueKeysWithValues: (snapshot?.clients ?? []).map { ($0.id, $0) })
+    }
+
+    private var storesById: [UUID: StoreDTO] {
+        Dictionary(uniqueKeysWithValues: (snapshot?.stores ?? []).map { ($0.id, $0) })
+    }
+
+    private var productsById: [UUID: ProductDTO] {
+        Dictionary(uniqueKeysWithValues: (snapshot?.products ?? []).map { ($0.id, $0) })
+    }
+
+    private var ordersById: [UUID: OrderDTO] {
+        Dictionary(uniqueKeysWithValues: portalOrders.map { ($0.id, $0) })
+    }
+
+    private var onlineRevenue: Double {
+        portalOrders.reduce(0.0) { $0 + $1.grandTotal }
+    }
+
+    private var inStoreRevenue: Double {
+        snapshot?.orders
+            .filter { $0.channel.lowercased() == "in_store" }
+            .reduce(0.0) { $0 + $1.grandTotal } ?? 0
+    }
+
+    private var filteredOrders: [OrderDTO] {
+        filter(text: searchText, over: portalOrders) { order in
+            let client = order.clientId.flatMap { clientsById[$0] }
+            let store = storesById[order.storeId]
+            return [
+                order.orderNumber ?? "",
+                order.channel,
+                order.status,
+                client?.fullName ?? "",
+                client?.email ?? "",
+                store?.name ?? ""
+            ]
+        }
+    }
+
+    private var filteredReservations: [ReservationDTO] {
+        filter(text: searchText, over: reservations) { reservation in
+            let client = clientsById[reservation.clientId]
+            let product = productsById[reservation.productId] ?? reservation.product
+            let storeName = reservation.storeId.flatMap { storesById[$0]?.name } ?? ""
+            return [
+                client?.fullName ?? "",
+                client?.email ?? "",
+                product?.name ?? "",
+                reservation.status,
+                storeName
+            ]
+        }
+    }
+
+    private var filteredReturns: [ServiceTicketDTO] {
+        filter(text: searchText, over: returnTickets) { ticket in
+            let client = ticket.clientId.flatMap { clientsById[$0] }
+            let order = ticket.orderId.flatMap { ordersById[$0] }
+            let store = storesById[ticket.storeId]
+            return [
+                ticket.displayTicketNumber,
+                ticket.type,
+                ticket.status,
+                client?.fullName ?? "",
+                client?.email ?? "",
+                order?.orderNumber ?? "",
+                store?.name ?? ""
+            ]
+        }
+    }
+
+    private var storeFulfillment: [AdminStoreFulfillmentRow] {
+        let grouped = Dictionary(grouping: activePortalOrders, by: \.storeId)
+        return grouped.map { storeId, orders in
+            let store = storesById[storeId]
+            let statusCounts = Dictionary(grouping: orders, by: { normalizedLabel($0.status) })
+                .mapValues(\.count)
+            return AdminStoreFulfillmentRow(
+                storeId: storeId,
+                storeName: store?.name ?? "Unknown Store",
+                location: [store?.city, store?.region].compactMap { value in
+                    guard let value, !value.isEmpty else { return nil }
+                    return value
+                }.joined(separator: ", "),
+                totalOrders: orders.count,
+                pendingCount: statusCounts["Pending"] ?? 0,
+                processingCount: statusCounts["Processing"] ?? 0,
+                confirmedCount: statusCounts["Confirmed"] ?? 0,
+                shippedCount: statusCounts["Shipped"] ?? 0
+            )
+        }
+        .sorted { $0.totalOrders > $1.totalOrders }
+    }
+
+    var body: some View {
+        ZStack {
+            AppColors.backgroundPrimary.ignoresSafeArea()
+
+            if let snapshot {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: AppSpacing.lg) {
+                        syncBanner
+                        summaryGrid
+                        channelComparisonCard(snapshot: snapshot)
+                        fulfillmentCard
+                        filterTabs
+                        searchBar
+                        contentSection
+                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.vertical, AppSpacing.md)
+                }
+            } else {
+                ContentUnavailableView(
+                    "No Live Activity Yet",
+                    systemImage: "chart.bar.xaxis",
+                    description: Text("Refresh the admin snapshot to load customer portal activity.")
+                )
+            }
+        }
+        .navigationTitle("Client Activity")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Close") { dismiss() }
+                    .foregroundColor(AppColors.accent)
+            }
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                Button {
+                    Task { await onRefresh() }
+                } label: {
+                    if isSyncing {
+                        ProgressView()
+                            .tint(AppColors.accent)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .foregroundColor(AppColors.accent)
+                    }
+                }
+
+                Button {
+                    Task { await exportChannelReport() }
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .foregroundColor(AppColors.accent)
+                }
+                .disabled(snapshot == nil || isExporting)
+            }
+        }
+        .sheet(item: $shareFile) { file in
+            ShareSheet(activityItems: [file.url])
+        }
+        .alert("Export Error", isPresented: $showExportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(exportErrorMessage)
+        }
+    }
+
+    private var syncBanner: some View {
+        HStack(spacing: AppSpacing.sm) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("LIVE PORTAL MONITOR")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+                Text(syncStatusText)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+            Spacer()
+            Text(isSyncing ? "Syncing" : "Connected")
+                .font(AppTypography.micro)
+                .foregroundColor(isSyncing ? AppColors.info : AppColors.success)
+                .padding(.horizontal, AppSpacing.xs)
+                .padding(.vertical, 4)
+                .background((isSyncing ? AppColors.info : AppColors.success).opacity(0.12))
+                .clipShape(Capsule())
+        }
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private var summaryGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AppSpacing.sm) {
+            summaryCard(title: "Portal Orders", value: "\(portalOrders.count)", subtitle: "\(activePortalOrders.count) active", color: AppColors.accent)
+            summaryCard(title: "Reservations", value: "\(reservations.count)", subtitle: "\(activeReservationsCount) active", color: AppColors.info)
+            summaryCard(title: "Returns", value: "\(returnTickets.count)", subtitle: "\(openReturnsCount) open", color: AppColors.warning)
+            summaryCard(title: "Fulfillment", value: "\(storeFulfillment.count)", subtitle: "stores involved", color: AppColors.success)
+        }
+    }
+
+    private func summaryCard(title: String, value: String, subtitle: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+            Text(value)
+                .font(AppTypography.heading2)
+                .foregroundColor(color)
+            Text(subtitle)
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func channelComparisonCard(snapshot: AdminInsightsSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack {
+                Text("ONLINE VS IN-STORE")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+                Spacer()
+                Text("Export CSV")
+                    .font(AppTypography.micro)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+
+            HStack(spacing: AppSpacing.sm) {
+                comparisonColumn(title: "Online / Omnichannel", orders: portalOrders.count, revenue: onlineRevenue, color: AppColors.accent)
+                comparisonColumn(title: "In-Store", orders: snapshot.orders.count - portalOrders.count, revenue: inStoreRevenue, color: AppColors.secondary)
+            }
+
+            let totalRevenue = max(onlineRevenue + inStoreRevenue, 1)
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                progressRow(label: "Online Mix", ratio: onlineRevenue / totalRevenue, color: AppColors.accent)
+                progressRow(label: "In-Store Mix", ratio: inStoreRevenue / totalRevenue, color: AppColors.secondary)
+            }
+        }
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func comparisonColumn(title: String, orders: Int, revenue: Double, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+            Text(currency(revenue))
+                .font(AppTypography.heading3)
+                .foregroundColor(color)
+            Text("\(orders) orders")
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.sm)
+        .background(AppColors.backgroundPrimary)
+        .cornerRadius(AppSpacing.radiusSmall)
+    }
+
+    private func progressRow(label: String, ratio: Double, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(AppTypography.micro)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                Spacer()
+                Text("\(Int(ratio * 100))%")
+                    .font(AppTypography.micro)
+                    .foregroundColor(AppColors.textPrimaryDark)
+            }
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(AppColors.backgroundPrimary)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(color)
+                        .frame(width: proxy.size.width * ratio)
+                }
+            }
+            .frame(height: 8)
+        }
+    }
+
+    private var fulfillmentCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("STORE FULFILLMENT STATUS")
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.accent)
+
+            if storeFulfillment.isEmpty {
+                Text("No active client-portal orders are waiting on store fulfillment.")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            } else {
+                ForEach(storeFulfillment.prefix(4)) { row in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(row.storeName)
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                if !row.location.isEmpty {
+                                    Text(row.location)
+                                        .font(AppTypography.micro)
+                                        .foregroundColor(AppColors.textSecondaryDark)
+                                }
+                            }
+                            Spacer()
+                            Text("\(row.totalOrders) open")
+                                .font(AppTypography.micro)
+                                .foregroundColor(AppColors.accent)
+                        }
+
+                        HStack(spacing: AppSpacing.xs) {
+                            fulfillmentPill(label: "Pending", count: row.pendingCount, color: AppColors.warning)
+                            fulfillmentPill(label: "Processing", count: row.processingCount, color: AppColors.info)
+                            fulfillmentPill(label: "Confirmed", count: row.confirmedCount, color: AppColors.success)
+                            fulfillmentPill(label: "Shipped", count: row.shippedCount, color: AppColors.secondary)
+                        }
+                    }
+                    .padding(AppSpacing.sm)
+                    .background(AppColors.backgroundPrimary)
+                    .cornerRadius(AppSpacing.radiusSmall)
+                }
+            }
+        }
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func fulfillmentPill(label: String, count: Int, color: Color) -> some View {
+        Text("\(label) \(count)")
+            .font(AppTypography.micro)
+            .foregroundColor(color)
+            .padding(.horizontal, AppSpacing.xs)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
+    }
+
+    private var filterTabs: some View {
+        Picker("", selection: $selectedTab) {
+            ForEach(AdminClientActivityTab.allCases) { tab in
+                Text(tab.rawValue).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: AppSpacing.xs) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(AppColors.textSecondaryDark)
+            TextField("Search customer, order, store or status", text: $searchText)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(AppColors.neutral500)
+                }
+            }
+        }
+        .padding(AppSpacing.sm)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusSmall)
+    }
+
+    @ViewBuilder
+    private var contentSection: some View {
+        switch selectedTab {
+        case .orders:
+            if filteredOrders.isEmpty {
+                emptyState("No client-portal orders match the current filters.")
+            } else {
+                VStack(spacing: AppSpacing.sm) {
+                    ForEach(filteredOrders) { order in
+                        orderRow(order)
+                    }
+                }
+            }
+        case .reservations:
+            if filteredReservations.isEmpty {
+                emptyState("No reservations match the current filters.")
+            } else {
+                VStack(spacing: AppSpacing.sm) {
+                    ForEach(filteredReservations) { reservation in
+                        reservationRow(reservation)
+                    }
+                }
+            }
+        case .returns:
+            if filteredReturns.isEmpty {
+                emptyState("No returns or exchange requests match the current filters.")
+            } else {
+                VStack(spacing: AppSpacing.sm) {
+                    ForEach(filteredReturns) { ticket in
+                        returnRow(ticket)
+                    }
+                }
+            }
+        case .fulfillment:
+            if storeFulfillment.isEmpty {
+                emptyState("No store fulfillment activity is pending.")
+            } else {
+                VStack(spacing: AppSpacing.sm) {
+                    ForEach(storeFulfillment) { row in
+                        fulfillmentDetailRow(row)
+                    }
+                }
+            }
+        }
+    }
+
+    private func orderRow(_ order: OrderDTO) -> some View {
+        let client = order.clientId.flatMap { clientsById[$0] }
+        let store = storesById[order.storeId]
+
+        return VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(order.orderNumber ?? "Order \(order.id.uuidString.prefix(8))")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(client?.fullName ?? "Guest Customer")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    if let email = client?.email {
+                        Text(email)
+                            .font(AppTypography.micro)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                }
+                Spacer()
+                Text(currency(order.grandTotal))
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.accent)
+            }
+
+            HStack(spacing: AppSpacing.xs) {
+                statusBadge(channelLabel(for: order.channel), color: channelColor(for: order.channel))
+                statusBadge(normalizedLabel(order.status), color: statusColor(for: order.status))
+            }
+
+            Text("Fulfillment: \(store?.name ?? "Unknown Store")")
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+
+            Text(order.createdAt.formatted(date: .abbreviated, time: .shortened))
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func reservationRow(_ reservation: ReservationDTO) -> some View {
+        let client = clientsById[reservation.clientId]
+        let product = productsById[reservation.productId] ?? reservation.product
+        let storeName = reservation.storeId.flatMap { storesById[$0]?.name } ?? "Boutique TBD"
+
+        return VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(product?.name ?? "Reserved Product")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(client?.fullName ?? "Unknown Client")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                Spacer()
+                statusBadge(normalizedLabel(reservation.status), color: reservationStatusColor(reservation.status))
+            }
+
+            Text(storeName)
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+
+            Text("Expires \(reservation.expiresAt.formatted(date: .abbreviated, time: .shortened))")
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func returnRow(_ ticket: ServiceTicketDTO) -> some View {
+        let client = ticket.clientId.flatMap { clientsById[$0] }
+        let order = ticket.orderId.flatMap { ordersById[$0] }
+        let store = storesById[ticket.storeId]
+
+        return VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(ticket.displayTicketNumber)
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(client?.fullName ?? "Unknown Client")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                Spacer()
+                statusBadge(normalizedLabel(ticket.status), color: statusColor(for: ticket.status))
+            }
+
+            HStack(spacing: AppSpacing.xs) {
+                statusBadge(normalizedLabel(ticket.type), color: AppColors.warning)
+                if let orderNumber = order?.orderNumber {
+                    statusBadge(orderNumber, color: AppColors.info)
+                }
+            }
+
+            Text("Store: \(store?.name ?? "Unknown Store")")
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func fulfillmentDetailRow(_ row: AdminStoreFulfillmentRow) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.storeName)
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    if !row.location.isEmpty {
+                        Text(row.location)
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                }
+                Spacer()
+                Text("\(row.totalOrders) active")
+                    .font(AppTypography.micro)
+                    .foregroundColor(AppColors.accent)
+            }
+
+            Text("Pending \(row.pendingCount) · Processing \(row.processingCount) · Confirmed \(row.confirmedCount) · Shipped \(row.shippedCount)")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func statusBadge(_ label: String, color: Color) -> some View {
+        Text(label)
+            .font(AppTypography.micro)
+            .foregroundColor(color)
+            .padding(.horizontal, AppSpacing.xs)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
+    }
+
+    private func emptyState(_ message: String) -> some View {
+        Text(message)
+            .font(AppTypography.caption)
+            .foregroundColor(AppColors.textSecondaryDark)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(AppSpacing.xl)
+            .background(AppColors.backgroundSecondary)
+            .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private var syncStatusText: String {
+        guard let lastSyncedAt else { return "Waiting for first sync from the client portal." }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return "Last synced \(formatter.localizedString(for: lastSyncedAt, relativeTo: Date()))."
+    }
+
+    private func exportChannelReport() async {
+        guard let snapshot else {
+            exportErrorMessage = "No snapshot is loaded yet."
+            showExportError = true
+            return
+        }
+
+        guard !isExporting else { return }
+        isExporting = true
+        defer { isExporting = false }
+
+        do {
+            let fileURL = try AdminReportExportService.exportChannelComparisonCSV(
+                snapshot: snapshot,
+                generatedBy: generatedBy
+            )
+            shareFile = ShareFile(url: fileURL)
+        } catch {
+            exportErrorMessage = "Could not export channel report: \(error.localizedDescription)"
+            showExportError = true
+        }
+    }
+
+    private func currency(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "INR"
+        return formatter.string(from: NSNumber(value: value)) ?? "INR \(value)"
+    }
+
+    private func normalizedLabel(_ raw: String) -> String {
+        raw.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    private func channelLabel(for channel: String) -> String {
+        switch channel.lowercased() {
+        case "online": return "Online Delivery"
+        case "bopis": return "BOPIS"
+        case "ship_from_store": return "Ship From Store"
+        case "in_store": return "In-Store"
+        default: return normalizedLabel(channel)
+        }
+    }
+
+    private func channelColor(for channel: String) -> Color {
+        switch channel.lowercased() {
+        case "online": return AppColors.accent
+        case "bopis": return AppColors.info
+        case "ship_from_store": return AppColors.secondary
+        case "in_store": return AppColors.success
+        default: return AppColors.textSecondaryDark
+        }
+    }
+
+    private func statusColor(for status: String) -> Color {
+        switch status.lowercased() {
+        case "pending", "requested", "intake":
+            return AppColors.warning
+        case "confirmed", "processing", "in_progress", "estimate_pending":
+            return AppColors.info
+        case "shipped", "delivered", "completed", "estimate_approved":
+            return AppColors.success
+        case "cancelled":
+            return AppColors.error
+        default:
+            return AppColors.textSecondaryDark
+        }
+    }
+
+    private func reservationStatusColor(_ status: String) -> Color {
+        switch status.lowercased() {
+        case "active", "reserved":
+            return AppColors.success
+        case "expired":
+            return AppColors.warning
+        case "cancelled":
+            return AppColors.error
+        default:
+            return AppColors.info
+        }
+    }
+
+    private func filter<T>(
+        text: String,
+        over source: [T],
+        fields: (T) -> [String]
+    ) -> [T] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return source }
+        return source.filter { item in
+            fields(item).contains { $0.lowercased().contains(trimmed) }
+        }
+    }
+}
+
+private enum AdminClientActivityTab: String, CaseIterable, Identifiable {
+    case orders = "Orders"
+    case reservations = "Reservations"
+    case returns = "Returns"
+    case fulfillment = "Fulfillment"
+
+    var id: String { rawValue }
+}
+
+private struct AdminStoreFulfillmentRow: Identifiable {
+    let storeId: UUID
+    let storeName: String
+    let location: String
+    let totalOrders: Int
+    let pendingCount: Int
+    let processingCount: Int
+    let confirmedCount: Int
+    let shippedCount: Int
+
+    var id: UUID { storeId }
 }
 
 #Preview {

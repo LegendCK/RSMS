@@ -60,6 +60,7 @@ final class ClientDetailViewModel {
     var editPostalCode = ""
     var editCountry = ""
     var editSegment = "standard"
+    var editGdprConsent = false
     var editMarketingOptIn = false
 
     // Preferences / Notes
@@ -174,6 +175,7 @@ final class ClientDetailViewModel {
         editPostalCode = client.postalCode ?? ""
         editCountry = client.country ?? ""
         editSegment = client.segment ?? "standard"
+        editGdprConsent = client.gdprConsent
         editMarketingOptIn = client.marketingOptIn
 
         let b = blob
@@ -230,6 +232,7 @@ final class ClientDetailViewModel {
             country: editCountry.isEmpty ? nil : editCountry,
             segment: editSegment,
             notes: newBlob.toJSONString(),
+            gdprConsent: editGdprConsent,
             marketingOptIn: editMarketingOptIn
         )
 

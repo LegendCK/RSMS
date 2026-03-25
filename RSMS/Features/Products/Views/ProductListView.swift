@@ -11,8 +11,10 @@ import SwiftData
 struct ProductListView: View {
     let categoryFilter: String?
     var productTypeFilter: String? = nil
+    var showsTabBar: Bool = false
     @Query private var allProducts: [Product]
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
 
     @State private var sortOption: SortOption = .featured
     @State private var selectedGender: GenderFilter = .all
@@ -52,7 +54,7 @@ struct ProductListView: View {
 
     var body: some View {
         ZStack {
-            Color.white.ignoresSafeArea()
+            AppColors.backgroundPrimary.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -60,7 +62,7 @@ struct ProductListView: View {
                     HStack {
                         Text("\(filteredProducts.count) items")
                             .font(.system(size: 11, weight: .light))
-                            .foregroundColor(.black.opacity(0.5))
+                            .foregroundColor(AppColors.textSecondaryDark)
 
                         Spacer()
 
@@ -80,10 +82,10 @@ struct ProductListView: View {
                                 Text("SORT")
                                     .font(.system(size: 10, weight: .semibold))
                                     .tracking(2)
-                                    .foregroundColor(.black)
+                                    .foregroundColor(AppColors.textPrimaryDark)
                                 Image(systemName: "arrow.up.arrow.down")
                                     .font(.system(size: 10))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(AppColors.textPrimaryDark)
                             }
                         }
                     }
@@ -91,7 +93,7 @@ struct ProductListView: View {
                     .padding(.vertical, 14)
 
                     Rectangle()
-                        .fill(Color.black.opacity(0.07))
+                        .fill(AppColors.dividerLight)
                         .frame(height: 1)
 
                     // Gender filter pills
@@ -139,6 +141,7 @@ struct ProductListView: View {
                 }
             }
         }
+        .toolbar(showsTabBar ? .visible : .hidden, for: .tabBar)
         .navigationTitle(productTypeFilter ?? categoryFilter ?? "All Products")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -198,8 +201,7 @@ struct ProductListView: View {
                 .overlay(alignment: .topTrailing) {
                     // Wishlist button — top-right
                     Button(action: {
-                        product.isWishlisted.toggle()
-                        try? modelContext.save()
+                        toggleWishlist(product)
                     }) {
                         Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
                             .font(.system(size: 13, weight: .light))
@@ -222,18 +224,37 @@ struct ProductListView: View {
                 Text(product.name)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(isOutOfStock ? .secondary : .black)
+                    .foregroundColor(AppColors.textPrimaryDark)
                     .lineLimit(1)
                 Text(product.formattedPrice)
                     .font(.system(size: 13, weight: .light))
-                    .foregroundColor(.black.opacity(0.55))
+                    .foregroundColor(AppColors.textSecondaryDark)
             }
             .padding(.horizontal, 10)
             .padding(.top, 10)
             .padding(.bottom, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white)
+            .background(AppColors.backgroundPrimary)
         }
-        .background(Color.white)
+        .background(AppColors.backgroundPrimary)
+    }
+
+    private func toggleWishlist(_ product: Product) {
+        let targetState = !product.isWishlisted
+        product.isWishlisted = targetState
+        try? modelContext.save()
+
+        guard appState.isAuthenticated, !appState.isGuest else { return }
+
+        Task { @MainActor in
+            do {
+                try await WishlistService.shared.setWishlisted(productId: product.id, isWishlisted: targetState)
+            } catch {
+                product.isWishlisted = !targetState
+                try? modelContext.save()
+                print("[ProductListView] Wishlist sync failed for \(product.id): \(error)")
+            }
+        }
     }
 }
 

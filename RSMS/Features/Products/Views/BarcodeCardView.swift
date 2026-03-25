@@ -100,7 +100,7 @@ struct BarcodeCardView: View {
                 }
             }
             .task {
-                generateHighResBarcode()
+                await generateHighResBarcode()
             }
             .sheet(isPresented: $isExporting, onDismiss: { generatedPDF = nil }) {
                 if let url = generatedPDF {
@@ -112,13 +112,9 @@ struct BarcodeCardView: View {
     
     // MARK: - Logic
     
-    private func generateHighResBarcode() {
-        // Offload image render queue so UI remains hyper-smooth opening the modal
-        Task.detached(priority: .userInitiated) {
-            if let img = BarcodeGeneratorService.shared.generateBarcode(from: item.barcode, scale: 6) {
-                await MainActor.run { barcodeImage = img }
-            }
-        }
+    private func generateHighResBarcode() async {
+        let img = BarcodeGeneratorService.shared.generateBarcode(from: item.barcode, scale: 6)
+        if let img { barcodeImage = img }
     }
     
     private func exportSinglePDF() {

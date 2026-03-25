@@ -18,7 +18,6 @@ struct BuyNowSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @Query private var allAddresses: [SavedAddress]
-    @Query private var allStores: [StoreLocation]
     @Query private var allCategories: [Category]
     @Query private var pricingPolicies: [PricingPolicySettings]
     @Query private var taxRules: [IndianTaxRule]
@@ -29,7 +28,7 @@ struct BuyNowSheetView: View {
 
     // Fulfillment
     @State private var selectedFulfillment: FulfillmentType = .standard
-    @State private var selectedPickupStore: StoreLocation?  = nil
+    @State private var selectedPickupStore: StoreDTO? = nil
     @State private var showStorePicker = false
 
     @State private var selectedAddress: SavedAddress? = nil
@@ -137,12 +136,7 @@ struct BuyNowSheetView: View {
                         .font(AppTypography.navTitle)
                         .foregroundColor(AppColors.textPrimaryDark)
                 }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .foregroundColor(AppColors.textPrimaryDark)
-                    }
-                }
+                // Removed cancel/cross button as per design update
             }
             .sheet(isPresented: $showAddressManager) {
                 AddressManagerView(onSelect: { addr in
@@ -159,10 +153,7 @@ struct BuyNowSheetView: View {
                     }
             }
             .sheet(isPresented: $showStorePicker) {
-                BOPISStorePickerSheet(
-                    stores: allStores.filter { $0.isOperational },
-                    selected: selectedPickupStore
-                ) { store in
+                BOPISStorePickerSheet(selected: selectedPickupStore) { store in
                     selectedPickupStore = store
                 }
             }
@@ -363,7 +354,7 @@ struct BuyNowSheetView: View {
                                 Text(store.name)
                                     .font(AppTypography.label)
                                     .foregroundColor(AppColors.textPrimaryDark)
-                                Text("\(store.addressLine1), \(store.city), \(store.country)")
+                                Text("\(store.address ?? ""), \(store.city ?? ""), \(store.country)")
                                     .font(AppTypography.caption)
                                     .foregroundColor(AppColors.textSecondaryDark)
                                 HStack(spacing: 4) {
@@ -878,7 +869,17 @@ struct BuyNowSheetView: View {
 
         // Determine channel and storeId from fulfillment type
         let channel: String = selectedFulfillment == .bopis ? "bopis" : "online"
-        let storeId: UUID? = selectedPickupStore?.id
+        let deliveryCity = selectedAddress?.city ?? inlineCity
+        let deliveryState = selectedAddress?.state ?? inlineAddrState
+        let storeId: UUID?
+        if selectedFulfillment == .bopis {
+            storeId = selectedPickupStore?.id
+        } else {
+            storeId = try? await StoreAssignmentService.shared.findNearestStore(
+                city: deliveryCity,
+                state: deliveryState
+            )
+        }
 
         // 1. Save locally (always — source of truth for customer order history UI)
         let order = Order(
@@ -917,7 +918,9 @@ struct BuyNowSheetView: View {
                     taxTotal: tax,
                     grandTotal: total,
                     channel: channel,
-                    storeId: storeId
+                    storeId: storeId,
+                    deliveryCity: deliveryCity,
+                    deliveryState: deliveryState
                 )
                 print("[BuyNowSheetView] ✅ Supabase sync succeeded for order: \(orderNum)")
             } catch {

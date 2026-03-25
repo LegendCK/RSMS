@@ -63,7 +63,7 @@ final class CatalogService {
     // MARK: - Categories
 
     func fetchCategories() async throws -> [CategoryDTO] {
-        try await withRetry(label: "fetchCategories") {
+        return try await withRetry(label: "fetchCategories") {
             try await client
                 .from("categories")
                 .select()
@@ -349,7 +349,7 @@ final class CatalogService {
             is_active: false,
             deleted_at: ISO8601DateFormatter().string(from: Date())
         )
-        try await withRetry(label: "deleteProduct") {
+        _ = try await withRetry(label: "deleteProduct") {
             try await client
                 .from("products")
                 .update(payload)
