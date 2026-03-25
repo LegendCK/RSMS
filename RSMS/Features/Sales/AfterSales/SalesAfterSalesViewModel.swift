@@ -171,6 +171,7 @@ final class SalesAfterSalesViewModel {
                 type: ticketTypeRaw,
                 status: RepairStatus.intake.rawValue,
                 conditionNotes: conditionSummary(for: result),
+                intakePhotos: nil,
                 estimatedCost: nil,
                 currency: "INR",
                 slaDueDate: nil,
@@ -202,7 +203,7 @@ final class SalesAfterSalesViewModel {
                 line: "Exchange Approved At: \(Date().formatted(date: .abbreviated, time: .shortened))"
             )
             createdTicket = try await ticketService.updateTicket(
-                id: ticket.id,
+                ticketId: ticket.id,
                 patch: ServiceTicketUpdatePatch(
                     status: RepairStatus.estimateApproved.rawValue,
                     notes: approvedNotes,
@@ -243,7 +244,7 @@ final class SalesAfterSalesViewModel {
             )
 
             createdTicket = try await ticketService.updateTicket(
-                id: ticket.id,
+                ticketId: ticket.id,
                 patch: ServiceTicketUpdatePatch(
                     status: RepairStatus.inProgress.rawValue,
                     notes: withOrderNotes,
@@ -272,7 +273,7 @@ final class SalesAfterSalesViewModel {
             )
 
             createdTicket = try await ticketService.updateTicket(
-                id: ticket.id,
+                ticketId: ticket.id,
                 patch: ServiceTicketUpdatePatch(
                     status: RepairStatus.completed.rawValue,
                     notes: completionNotes,

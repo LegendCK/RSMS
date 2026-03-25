@@ -34,6 +34,9 @@ struct InvoiceSnapshot {
     let currencyCode: String
     let items: [InvoiceLineItem]
     let subtotal: Double
+    let discountTotal: Double
     let taxBreakdown: InvoiceTaxBreakdown
     let total: Double
+    let isTaxFree: Bool
+    let taxFreeReason: String
 }

@@ -39,6 +39,7 @@ struct ManagerOperationsView: View {
     @State private var liveOrders: [OrderDTO] = []
     @State private var isLoadingOrders = false
     @State private var orderToTag: OrderDTO? = nil       // drives Tag to Event sheet
+    @State private var selectedOrder: OrderDTO? = nil    // drives Order Detail sheet
 
     var body: some View {
         ZStack {
@@ -97,41 +98,7 @@ struct ManagerOperationsView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("Operations").font(AppTypography.navTitle).foregroundColor(AppColors.textPrimaryDark)
-            }
-            // Report Discrepancy button — visible only on the Discrepancies tab
-            if selectedSection == 2 {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showReportDiscrepancy = true } label: {
-                        Image(systemName: "plus.circle")
-                            .font(AppTypography.iconMedium)
-                            .foregroundColor(AppColors.accent)
-                    }
-                    .accessibilityLabel("Report Discrepancy")
-                }
-            } else if selectedSection == 3 {
-                // Create Event button on the VIP Events tab
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showCreateEvent = true } label: {
-                        Image(systemName: "plus.circle")
-                            .font(AppTypography.iconMedium)
-                            .foregroundColor(AppColors.accent)
-                    }
-                    .accessibilityLabel("Create Event")
-                }
-            } else {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showInventoryWorkspace = true } label: {
-                        Image(systemName: "shippingbox")
-                            .font(AppTypography.iconMedium)
-                            .foregroundColor(AppColors.accent)
-                    }
-                    .accessibilityLabel("Open Inventory Workspace")
-                }
-            }
-        }
+        .toolbar { operationsToolbar }
         .navigationDestination(isPresented: $showInventoryWorkspace) {
             ManagerInventoryView()
         }
@@ -170,10 +137,59 @@ struct ManagerOperationsView: View {
                 }
             }
         }
+        .sheet(item: $selectedOrder) { order in
+            ManagerOrderDetailSheet(order: order, events: liveEvents) {
+                Task { await loadLiveOrders() }
+            }
+        }
         .sheet(item: $selectedDiscrepancyForReview) { disc in
             DiscrepancyDetailSheet(discrepancy: disc) { _ in
                 Task { await loadLiveDiscrepancies() }
             }
+        }
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var operationsToolbar: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            Text("Operations")
+                .font(AppTypography.navTitle)
+                .foregroundColor(AppColors.textPrimaryDark)
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            trailingToolbarButton
+        }
+    }
+
+    @ViewBuilder
+    private var trailingToolbarButton: some View {
+        switch selectedSection {
+        case 2:
+            Button { showReportDiscrepancy = true } label: {
+                Image(systemName: "plus.circle")
+                    .font(AppTypography.iconMedium)
+                    .foregroundColor(AppColors.accent)
+            }
+            .accessibilityLabel("Report Discrepancy")
+        case 3:
+            Button { showCreateEvent = true } label: {
+                Image(systemName: "plus.circle")
+                    .font(AppTypography.iconMedium)
+                    .foregroundColor(AppColors.accent)
+            }
+            .accessibilityLabel("Create Event")
+        case 1:
+            // BOPIS tab — BOPISOrderMonitorView provides its own bell + refresh; show nothing here
+            EmptyView()
+        default:
+            Button { showInventoryWorkspace = true } label: {
+                Image(systemName: "shippingbox")
+                    .font(AppTypography.iconMedium)
+                    .foregroundColor(AppColors.accent)
+            }
+            .accessibilityLabel("Open Inventory Workspace")
         }
     }
 
@@ -226,54 +242,76 @@ struct ManagerOperationsView: View {
     }
 
     private func liveOrderRow(_ order: OrderDTO) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            HStack {
-                Text(order.orderNumber ?? order.id.uuidString.prefix(8).description)
-                    .font(AppTypography.monoID)
-                    .foregroundColor(AppColors.neutral500)
-                Spacer()
-                // Event tag indicator
-                if order.eventId != nil {
-                    Label("Event", systemImage: "star.fill")
-                        .font(AppTypography.nano)
-                        .foregroundColor(AppColors.secondary)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(AppColors.secondary.opacity(0.1))
-                        .cornerRadius(4)
-                } else if !liveEvents.isEmpty {
-                    Button {
-                        orderToTag = order
-                    } label: {
-                        Label("Tag Event", systemImage: "star")
-                            .font(AppTypography.nano)
-                            .foregroundColor(AppColors.accent)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(AppColors.accent.opacity(0.08))
-                            .cornerRadius(4)
+        Button { selectedOrder = order } label: {
+            HStack(spacing: AppSpacing.sm) {
+                // Channel icon
+                Image(systemName: orderChannelIcon(order.channel))
+                    .font(.system(size: 18, weight: .light))
+                    .foregroundColor(AppColors.accent)
+                    .frame(width: 36, height: 36)
+                    .background(AppColors.accent.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                // Order info
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: AppSpacing.xs) {
+                        Text(order.orderNumber ?? "#\(order.id.uuidString.prefix(8))")
+                            .font(AppTypography.monoID)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        if order.eventId != nil {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 9))
+                                .foregroundColor(AppColors.secondary)
+                        }
                     }
-                }
-                Text(order.createdAt.formatted(date: .omitted, time: .shortened))
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.neutral500)
-            }
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(order.channel.replacingOccurrences(of: "_", with: " ").capitalized)
-                        .font(AppTypography.label)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                    Text(order.createdAt.formatted(date: .abbreviated, time: .omitted))
-                        .font(AppTypography.micro)
+                    Text(orderChannelLabel(order.channel))
+                        .font(AppTypography.caption)
                         .foregroundColor(AppColors.textSecondaryDark)
                 }
+
                 Spacer()
-                Text(order.formattedTotal)
-                    .font(AppTypography.label)
-                    .foregroundColor(AppColors.accent)
+
+                // Amount + time
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(order.formattedTotal)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(order.createdAt.formatted(date: .omitted, time: .shortened))
+                        .font(AppTypography.micro)
+                        .foregroundColor(AppColors.neutral500)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppColors.neutral500)
             }
+            .padding(.horizontal, AppSpacing.sm)
+            .padding(.vertical, AppSpacing.xs + 2)
+            .contentShape(Rectangle())
         }
-        .padding(AppSpacing.sm)
+        .buttonStyle(.plain)
         .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
         .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    private func orderChannelLabel(_ channel: String) -> String {
+        switch channel {
+        case "bopis":           return "Pick Up In Store"
+        case "ship_from_store": return "Ship from Store"
+        case "in_store":        return "In-Store"
+        case "online":          return "Online"
+        default:                return channel.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    private func orderChannelIcon(_ channel: String) -> String {
+        switch channel {
+        case "bopis":           return "building.2"
+        case "ship_from_store": return "shippingbox"
+        case "in_store":        return "cart"
+        case "online":          return "globe"
+        default:                return "bag"
+        }
     }
 
     private func loadLiveOrders() async {

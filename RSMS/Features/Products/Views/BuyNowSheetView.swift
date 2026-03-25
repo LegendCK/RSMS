@@ -18,7 +18,6 @@ struct BuyNowSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @Query private var allAddresses: [SavedAddress]
-    @Query private var allStores: [StoreLocation]
     @Query private var allCategories: [Category]
     @Query private var pricingPolicies: [PricingPolicySettings]
     @Query private var taxRules: [IndianTaxRule]
@@ -29,7 +28,7 @@ struct BuyNowSheetView: View {
 
     // Fulfillment
     @State private var selectedFulfillment: FulfillmentType = .standard
-    @State private var selectedPickupStore: StoreLocation?  = nil
+    @State private var selectedPickupStore: StoreDTO? = nil
     @State private var showStorePicker = false
 
     @State private var selectedAddress: SavedAddress? = nil
@@ -154,10 +153,7 @@ struct BuyNowSheetView: View {
                     }
             }
             .sheet(isPresented: $showStorePicker) {
-                BOPISStorePickerSheet(
-                    stores: allStores.filter { $0.isOperational },
-                    selected: selectedPickupStore
-                ) { store in
+                BOPISStorePickerSheet(selected: selectedPickupStore) { store in
                     selectedPickupStore = store
                 }
             }
@@ -358,12 +354,17 @@ struct BuyNowSheetView: View {
                                 Text(store.name)
                                     .font(AppTypography.label)
                                     .foregroundColor(AppColors.textPrimaryDark)
-                                Text("\(store.addressLine1), \(store.city), \(store.country)")
+                                Text("\(store.address ?? ""), \(store.city ?? ""), \(store.country)")
                                     .font(AppTypography.caption)
                                     .foregroundColor(AppColors.textSecondaryDark)
-                                Text("Ready within 2 hours")
-                                    .font(AppTypography.caption)
-                                    .foregroundColor(AppColors.success)
+                                HStack(spacing: 4) {
+                                    Image(systemName: "clock.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(AppColors.success)
+                                    Text("Estimated Pickup: \(estimatedPickupTimeString)")
+                                        .font(AppTypography.caption)
+                                        .foregroundColor(AppColors.success)
+                                }
                             } else {
                                 Text("Select a boutique")
                                     .font(AppTypography.label)
@@ -577,7 +578,9 @@ struct BuyNowSheetView: View {
                     if selectedFulfillment == .bopis, let store = selectedPickupStore {
                         reviewRow(icon: "building.2.fill", title: "Pick Up At", value: store.name)
                         GoldDivider()
-                        reviewRow(icon: "clock.fill", title: "Ready In", value: "2 hours")
+                        reviewRow(icon: "mappin.circle.fill", title: "Address", value: "\(store.address ?? ""), \(store.city ?? "")")
+                        GoldDivider()
+                        reviewRow(icon: "clock.fill", title: "Estimated Pickup", value: estimatedPickupTimeString)
                     } else if let addr = selectedAddress {
                         reviewRow(icon: "mappin.circle.fill", title: "Deliver to", value: addr.shortSummary)
                         GoldDivider()
@@ -786,6 +789,14 @@ struct BuyNowSheetView: View {
 
     // MARK: - Helpers
 
+    /// Calculates a human-readable estimated pickup time (now + 2 hours) as a time string.
+    private var estimatedPickupTimeString: String {
+        let pickupDate = Calendar.current.date(byAdding: .hour, value: 2, to: Date()) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: pickupDate)
+    }
+
     private func sectionHeader(_ text: String) -> some View {
         Text(text)
             .font(AppTypography.overline)
@@ -858,7 +869,17 @@ struct BuyNowSheetView: View {
 
         // Determine channel and storeId from fulfillment type
         let channel: String = selectedFulfillment == .bopis ? "bopis" : "online"
-        let storeId: UUID? = selectedPickupStore?.id
+        let deliveryCity = selectedAddress?.city ?? inlineCity
+        let deliveryState = selectedAddress?.state ?? inlineAddrState
+        let storeId: UUID?
+        if selectedFulfillment == .bopis {
+            storeId = selectedPickupStore?.id
+        } else {
+            storeId = try? await StoreAssignmentService.shared.findNearestStore(
+                city: deliveryCity,
+                state: deliveryState
+            )
+        }
 
         // 1. Save locally (always — source of truth for customer order history UI)
         let order = Order(
@@ -897,7 +918,9 @@ struct BuyNowSheetView: View {
                     taxTotal: tax,
                     grandTotal: total,
                     channel: channel,
-                    storeId: storeId
+                    storeId: storeId,
+                    deliveryCity: deliveryCity,
+                    deliveryState: deliveryState
                 )
                 print("[BuyNowSheetView] ✅ Supabase sync succeeded for order: \(orderNum)")
             } catch {

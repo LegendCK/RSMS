@@ -34,20 +34,45 @@ final class OrderService {
 
     private init() {}
 
+    struct PaymentSplitInput {
+        let method: String
+        let amount: Double
+        let paymentReference: String?
+        let status: String
+
+        init(
+            method: String,
+            amount: Double,
+            paymentReference: String? = nil,
+            status: String = "completed"
+        ) {
+            self.method = method
+            self.amount = amount
+            self.paymentReference = paymentReference
+            self.status = status
+        }
+    }
+
     // MARK: - Sync order to Supabase via Edge Function
 
     /// Sends the order to the `create-order` Edge Function which uses the service role
     /// key to insert into `orders` and `order_items`, bypassing RLS safely.
     func syncOrder(
-        clientId: UUID,
+        clientId: UUID?,
         cartItems: [(productId: UUID, productName: String, quantity: Int, unitPrice: Double)],
         orderNumber: String,
         subtotal: Double,
         discountTotal: Double,
         taxTotal: Double,
         grandTotal: Double,
-        channel: String,      // "online" | "bopis" | "in_store" | "ship_from_store"
-        storeId: UUID? = nil  // Nearest store for online orders; nil = edge function default
+        channel: String,           // "online" | "bopis" | "in_store" | "ship_from_store"
+        storeId: UUID? = nil,      // Nearest store for online orders; nil = edge function default
+        isTaxFree: Bool = false,
+        taxFreeReason: String = "",
+        notes: String? = nil,
+        deliveryCity: String? = nil,
+        deliveryState: String? = nil,
+        paymentSplits: [PaymentSplitInput]? = nil
     ) async throws {
 
         struct CartItemPayload: Encodable {
@@ -58,6 +83,14 @@ final class OrderService {
         }
 
         struct CreateOrderPayload: Encodable {
+            struct PaymentSplitPayload: Encodable {
+                let method: String
+                let amount: Double
+                let paymentReference: String?
+                let status: String
+            }
+
+            let clientId: String?  // explicit client UUID; nil for walk-in POS sales
             let orderNumber: String
             let cartItems: [CartItemPayload]
             let subtotal: Double
@@ -67,6 +100,12 @@ final class OrderService {
             let channel: String
             let currency: String
             let storeId: String?   // nearest store UUID — edge function uses this if present
+            let isTaxFree: Bool
+            let taxFreeReason: String
+            let notes: String?
+            let deliveryCity: String?
+            let deliveryState: String?
+            let paymentSplits: [PaymentSplitPayload]?
         }
 
         struct EdgeResponse: Decodable {
@@ -87,6 +126,7 @@ final class OrderService {
         }
 
         let payload = CreateOrderPayload(
+            clientId: clientId?.uuidString.lowercased(),
             orderNumber: orderNumber,
             cartItems: items,
             subtotal: subtotal,
@@ -95,34 +135,41 @@ final class OrderService {
             grandTotal: grandTotal,
             channel: channel,
             currency: "INR",
-            storeId: storeId?.uuidString.lowercased()
+            storeId: storeId?.uuidString.lowercased(),
+            isTaxFree: isTaxFree,
+            taxFreeReason: taxFreeReason,
+            notes: notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
+                ? nil
+                : notes?.trimmingCharacters(in: .whitespacesAndNewlines),
+            deliveryCity: deliveryCity?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
+                ? nil
+                : deliveryCity?.trimmingCharacters(in: .whitespacesAndNewlines),
+            deliveryState: deliveryState?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
+                ? nil
+                : deliveryState?.trimmingCharacters(in: .whitespacesAndNewlines),
+            paymentSplits: paymentSplits?.map {
+                CreateOrderPayload.PaymentSplitPayload(
+                    method: $0.method,
+                    amount: $0.amount,
+                    paymentReference: $0.paymentReference,
+                    status: $0.status
+                )
+            }
         )
 
         print("[OrderService] Calling create-order edge function for order: \(orderNumber)")
 
-        // Refresh the session to guarantee a non-expired JWT.
-        // client.auth.session returns the cached token which may be stale.
-        // refreshSession() exchanges it for a fresh one before calling the edge function.
-        let accessToken: String
-        do {
-            let refreshed = try await client.auth.refreshSession()
-            accessToken = refreshed.accessToken
-            print("[OrderService] Session refreshed, token obtained for \(refreshed.user.email ?? "unknown")")
-        } catch {
-            // Refresh failed — fall back to the cached session token as last resort
-            do {
-                let session = try await client.auth.session
-                accessToken = session.accessToken
-                print("[OrderService] Using cached session token (refresh failed: \(error.localizedDescription))")
-            } catch {
-                throw OrderServiceError.edgeFunctionError("No active session: \(error.localizedDescription)")
-            }
+        // Sometimes the Supabase Swift client suppresses the Authorization header for edge functions,
+        // so we manually inject the session's token and apikey to guarantee Kong validation pass.
+        var customHeaders = ["apikey": SupabaseConfig.anonKey]
+        if let session = try? await client.auth.session {
+            customHeaders["Authorization"] = "Bearer \(session.accessToken)"
         }
 
         let response: EdgeResponse = try await client.functions.invoke(
             "create-order",
             options: FunctionInvokeOptions(
-                headers: ["Authorization": "Bearer \(accessToken)"],
+                headers: customHeaders,
                 body: payload
             )
         )
@@ -132,9 +179,13 @@ final class OrderService {
             throw OrderServiceError.edgeFunctionError(errorMsg)
         }
 
+        guard response.success == true else {
+            throw OrderServiceError.edgeFunctionError("Order sync returned unsuccessful response")
+        }
+
         let orderId = response.orderId ?? "unknown"
         let itemCount = response.itemsInserted ?? 0
-        print("[OrderService] ✅ Order \(orderNumber) saved to Supabase — id: \(orderId), items: \(itemCount), status: pending")
+        print("[OrderService] ✅ Order \(orderNumber) saved to Supabase — id: \(orderId), items: \(itemCount), status: completed")
         // Store routing is handled entirely server-side (city → state → fallback).
         // The edge function always sets store_id; no client-side patch needed.
     }

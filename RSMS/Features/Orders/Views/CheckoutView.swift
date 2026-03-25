@@ -16,11 +16,11 @@ struct CheckoutView: View {
     @Query private var allAddresses: [SavedAddress]
     @Query private var allProducts: [Product]
     @Query private var allCategories: [Category]
-    @Query private var allStores: [StoreLocation]
     @Query private var pricingPolicies: [PricingPolicySettings]
     @Query private var taxRules: [IndianTaxRule]
     @Query private var regionalPriceRules: [RegionalPriceRule]
     @Query private var promotionRules: [PromotionRule]
+    @Query private var allInventory: [InventoryByLocation]
 
     @State private var currentStep = 0
 
@@ -45,7 +45,7 @@ struct CheckoutView: View {
     @State private var cardCVV     = ""
 
     // BOPIS store selection
-    @State private var selectedPickupStore: StoreLocation? = nil
+    @State private var selectedPickupStore: StoreDTO? = nil
     @State private var showStorePicker = false
 
     // Order
@@ -160,10 +160,7 @@ struct CheckoutView: View {
                 }
         }
         .sheet(isPresented: $showStorePicker) {
-            BOPISStorePickerSheet(
-                stores: allStores.filter { $0.isOperational },
-                selected: selectedPickupStore
-            ) { store in
+            BOPISStorePickerSheet(selected: selectedPickupStore) { store in
                 selectedPickupStore = store
             }
         }
@@ -173,6 +170,9 @@ struct CheckoutView: View {
             }
         }
         .onAppear {
+            if appState.currentUserRole != .customer && selectedFulfillment == .standard {
+                selectedFulfillment = .shipFromStore
+            }
             Task { @MainActor in
                 if savedAddresses.isEmpty,
                    !appState.isGuest,
@@ -264,16 +264,16 @@ struct CheckoutView: View {
             sectionHeader("FULFILLMENT")
             VStack(spacing: AppSpacing.sm) {
                 fulfillmentOption(
-                    .standard,
-                    title: "Standard Delivery",
+                    appState.currentUserRole == .customer ? .standard : .shipFromStore,
+                    title: appState.currentUserRole == .customer ? "Standard Delivery" : "Ship From Store",
                     subtitle: subtotal >= policy.freeShippingThreshold ? "Free · 5–7 days" : "\(formatCurrency(policy.standardShippingFee)) · 5–7 days",
                     icon: "shippingbox.fill"
                 )
-                fulfillmentOption(.bopis,    title: "Pick Up In Store",     subtitle: "Free · Ready in 2 hours", icon: "building.2.fill")
+                fulfillmentOption(.bopis,    title: "Pick Up In Store",     subtitle: "Free · Ready within 2 hours", icon: "building.2.fill")
             }
 
             // Address section (delivery only)
-            if selectedFulfillment == .standard {
+            if selectedFulfillment == .standard || selectedFulfillment == .shipFromStore {
                 sectionHeader("SHIPPING ADDRESS")
 
                 if savedAddresses.isEmpty {
@@ -321,12 +321,17 @@ struct CheckoutView: View {
                                 Text(store.name)
                                     .font(AppTypography.label)
                                     .foregroundColor(AppColors.textPrimaryDark)
-                                Text("\(store.addressLine1), \(store.city), \(store.country)")
+                                Text("\(store.address ?? ""), \(store.city ?? ""), \(store.country)")
                                     .font(AppTypography.caption)
                                     .foregroundColor(AppColors.textSecondaryDark)
-                                Text("Ready within 2 hours")
-                                    .font(AppTypography.caption)
-                                    .foregroundColor(AppColors.success)
+                                HStack(spacing: 4) {
+                                    Image(systemName: "clock.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(AppColors.success)
+                                    Text("Estimated Pickup: \(estimatedPickupTimeString)")
+                                        .font(AppTypography.caption)
+                                        .foregroundColor(AppColors.success)
+                                }
                             } else {
                                 Text("Select a boutique")
                                     .font(AppTypography.label)
@@ -559,9 +564,22 @@ struct CheckoutView: View {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 sectionHeader("DELIVERY")
                 if selectedFulfillment == .bopis {
-                    Text("Pick Up In Store — \(selectedPickupStore?.name ?? "Boutique")")
+                Text("Pick Up In Store — \(selectedPickupStore?.name ?? "Boutique")")
                         .font(AppTypography.bodyMedium)
                         .foregroundColor(AppColors.textPrimaryDark)
+                    if let store = selectedPickupStore {
+                        Text("\(store.address ?? ""), \(store.city ?? "")")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(AppColors.success)
+                        Text("Estimated Pickup: \(estimatedPickupTimeString)")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.success)
+                    }
                 } else if let addr = selectedAddress {
                     Text("Standard Delivery · \(addr.label)")
                         .font(AppTypography.bodyMedium)
@@ -679,6 +697,14 @@ struct CheckoutView: View {
 
     // MARK: - Helpers
 
+    /// Calculates a human-readable estimated pickup time (now + 2 hours).
+    private var estimatedPickupTimeString: String {
+        let pickupDate = Calendar.current.date(byAdding: .hour, value: 2, to: Date()) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return "~\(formatter.string(from: pickupDate))"
+    }
+
     private func sectionHeader(_ text: String) -> some View {
         Text(text)
             .font(AppTypography.overline)
@@ -727,7 +753,7 @@ struct CheckoutView: View {
     }
 
     private func persistInlineAddressIfNeeded() {
-        guard selectedFulfillment == .standard, selectedAddress == nil, saveInlineAddressForFuture, isInlineAddressComplete else { return }
+        guard (selectedFulfillment == .standard || selectedFulfillment == .shipFromStore), selectedAddress == nil, saveInlineAddressForFuture, isInlineAddressComplete else { return }
 
         let trimmedLine1 = addressLine1.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedCity = city.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -808,7 +834,7 @@ struct CheckoutView: View {
                       let s = String(data: data, encoding: .utf8) else { return "{}" }
                 return s
             }
-            if selectedFulfillment == .standard && !addressLine1.isEmpty {
+            if (selectedFulfillment == .standard || selectedFulfillment == .shipFromStore) && !addressLine1.isEmpty {
                 let d: [String: String] = [
                     "line1": addressLine1, "line2": addressLine2,
                     "city": city, "state": addrState, "zip": zip, "country": "IN"
@@ -850,18 +876,51 @@ struct CheckoutView: View {
         )
         // Set boutique ID for BOPIS orders so the manager dashboard picks them up
         if selectedFulfillment == .bopis, let store = selectedPickupStore {
-            order.boutiqueId = store.code
+            order.boutiqueId = store.code ?? ""
         }
         modelContext.insert(order)
 
-        // Decrement local product stock counts
+        // Decrement local product stock counts and per-location inventory
         for item in cartItems {
+            // Resolve a fulfillment store only from explicit selections; do not fall back to an arbitrary store.
+            let resolvedStoreId = selectedPickupStore?.id ?? appState.currentStoreId
+
             if let product = allProducts.first(where: { $0.id == item.productId }) {
                 product.stockCount = max(0, product.stockCount - item.quantity)
+
+                // Update InventoryByLocation for real-time per-store visibility
+                if let storeId = resolvedStoreId {
+                    if let invRow = allInventory.first(where: { $0.locationId == storeId && $0.productId == item.productId }) {
+                        invRow.quantity = max(0, invRow.quantity - item.quantity)
+                        invRow.updatedAt = Date()
+                        
+                        // Force flush this row to Supabase immediately so the next sync doesn't overwrite it
+                        let snapshotRow = invRow
+                        Task { try? await InventorySyncService.shared.upsertInventory(snapshotRow) }
+                    } else {
+                        let newRow = InventoryByLocation(
+                            locationId: storeId,
+                            productId: item.productId,
+                            sku: product.sku.isEmpty ? product.id.uuidString : product.sku,
+                            productName: product.name,
+                            categoryName: product.categoryName,
+                            quantity: 0,
+                            reorderPoint: 2,
+                            updatedAt: Date()
+                        )
+                        modelContext.insert(newRow)
+                        
+                        let snapshotRow = newRow
+                        Task { try? await InventorySyncService.shared.upsertInventory(snapshotRow) }
+                    }
+                }
             }
             modelContext.delete(item)
         }
         try? modelContext.save()
+
+        // Notify dashboards that inventory changed
+        NotificationCenter.default.post(name: .inventoryStockUpdated, object: nil)
 
         // 2. Sync to Supabase so sales associates can view purchase history.
         //    Try currentUserProfile.id first (set by Supabase login), fall back to
@@ -879,15 +938,21 @@ struct CheckoutView: View {
             // Determine the nearest store for online delivery so the IC can fulfil it.
             // BOPIS already uses the pickup store; for online we resolve by address.
             let nearestStoreId: UUID?
+            let deliveryCity: String?
+            let deliveryState: String?
             if channel == "online" || channel == "ship_from_store" {
-                let deliveryCity  = selectedAddress?.city  ?? city
-                let deliveryState = selectedAddress?.state ?? addrState
+                let cityValue  = selectedAddress?.city  ?? city
+                let stateValue = selectedAddress?.state ?? addrState
+                deliveryCity = cityValue
+                deliveryState = stateValue
                 nearestStoreId = try? await StoreAssignmentService.shared.findNearestStore(
-                    city: deliveryCity,
-                    state: deliveryState
+                    city: cityValue,
+                    state: stateValue
                 )
             } else {
                 nearestStoreId = selectedPickupStore?.id
+                deliveryCity = nil
+                deliveryState = nil
             }
 
             print("[CheckoutView] Starting Supabase sync for clientId: \(clientId), storeId: \(nearestStoreId?.uuidString ?? "none")")
@@ -901,7 +966,9 @@ struct CheckoutView: View {
                     taxTotal: snapshotTax,
                     grandTotal: snapshotTotal,
                     channel: channel,
-                    storeId: nearestStoreId
+                    storeId: nearestStoreId,
+                    deliveryCity: deliveryCity,
+                    deliveryState: deliveryState
                 )
                 print("[CheckoutView] Supabase sync succeeded for order: \(num)")
             } catch {
@@ -926,49 +993,80 @@ struct CheckoutView: View {
 // MARK: - BOPIS Store Picker Sheet
 
 struct BOPISStorePickerSheet: View {
-    let stores: [StoreLocation]
-    let selected: StoreLocation?
-    let onSelect: (StoreLocation) -> Void
+    let selected: StoreDTO?
+    let onSelect: (StoreDTO) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var stores: [StoreDTO] = []
+    @State private var isLoading = true
+    @State private var loadError: String? = nil
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(stores) { store in
-                    Button {
-                        onSelect(store)
-                        dismiss()
-                    } label: {
-                        HStack(spacing: AppSpacing.md) {
-                            ZStack {
-                                Circle()
-                                    .fill(AppColors.accent.opacity(0.1))
-                                    .frame(width: 36, height: 36)
-                                Image(systemName: "building.2.fill")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(AppColors.accent)
-                            }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(store.name)
-                                    .font(AppTypography.label)
-                                    .foregroundColor(AppColors.textPrimaryDark)
-                                Text("\(store.addressLine1), \(store.city)")
-                                    .font(AppTypography.caption)
-                                    .foregroundColor(AppColors.textSecondaryDark)
-                            }
-                            Spacer()
-                            if selected?.id == store.id {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(AppColors.accent)
-                            }
-                        }
-                        .padding(.vertical, AppSpacing.xs)
+            Group {
+                if isLoading {
+                    ProgressView("Loading boutiques…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let err = loadError {
+                    VStack(spacing: 12) {
+                        Image(systemName: "wifi.slash")
+                            .font(.system(size: 32, weight: .light))
+                            .foregroundColor(AppColors.warning)
+                        Text(err)
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                        Button("Retry") { Task { await loadStores() } }
+                            .foregroundColor(AppColors.accent)
                     }
-                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if stores.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "building.2")
+                            .font(.system(size: 32, weight: .ultraLight))
+                            .foregroundColor(AppColors.neutral300)
+                        Text("No boutiques available for pickup")
+                            .font(AppTypography.bodyMedium)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(stores) { store in
+                        Button {
+                            onSelect(store)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: AppSpacing.md) {
+                                ZStack {
+                                    Circle()
+                                        .fill(AppColors.accent.opacity(0.1))
+                                        .frame(width: 36, height: 36)
+                                    Image(systemName: "building.2.fill")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(AppColors.accent)
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(store.name)
+                                        .font(AppTypography.label)
+                                        .foregroundColor(AppColors.textPrimaryDark)
+                                    Text([store.address, store.city].compactMap { $0 }.joined(separator: ", "))
+                                        .font(AppTypography.caption)
+                                        .foregroundColor(AppColors.textSecondaryDark)
+                                }
+                                Spacer()
+                                if selected?.id == store.id {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(AppColors.accent)
+                                }
+                            }
+                            .padding(.vertical, AppSpacing.xs)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .listStyle(.plain)
                 }
             }
-            .listStyle(.plain)
             .navigationTitle("Choose Boutique")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -977,7 +1075,19 @@ struct BOPISStorePickerSheet: View {
                         .foregroundColor(AppColors.accent)
                 }
             }
+            .task { await loadStores() }
         }
+    }
+
+    private func loadStores() async {
+        isLoading = true
+        loadError = nil
+        do {
+            stores = try await StoreSyncService.shared.fetchActiveBoutiques()
+        } catch {
+            loadError = error.localizedDescription
+        }
+        isLoading = false
     }
 }
 

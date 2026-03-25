@@ -74,7 +74,7 @@ final class NotificationService {
                 InsertAction.self,
                 schema: "public",
                 table: "notifications",
-                filter: "recipient_client_id=eq.\(clientId.uuidString.lowercased())"
+                filter: .eq("recipient_client_id", value: clientId.uuidString.lowercased())
             )
             do {
                 try await ch.subscribeWithError()

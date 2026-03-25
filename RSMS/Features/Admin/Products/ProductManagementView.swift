@@ -233,80 +233,161 @@ struct CreateProductSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppColors.backgroundPrimary
+                Color(uiColor: .systemGroupedBackground)
                     .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppSpacing.xl) {
-                        VStack(spacing: AppSpacing.xs) {
+                    VStack(spacing: 24) {
+
+                        // Header
+                        VStack(spacing: 8) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(AppColors.accent.opacity(0.10))
+                                    .frame(width: 56, height: 56)
+                                Image(systemName: "tag.fill")
+                                    .font(.system(size: 24, weight: .light))
+                                    .foregroundColor(AppColors.accent)
+                            }
                             Text("Add Product")
-                                .font(AppTypography.displaySmall)
-                                .foregroundColor(AppColors.textPrimaryDark)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.primary)
                             Text("Create a new SKU in the catalog")
-                                .font(AppTypography.bodyMedium)
-                                .foregroundColor(AppColors.textSecondaryDark)
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
                         }
-                        .padding(.top, AppSpacing.xl)
+                        .padding(.top, 24)
 
                         // Category picker
-                        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        VStack(alignment: .leading, spacing: 8) {
                             Text("CATEGORY")
-                                .font(AppTypography.overline)
+                                .font(.system(size: 11, weight: .semibold))
                                 .tracking(2)
                                 .foregroundColor(AppColors.accent)
-                                .padding(.horizontal, AppSpacing.screenHorizontal)
+                                .padding(.horizontal, 20)
 
                             ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: AppSpacing.xs) {
-                                    ForEach(categories) { cat in
+                                HStack(spacing: 8) {
+                                    ForEach(categories.filter { !$0.name.isEmpty }) { cat in
                                         Button(action: { selectedCategory = cat.name }) {
                                             Text(cat.name)
-                                                .font(AppTypography.caption)
-                                                .foregroundColor(selectedCategory == cat.name ? AppColors.primary : AppColors.textSecondaryDark)
-                                                .padding(.horizontal, AppSpacing.md)
-                                                .padding(.vertical, AppSpacing.xs)
-                                                .background(selectedCategory == cat.name ? AppColors.accent : AppColors.backgroundTertiary)
-                                                .cornerRadius(AppSpacing.radiusSmall)
+                                                .font(.system(size: 13, weight: selectedCategory == cat.name ? .semibold : .regular))
+                                                .foregroundColor(selectedCategory == cat.name ? .white : .primary)
+                                                .padding(.horizontal, 16)
+                                                .padding(.vertical, 9)
+                                                .background(selectedCategory == cat.name ? AppColors.accent : Color(uiColor: .secondarySystemGroupedBackground))
+                                                .clipShape(Capsule())
+                                                .overlay(Capsule().strokeBorder(selectedCategory == cat.name ? Color.clear : Color(uiColor: .systemGray4), lineWidth: 1))
                                         }
+                                        .buttonStyle(.plain)
                                     }
                                 }
-                                .padding(.horizontal, AppSpacing.screenHorizontal)
+                                .padding(.horizontal, 20)
                             }
                         }
 
-                        VStack(spacing: AppSpacing.lg) {
-                            LuxuryTextField(placeholder: "Product Name", text: $name, icon: "tag")
-                            LuxuryTextField(placeholder: "Brand", text: $brand, icon: "building")
-                            LuxuryTextField(placeholder: "Description", text: $description, icon: "text.alignleft")
-                            LuxuryTextField(placeholder: "Price (INR)", text: $price, icon: "indianrupeesign.circle")
-                            LuxuryTextField(placeholder: "Stock Count", text: $stockCount, icon: "shippingbox")
+                        // Product details
+                        productFormSection {
+                            fieldRow(label: "Product Name", icon: "tag") {
+                                TextField("Required", text: $name)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                            Divider().padding(.leading, 52)
+                            fieldRow(label: "Brand", icon: "building") {
+                                TextField("Maison Luxe", text: $brand)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                            Divider().padding(.leading, 52)
+                            fieldRow(label: "Price (INR)", icon: "indianrupeesign.circle") {
+                                TextField("0.00", text: $price)
+                                    .multilineTextAlignment(.trailing)
+                                    .keyboardType(.decimalPad)
+                            }
+                            Divider().padding(.leading, 52)
+                            fieldRow(label: "Stock Count", icon: "shippingbox") {
+                                TextField("0", text: $stockCount)
+                                    .multilineTextAlignment(.trailing)
+                                    .keyboardType(.numberPad)
+                            }
                         }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
+
+                        // Description
+                        productFormSection {
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: "text.alignleft")
+                                    .font(.system(size: 15, weight: .light))
+                                    .foregroundColor(AppColors.accent)
+                                    .frame(width: 24)
+                                    .padding(.top, 2)
+                                TextField("Description (optional)", text: $description, axis: .vertical)
+                                    .font(.system(size: 15))
+                                    .lineLimit(3...6)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                        }
 
                         // Toggles
-                        VStack(spacing: AppSpacing.sm) {
-                            toggleRow(title: "Limited Edition", isOn: $isLimitedEdition)
-                            toggleRow(title: "Featured Product", isOn: $isFeatured)
+                        productFormSection {
+                            HStack {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 15, weight: .light))
+                                    .foregroundColor(AppColors.accent)
+                                    .frame(width: 24)
+                                Text("Limited Edition")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Toggle("", isOn: $isLimitedEdition)
+                                    .tint(AppColors.accent)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            Divider().padding(.leading, 52)
+                            HStack {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 15, weight: .light))
+                                    .foregroundColor(AppColors.accent)
+                                    .frame(width: 24)
+                                Text("Featured Product")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Toggle("", isOn: $isFeatured)
+                                    .tint(AppColors.accent)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
                         }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
 
-                        PrimaryButton(title: "Create Product") {
+                        // Create button
+                        Button {
                             createProduct()
+                        } label: {
+                            Text("Create Product")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(AppColors.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-                        .padding(.top, AppSpacing.md)
-                        .padding(.bottom, AppSpacing.xxxl)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 40)
                     }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(AppTypography.closeButton)
-                            .foregroundColor(AppColors.textPrimaryDark)
-                    }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(.primary)
+                }
+                ToolbarItem(placement: .principal) {
+                    Text("ADD PRODUCT")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(2)
+                        .foregroundColor(AppColors.accent)
                 }
             }
             .alert("Error", isPresented: $showError) {
@@ -317,18 +398,34 @@ struct CreateProductSheet: View {
         }
     }
 
-    private func toggleRow(title: String, isOn: Binding<Bool>) -> some View {
-        HStack {
-            Text(title)
-                .font(AppTypography.bodyMedium)
-                .foregroundColor(AppColors.textPrimaryDark)
-            Spacer()
-            Toggle("", isOn: isOn)
-                .tint(AppColors.accent)
+    @ViewBuilder
+    private func productFormSection<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            content()
         }
-        .padding(AppSpacing.sm)
-        .background(AppColors.backgroundSecondary)
-        .cornerRadius(AppSpacing.radiusMedium)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
+        .shadow(color: .black.opacity(0.02), radius: 2, x: 0, y: 1)
+        .padding(.horizontal, 20)
+    }
+
+    private func fieldRow<Content: View>(label: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .light))
+                .foregroundColor(AppColors.accent)
+                .frame(width: 24)
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundColor(.primary)
+            Spacer()
+            content()
+                .font(.system(size: 15))
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
     private func createProduct() {

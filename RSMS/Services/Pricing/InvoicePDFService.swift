@@ -129,6 +129,128 @@ enum InvoicePDFService {
         return url
     }
 
+    // MARK: - POS Sale Receipt (standard & gift)
+
+    /// Generates a thermal-style receipt for in-store POS sales.
+    /// - Parameters:
+    ///   - snapshot: The invoice data.
+    ///   - isGift: When `true`, prices and totals are omitted — used for gift receipts.
+    static func generatePOSReceipt(for snapshot: InvoiceSnapshot, isGift: Bool = false) throws -> URL {
+        let pageRect = CGRect(x: 0, y: 0, width: 300, height: 600) // thermal-width proportions
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+
+        let prefix   = isGift ? "GiftReceipt" : "Receipt"
+        let fileName = "\(prefix)-\(snapshot.orderNumber.replacingOccurrences(of: "/", with: "-")).pdf"
+        let url      = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+        try renderer.writePDF(to: url) { ctx in
+            ctx.beginPage()
+
+            var y: CGFloat = 20
+            let cx: CGFloat = pageRect.midX
+            let lm: CGFloat = 16
+
+            func centered(_ text: String, _ font: UIFont, _ color: UIColor = .black) {
+                let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+                let size = (text as NSString).size(withAttributes: attrs)
+                text.draw(at: CGPoint(x: cx - size.width / 2, y: y), withAttributes: attrs)
+                y += size.height + 4
+            }
+
+            func leftRight(_ left: String, _ right: String,
+                           _ lFont: UIFont = .systemFont(ofSize: 9),
+                           _ rFont: UIFont = .systemFont(ofSize: 9, weight: .medium)) {
+                let lAttrs: [NSAttributedString.Key: Any] = [.font: lFont, .foregroundColor: UIColor.darkGray]
+                let rAttrs: [NSAttributedString.Key: Any] = [.font: rFont, .foregroundColor: UIColor.black]
+                left.draw(at: CGPoint(x: lm, y: y), withAttributes: lAttrs)
+                let rw = (right as NSString).size(withAttributes: rAttrs).width
+                right.draw(at: CGPoint(x: pageRect.width - lm - rw, y: y), withAttributes: rAttrs)
+                y += 16
+            }
+
+            func dashedLine() {
+                let dash = String(repeating: "- ", count: 18)
+                let attrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 8), .foregroundColor: UIColor.lightGray]
+                dash.draw(at: CGPoint(x: lm, y: y), withAttributes: attrs)
+                y += 12
+            }
+
+            // ── Header ──────────────────────────────────────────────────────────
+            centered(snapshot.storeName, .systemFont(ofSize: 14, weight: .bold))
+            centered(snapshot.storeAddress, .systemFont(ofSize: 8), .darkGray)
+            y += 6
+
+            let receiptTitle = isGift ? "GIFT RECEIPT" : (snapshot.isTaxFree ? "TAX-FREE RECEIPT" : "SALE RECEIPT")
+            centered(receiptTitle, .systemFont(ofSize: 11, weight: .semibold))
+            y += 4
+
+            // ── Order info ──────────────────────────────────────────────────────
+            dashedLine()
+            leftRight("Order", snapshot.orderNumber)
+            leftRight("Date", dateTimeString(snapshot.issuedAt))
+            if !isGift {
+                leftRight("Customer", snapshot.customerName)
+                leftRight("Payment", snapshot.paymentMethod)
+            }
+            if snapshot.isTaxFree && !isGift {
+                leftRight("Tax Status", "TAX-FREE ✓")
+                if !snapshot.taxFreeReason.isEmpty {
+                    leftRight("Ref", snapshot.taxFreeReason)
+                }
+            }
+            dashedLine()
+
+            // ── Line items ──────────────────────────────────────────────────────
+            for item in snapshot.items {
+                let nameAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 9), .foregroundColor: UIColor.black]
+                item.name.draw(at: CGPoint(x: lm, y: y), withAttributes: nameAttrs)
+                y += 13
+                if !isGift {
+                    let detail = "  ×\(item.quantity) @ \(formatCurrency(item.unitPrice, code: snapshot.currencyCode))"
+                    let totalStr = formatCurrency(item.lineTotal, code: snapshot.currencyCode)
+                    leftRight(detail, totalStr, .systemFont(ofSize: 8), .systemFont(ofSize: 8, weight: .medium))
+                } else {
+                    let detail = "  ×\(item.quantity)"
+                    let attrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 8), .foregroundColor: UIColor.darkGray]
+                    detail.draw(at: CGPoint(x: lm, y: y), withAttributes: attrs)
+                    y += 14
+                }
+            }
+
+            // ── Totals (standard receipt only) ──────────────────────────────────
+            if !isGift {
+                dashedLine()
+                leftRight("Subtotal", formatCurrency(snapshot.subtotal, code: snapshot.currencyCode))
+                if snapshot.discountTotal > 0 {
+                    leftRight("Discount", "−\(formatCurrency(snapshot.discountTotal, code: snapshot.currencyCode))",
+                              .systemFont(ofSize: 9), .systemFont(ofSize: 9, weight: .medium))
+                }
+                if snapshot.isTaxFree {
+                    leftRight("Tax", "₹0.00 (Tax-Free)", .systemFont(ofSize: 9), .systemFont(ofSize: 9, weight: .medium))
+                } else {
+                    let taxTotal = snapshot.taxBreakdown.total
+                    leftRight("Tax", formatCurrency(taxTotal, code: snapshot.currencyCode))
+                }
+                dashedLine()
+                leftRight("TOTAL", formatCurrency(snapshot.total, code: snapshot.currencyCode),
+                          .systemFont(ofSize: 11, weight: .bold), .systemFont(ofSize: 11, weight: .bold))
+                y += 4
+            }
+
+            // ── Footer ──────────────────────────────────────────────────────────
+            dashedLine()
+            if isGift {
+                centered("This is a gift receipt.", .systemFont(ofSize: 8), .darkGray)
+                centered("No pricing information is shown.", .systemFont(ofSize: 8), .darkGray)
+            } else {
+                centered("Thank you for shopping with us.", .systemFont(ofSize: 8), .darkGray)
+            }
+            centered("Please retain for your records.", .systemFont(ofSize: 8), .darkGray)
+        }
+
+        return url
+    }
+
     private static func dateTimeString(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium

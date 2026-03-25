@@ -29,6 +29,10 @@ final class SACartViewModel {
     var discountMode: DiscountMode = .percent
     var discountInput: String = ""        // raw text from the field
 
+    // MARK: - Tax-free sale
+    var isTaxFree: Bool    = false
+    var taxFreeReason: String = ""   // e.g. "International visitor — Passport: AB123"
+
     // MARK: - Checkout flow state
     var showCart        = false
     var showCheckout    = false
@@ -36,6 +40,7 @@ final class SACartViewModel {
     var isProcessing    = false
     var errorMessage: String? = nil
     var completedOrderNumber: String? = nil
+    var completedPaymentMethod: String = ""
 
     // MARK: - Computed: counts & subtotal
 
@@ -82,7 +87,8 @@ final class SACartViewModel {
 
     /// Tax rate fetched from Supabase via TaxService (no hardcoded fallback).
     var taxRate: Double { TaxService.shared.rate() }
-    var tax:   Double { discountedSubtotal * taxRate }
+    /// Tax is zero for tax-free transactions; otherwise calculated from discounted subtotal.
+    var tax:   Double { isTaxFree ? 0 : discountedSubtotal * taxRate }
     var total: Double { discountedSubtotal + tax }
 
     // MARK: - Formatted strings
@@ -101,16 +107,22 @@ final class SACartViewModel {
 
     // MARK: - Cart mutations
 
-    func addItem(_ product: ProductDTO) {
-        if let idx = items.firstIndex(where: { $0.productId == product.id }) {
+    func addItem(_ product: ProductDTO, color: String? = nil, size: String? = nil) {
+        if let idx = items.firstIndex(where: {
+            $0.productId == product.id &&
+            $0.selectedColor == color &&
+            $0.selectedSize == size
+        }) {
             items[idx].quantity += 1
         } else {
             items.append(SACartItem(
-                productId:    product.id,
-                productName:  product.name,
-                productBrand: product.brand ?? "Maison Luxe",
-                unitPrice:    product.price,
-                imageURL:     product.resolvedImageURLs.first
+                productId:     product.id,
+                productName:   product.name,
+                productBrand:  product.brand ?? "Maison Luxe",
+                unitPrice:     product.price,
+                imageURL:      product.resolvedImageURLs.first,
+                selectedColor: color,
+                selectedSize:  size
             ))
         }
     }
@@ -125,14 +137,17 @@ final class SACartViewModel {
     }
 
     func clearCart() {
-        items                 = []
-        selectedClient        = nil
-        discountInput         = ""
-        discountMode          = .percent
-        completedOrderNumber  = nil
-        showCart              = false
-        showCheckout          = false
-        showConfirmation      = false
+        items                  = []
+        selectedClient         = nil
+        discountInput          = ""
+        discountMode           = .percent
+        isTaxFree              = false
+        taxFreeReason          = ""
+        completedOrderNumber   = nil
+        completedPaymentMethod = ""
+        showCart               = false
+        showCheckout           = false
+        showConfirmation       = false
     }
 
     // MARK: - Complete Sale
@@ -140,7 +155,8 @@ final class SACartViewModel {
     /// Saves locally, syncs to Supabase, decrements inventory, then signals confirmation.
     @MainActor
     func completeSale(
-        paymentMethod: String,
+        paymentSummary: String,
+        paymentSplits: [OrderService.PaymentSplitInput],
         notes: String,
         associateProfile: UserDTO?,
         modelContext: ModelContext
@@ -163,36 +179,54 @@ final class SACartViewModel {
             discount:            discountAmount,
             total:               total,
             fulfillmentType:     .inStore,
-            paymentMethod:       paymentMethod,
+            paymentMethod:       paymentSummary,
             notes:               notes,
             salesAssociateEmail: associateProfile?.email ?? "",
-            boutiqueId:          associateProfile?.storeId?.uuidString ?? ""
+            boutiqueId:          associateProfile?.storeId?.uuidString ?? "",
+            isTaxFree:           isTaxFree,
+            taxFreeReason:       taxFreeReason
         )
         modelContext.insert(order)
         try? modelContext.save()
 
-        // 2 ── Supabase edge-function sync (non-fatal)
-        if let clientId = selectedClient?.id {
-            let payload = items.map { (
-                productId:   $0.productId,
-                productName: $0.productName,
-                quantity:    $0.quantity,
-                unitPrice:   $0.unitPrice
-            ) }
-            do {
-                try await OrderService.shared.syncOrder(
-                    clientId:      clientId,
-                    cartItems:     payload,
-                    orderNumber:   orderNumber,
-                    subtotal:      subtotal,
-                    discountTotal: discountAmount,
-                    taxTotal:      tax,
-                    grandTotal:    total,
-                    channel:       "in_store"
-                )
-            } catch {
-                print("[SACartVM] Supabase sync failed (order saved locally): \(error.localizedDescription)")
+        // 2 ── Supabase edge-function sync (required before success confirmation)
+        let cartPayload = items.map { (
+            productId:   $0.productId,
+            productName: $0.productName,
+            quantity:    $0.quantity,
+            unitPrice:   $0.unitPrice
+        ) }
+        do {
+            // Wrap sync in a 15-second timeout so a dropped/slow connection
+            // doesn't leave the UI stuck on "Processing…" indefinitely.
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    try await self.syncOrderWithRetry(
+                        clientId: self.selectedClient?.id,
+                        cartItems: cartPayload,
+                        orderNumber: orderNumber,
+                        subtotal: self.subtotal,
+                        discountTotal: self.discountAmount,
+                        taxTotal: self.tax,
+                        grandTotal: self.total,
+                        storeId: associateProfile?.storeId,
+                        isTaxFree: self.isTaxFree,
+                        taxFreeReason: self.taxFreeReason,
+                        notes: notes,
+                        paymentSplits: paymentSplits
+                    )
+                }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: 15_000_000_000)
+                    throw OrderServiceError.edgeFunctionError("Request timed out. Check your connection.")
+                }
+                try await group.next()!
+                group.cancelAll()
             }
+        } catch {
+            print("[SACartVM] Supabase sync failed (order saved locally): \(error.localizedDescription)")
+            errorMessage = "Sale was saved locally, but cloud sync failed. Please try again."
+            return
         }
 
         // 3 ── Inventory decrement (non-fatal)
@@ -200,9 +234,10 @@ final class SACartViewModel {
             await decrementInventory(storeId: storeId)
         }
 
-        completedOrderNumber = orderNumber
-        showCheckout         = false
-        showConfirmation     = true
+        completedOrderNumber   = orderNumber
+        completedPaymentMethod = paymentSummary
+        showCheckout           = false
+        showConfirmation       = true
     }
 
     // MARK: - Private helpers
@@ -223,39 +258,67 @@ final class SACartViewModel {
         return str
     }
 
-    /// Decrements each sold item's quantity in the Supabase `inventory` table
-    /// for the SA's store. Failures are logged and skipped — the sale still completes.
+    /// Decrements each sold item's quantity using the SECURITY DEFINER RPC path,
+    /// so Sales Associate role permissions do not block inventory sync.
     @MainActor
     private func decrementInventory(storeId: UUID) async {
-        let db = SupabaseManager.shared.client
-
-        struct QtyPatch: Encodable { let quantity: Int }
-
         for item in items {
             do {
-                let rows: [InventoryDTO] = try await db
-                    .from("inventory")
-                    .select()
-                    .eq("store_id",  value: storeId.uuidString.lowercased())
-                    .eq("product_id", value: item.productId.uuidString.lowercased())
-                    .limit(1)
-                    .execute()
-                    .value
-
-                guard let current = rows.first else { continue }
-                let newQty = max(0, current.quantity - item.quantity)
-
-                try await db
-                    .from("inventory")
-                    .update(QtyPatch(quantity: newQty))
-                    .eq("store_id",  value: storeId.uuidString.lowercased())
-                    .eq("product_id", value: item.productId.uuidString.lowercased())
-                    .execute()
-
-                print("[SACartVM] Inventory updated: \(item.productName) → \(newQty) remaining")
+                try await OrderFulfillmentService.shared.decrementInventory(
+                    productId: item.productId,
+                    storeId: storeId,
+                    quantity: item.quantity
+                )
+                print("[SACartVM] Inventory decremented via RPC: \(item.productName) -\(item.quantity)")
             } catch {
                 print("[SACartVM] Inventory decrement failed for \(item.productName): \(error.localizedDescription)")
             }
         }
+    }
+
+    private func syncOrderWithRetry(
+        clientId: UUID?,
+        cartItems: [(productId: UUID, productName: String, quantity: Int, unitPrice: Double)],
+        orderNumber: String,
+        subtotal: Double,
+        discountTotal: Double,
+        taxTotal: Double,
+        grandTotal: Double,
+        storeId: UUID?,
+        isTaxFree: Bool,
+        taxFreeReason: String,
+        notes: String,
+        paymentSplits: [OrderService.PaymentSplitInput]
+    ) async throws {
+        let maxAttempts = 2
+        var lastError: Error?
+
+        for attempt in 1...maxAttempts {
+            do {
+                try await OrderService.shared.syncOrder(
+                    clientId:      clientId,
+                    cartItems:     cartItems,
+                    orderNumber:   orderNumber,
+                    subtotal:      subtotal,
+                    discountTotal: discountTotal,
+                    taxTotal:      taxTotal,
+                    grandTotal:    grandTotal,
+                    channel:       "in_store",
+                    storeId:       storeId,
+                    isTaxFree:     isTaxFree,
+                    taxFreeReason: taxFreeReason,
+                    notes:         notes,
+                    paymentSplits: paymentSplits
+                )
+                return
+            } catch {
+                lastError = error
+                if attempt < maxAttempts {
+                    try? await Task.sleep(nanoseconds: 800_000_000)
+                }
+            }
+        }
+
+        throw lastError ?? OrderServiceError.edgeFunctionError("Unknown sync failure")
     }
 }

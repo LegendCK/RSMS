@@ -139,7 +139,7 @@ struct SASaleCartView: View {
                 }
             }
 
-            // Name + brand
+            // Name + brand + variant
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.productName)
                     .font(AppTypography.label)
@@ -148,6 +148,11 @@ struct SASaleCartView: View {
                 Text(item.productBrand)
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
+                if let variant = item.variantLabel {
+                    Text(variant)
+                        .font(AppTypography.micro)
+                        .foregroundColor(AppColors.accent.opacity(0.8))
+                }
                 Text(item.formattedLineTotal)
                     .font(AppTypography.label)
                     .foregroundColor(AppColors.accent)
@@ -396,6 +401,32 @@ struct SASaleCartView: View {
                         .clipShape(Capsule())
                 }
             }
+            HStack(spacing: AppSpacing.sm) {
+                Button { cart.showCheckout = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "rectangle.3.group.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Split Payment")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(AppColors.accent)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(AppColors.accent.opacity(0.12))
+                    .clipShape(Capsule())
+                }
+                Spacer()
+            }
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.top, 8)
+            HStack {
+                Text("Split payment options are available on the next screen.")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                Spacer()
+            }
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.top, 6)
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, 12)
             .padding(.bottom, 28)
@@ -540,4 +571,3 @@ struct SAClientPickerView: View {
         clients = (try? await ClientService.shared.fetchAllClients()) ?? []
     }
 }
-

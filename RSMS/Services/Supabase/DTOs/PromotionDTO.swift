@@ -18,7 +18,7 @@ struct PromotionDTO: Codable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id, name, details
-        case promotionScope       = "promotion_scope"
+        case promotionScope       = "scope"
         case targetProductId      = "target_product_id"
         case targetCategoryId     = "target_category_id"
         case promotionDiscountType = "discount_type"
@@ -47,7 +47,7 @@ struct PromotionInsertDTO: Codable {
 
     enum CodingKeys: String, CodingKey {
         case name, details
-        case promotionScope       = "promotion_scope"
+        case promotionScope       = "scope"
         case targetProductId      = "target_product_id"
         case targetCategoryId     = "target_category_id"
         case promotionDiscountType = "discount_type"
