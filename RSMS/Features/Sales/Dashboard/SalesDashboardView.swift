@@ -120,23 +120,14 @@ struct SalesDashboardView: View {
                     .foregroundColor(.primary)
             }
         }
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .newClient:
-                NavigationStack {
-                    CreateClientProfileView()
-                }
-            case .bookAppointment:
-                CreateAppointmentView()
-            case .startSale:
-                SACatalogView()
-            case .serviceTicket:
-                SalesAfterSalesView()
-            }
-        }
         .sheet(isPresented: $showCreateTicket) {
             NavigationStack {
                 CreateServiceTicketView()
+            }
+        }
+        .sheet(isPresented: $showAfterSales) {
+            NavigationStack {
+                SalesAfterSalesView()
             }
         }
         .navigationDestination(isPresented: $showTicketList) {
@@ -199,13 +190,4 @@ struct SalesDashboardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
     }
-}
-
-private enum ActiveSalesSheet: String, Identifiable {
-    case newClient
-    case bookAppointment
-    case startSale
-    case serviceTicket
-
-    var id: String { rawValue }
 }

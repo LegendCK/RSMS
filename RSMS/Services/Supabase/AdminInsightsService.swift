@@ -23,6 +23,13 @@ final class AdminInsightsService {
             .execute()
             .value
 
+        async let reservations: [ReservationDTO] = client
+            .from("reservations")
+            .select("*, products(*)")
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+
         async let stores: [StoreDTO] = client
             .from("stores")
             .select()
@@ -67,6 +74,7 @@ final class AdminInsightsService {
             stores: stores,
             orders: orders,
             orderItems: orderItems,
+            reservations: reservations,
             inventory: inventory,
             users: users,
             appointments: appointments,

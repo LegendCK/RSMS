@@ -12,7 +12,7 @@ final class EventSalesService {
     /// Fetch all events for a store, newest first.
     /// Auto-transitions statuses (Planned→In Progress→Completed) before returning.
     func fetchEvents(storeId: UUID) async throws -> [EventDTO] {
-        try? await client
+        _ = try? await client
             .rpc("auto_transition_event_statuses",
                  params: ["p_store_id": storeId.uuidString.lowercased()])
             .execute()
@@ -46,6 +46,18 @@ final class EventSalesService {
             .value
     }
 
+    /// Update an existing event and return the updated row.
+    func updateEvent(eventId: UUID, dto: EventUpdateDTO) async throws -> EventDTO {
+        try await client
+            .from("boutique_events")
+            .update(dto)
+            .eq("id", value: eventId.uuidString.lowercased())
+            .select()
+            .single()
+            .execute()
+            .value
+    }
+
     /// Sync a local SwiftData Event to Supabase (upsert by id).
     func syncEvent(localEvent: Event, storeId: UUID) async throws -> EventDTO {
         let dto = EventInsertDTO(
@@ -63,12 +75,6 @@ final class EventSalesService {
             currency:        "INR",
             invitedSegment:  nil
         )
-        return try await client
-            .from("boutique_events")
-            .select()
-            .eq("store_id", value: storeId.uuidString.lowercased())
-            .order("scheduled_date", ascending: false)
-            .execute()
-            .value
+        return try await createEvent(dto)
     }
 }

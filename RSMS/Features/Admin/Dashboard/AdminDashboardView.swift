@@ -18,6 +18,7 @@ enum ActiveAdminSheet: Identifiable {
     case addStore
     case addPromotion
     case export
+    case clientActivity
     case salesInsights
     case inventoryInsights
     case shareFile(URL)
@@ -30,6 +31,7 @@ enum ActiveAdminSheet: Identifiable {
         case .addStore: return "addStore"
         case .addPromotion: return "addPromotion"
         case .export: return "export"
+        case .clientActivity: return "clientActivity"
         case .salesInsights: return "salesInsights"
         case .inventoryInsights: return "inventoryInsights"
         case .shareFile(let url): return "shareFile-\(url.absoluteString)"
@@ -97,6 +99,7 @@ struct AdminDashboardView: View {
     private var remoteAppointments: [AppointmentDTO]? { remoteSnapshot?.appointments }
     private var remoteClients: [ClientDTO]? { remoteSnapshot?.clients }
     private var remoteServiceTickets: [ServiceTicketDTO]? { remoteSnapshot?.serviceTickets }
+    private var remoteReservations: [ReservationDTO]? { remoteSnapshot?.reservations }
     private var remoteInventory: [InventoryDTO]? { remoteSnapshot?.inventory }
 
     private var staffCount: Int {
@@ -201,7 +204,7 @@ struct AdminDashboardView: View {
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 14) {
-                    Button(action: {}) {
+                    Button(action: { activeSheet = .clientActivity }) {
                         Image(systemName: "bell.badge")
                             .font(.system(size: 16, weight: .light))
                             .foregroundColor(.primary)
@@ -244,6 +247,11 @@ struct AdminDashboardView: View {
                         Task { await exportReports() }
                     }
                 )
+            case .clientActivity:
+                NavigationStack {
+                    CorporateAdminClientActivityView()
+                        .environment(appState)
+                }
             case .salesInsights:
                 DashboardSalesInsightsSheet(
                     associateRating: associateRatingFeedback,
@@ -752,8 +760,8 @@ struct AdminDashboardView: View {
                 actionTile(icon: "building.2.fill", label: "Add Store", color: AppColors.info) {
                     impact.impactOccurred(); activeSheet = .addStore
                 }
-                actionTile(icon: "arrow.left.arrow.right", label: "Transfer", color: AppColors.success) {
-                    impact.impactOccurred()
+                actionTile(icon: "person.text.rectangle.fill", label: "Activity", color: AppColors.success) {
+                    impact.impactOccurred(); activeSheet = .clientActivity
                 }
                 actionTile(icon: "percent", label: "Promotion", color: AppColors.warning) {
                     impact.impactOccurred(); activeSheet = .addPromotion
@@ -800,7 +808,7 @@ struct AdminDashboardView: View {
             HStack {
                 sectionHeader("ACTIVITY")
                 Spacer()
-                Button(action: {}) {
+                Button(action: { activeSheet = .clientActivity }) {
                     HStack(spacing: 3) {
                         Text("View All")
                             .font(.system(size: 12, weight: .medium))
@@ -3053,6 +3061,759 @@ struct CreatePromotionSheet: View {
             showError = true
         }
     }
+}
+
+private struct AdminClientActivityMonitorView: View {
+    let snapshot: AdminInsightsSnapshot?
+    let isSyncing: Bool
+    let lastSyncedAt: Date?
+    let generatedBy: String
+    let onRefresh: () async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedTab: AdminClientActivityTab = .orders
+    @State private var searchText = ""
+    @State private var shareFile: ShareFile?
+    @State private var exportErrorMessage = ""
+    @State private var showExportError = false
+    @State private var isExporting = false
+
+    private var portalOrders: [OrderDTO] {
+        guard let snapshot else { return [] }
+        return snapshot.orders.filter { order in
+            let channel = order.channel.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return channel == "online" || channel == "bopis" || channel == "ship_from_store"
+        }
+    }
+
+    private var reservations: [ReservationDTO] {
+        snapshot?.reservations ?? []
+    }
+
+    private var returnTickets: [ServiceTicketDTO] {
+        guard let snapshot else { return [] }
+        return snapshot.serviceTickets.filter { ticket in
+            let type = ticket.type.lowercased()
+            let notes = ticket.notes?.lowercased() ?? ""
+            return type == RepairType.warrantyClaim.rawValue || notes.contains("exchange") || notes.contains("return")
+        }
+    }
+
+    private var activePortalOrders: [OrderDTO] {
+        portalOrders.filter { !["completed", "cancelled", "delivered"].contains($0.status.lowercased()) }
+    }
+
+    private var activeReservationsCount: Int {
+        reservations.filter { !$0.status.lowercased().contains("cancel") && $0.expiresAt > Date() }.count
+    }
+
+    private var openReturnsCount: Int {
+        returnTickets.filter { !["completed", "cancelled"].contains($0.status.lowercased()) }.count
+    }
+
+    private var clientsById: [UUID: ClientDTO] {
+        Dictionary(uniqueKeysWithValues: (snapshot?.clients ?? []).map { ($0.id, $0) })
+    }
+
+    private var storesById: [UUID: StoreDTO] {
+        Dictionary(uniqueKeysWithValues: (snapshot?.stores ?? []).map { ($0.id, $0) })
+    }
+
+    private var productsById: [UUID: ProductDTO] {
+        Dictionary(uniqueKeysWithValues: (snapshot?.products ?? []).map { ($0.id, $0) })
+    }
+
+    private var ordersById: [UUID: OrderDTO] {
+        Dictionary(uniqueKeysWithValues: portalOrders.map { ($0.id, $0) })
+    }
+
+    private var onlineRevenue: Double {
+        portalOrders.reduce(0.0) { $0 + $1.grandTotal }
+    }
+
+    private var inStoreRevenue: Double {
+        snapshot?.orders
+            .filter { $0.channel.lowercased() == "in_store" }
+            .reduce(0.0) { $0 + $1.grandTotal } ?? 0
+    }
+
+    private var filteredOrders: [OrderDTO] {
+        filter(text: searchText, over: portalOrders) { order in
+            let client = order.clientId.flatMap { clientsById[$0] }
+            let store = storesById[order.storeId]
+            return [
+                order.orderNumber ?? "",
+                order.channel,
+                order.status,
+                client?.fullName ?? "",
+                client?.email ?? "",
+                store?.name ?? ""
+            ]
+        }
+    }
+
+    private var filteredReservations: [ReservationDTO] {
+        filter(text: searchText, over: reservations) { reservation in
+            let client = clientsById[reservation.clientId]
+            let product = productsById[reservation.productId] ?? reservation.product
+            let storeName = reservation.storeId.flatMap { storesById[$0]?.name } ?? ""
+            return [
+                client?.fullName ?? "",
+                client?.email ?? "",
+                product?.name ?? "",
+                reservation.status,
+                storeName
+            ]
+        }
+    }
+
+    private var filteredReturns: [ServiceTicketDTO] {
+        filter(text: searchText, over: returnTickets) { ticket in
+            let client = ticket.clientId.flatMap { clientsById[$0] }
+            let order = ticket.orderId.flatMap { ordersById[$0] }
+            let store = storesById[ticket.storeId]
+            return [
+                ticket.displayTicketNumber,
+                ticket.type,
+                ticket.status,
+                client?.fullName ?? "",
+                client?.email ?? "",
+                order?.orderNumber ?? "",
+                store?.name ?? ""
+            ]
+        }
+    }
+
+    private var storeFulfillment: [AdminStoreFulfillmentRow] {
+        let grouped = Dictionary(grouping: activePortalOrders, by: \.storeId)
+        return grouped.map { storeId, orders in
+            let store = storesById[storeId]
+            let statusCounts = Dictionary(grouping: orders, by: { normalizedLabel($0.status) })
+                .mapValues(\.count)
+            return AdminStoreFulfillmentRow(
+                storeId: storeId,
+                storeName: store?.name ?? "Unknown Store",
+                location: [store?.city, store?.region].compactMap { value in
+                    guard let value, !value.isEmpty else { return nil }
+                    return value
+                }.joined(separator: ", "),
+                totalOrders: orders.count,
+                pendingCount: statusCounts["Pending"] ?? 0,
+                processingCount: statusCounts["Processing"] ?? 0,
+                confirmedCount: statusCounts["Confirmed"] ?? 0,
+                shippedCount: statusCounts["Shipped"] ?? 0
+            )
+        }
+        .sorted { $0.totalOrders > $1.totalOrders }
+    }
+
+    var body: some View {
+        ZStack {
+            AppColors.backgroundPrimary.ignoresSafeArea()
+
+            if let snapshot {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: AppSpacing.lg) {
+                        syncBanner
+                        summaryGrid
+                        channelComparisonCard(snapshot: snapshot)
+                        fulfillmentCard
+                        filterTabs
+                        searchBar
+                        contentSection
+                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.vertical, AppSpacing.md)
+                }
+            } else {
+                ContentUnavailableView(
+                    "No Live Activity Yet",
+                    systemImage: "chart.bar.xaxis",
+                    description: Text("Refresh the admin snapshot to load customer portal activity.")
+                )
+            }
+        }
+        .navigationTitle("Client Activity")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Close") { dismiss() }
+                    .foregroundColor(AppColors.accent)
+            }
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                Button {
+                    Task { await onRefresh() }
+                } label: {
+                    if isSyncing {
+                        ProgressView()
+                            .tint(AppColors.accent)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .foregroundColor(AppColors.accent)
+                    }
+                }
+
+                Button {
+                    Task { await exportChannelReport() }
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .foregroundColor(AppColors.accent)
+                }
+                .disabled(snapshot == nil || isExporting)
+            }
+        }
+        .sheet(item: $shareFile) { file in
+            ShareSheet(activityItems: [file.url])
+        }
+        .alert("Export Error", isPresented: $showExportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(exportErrorMessage)
+        }
+    }
+
+    private var syncBanner: some View {
+        HStack(spacing: AppSpacing.sm) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("LIVE PORTAL MONITOR")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+                Text(syncStatusText)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+            Spacer()
+            Text(isSyncing ? "Syncing" : "Connected")
+                .font(AppTypography.micro)
+                .foregroundColor(isSyncing ? AppColors.info : AppColors.success)
+                .padding(.horizontal, AppSpacing.xs)
+                .padding(.vertical, 4)
+                .background((isSyncing ? AppColors.info : AppColors.success).opacity(0.12))
+                .clipShape(Capsule())
+        }
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private var summaryGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AppSpacing.sm) {
+            summaryCard(title: "Portal Orders", value: "\(portalOrders.count)", subtitle: "\(activePortalOrders.count) active", color: AppColors.accent)
+            summaryCard(title: "Reservations", value: "\(reservations.count)", subtitle: "\(activeReservationsCount) active", color: AppColors.info)
+            summaryCard(title: "Returns", value: "\(returnTickets.count)", subtitle: "\(openReturnsCount) open", color: AppColors.warning)
+            summaryCard(title: "Fulfillment", value: "\(storeFulfillment.count)", subtitle: "stores involved", color: AppColors.success)
+        }
+    }
+
+    private func summaryCard(title: String, value: String, subtitle: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+            Text(value)
+                .font(AppTypography.heading2)
+                .foregroundColor(color)
+            Text(subtitle)
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func channelComparisonCard(snapshot: AdminInsightsSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack {
+                Text("ONLINE VS IN-STORE")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+                Spacer()
+                Text("Export CSV")
+                    .font(AppTypography.micro)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+
+            HStack(spacing: AppSpacing.sm) {
+                comparisonColumn(title: "Online / Omnichannel", orders: portalOrders.count, revenue: onlineRevenue, color: AppColors.accent)
+                comparisonColumn(title: "In-Store", orders: snapshot.orders.count - portalOrders.count, revenue: inStoreRevenue, color: AppColors.secondary)
+            }
+
+            let totalRevenue = max(onlineRevenue + inStoreRevenue, 1)
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                progressRow(label: "Online Mix", ratio: onlineRevenue / totalRevenue, color: AppColors.accent)
+                progressRow(label: "In-Store Mix", ratio: inStoreRevenue / totalRevenue, color: AppColors.secondary)
+            }
+        }
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func comparisonColumn(title: String, orders: Int, revenue: Double, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+            Text(currency(revenue))
+                .font(AppTypography.heading3)
+                .foregroundColor(color)
+            Text("\(orders) orders")
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.sm)
+        .background(AppColors.backgroundPrimary)
+        .cornerRadius(AppSpacing.radiusSmall)
+    }
+
+    private func progressRow(label: String, ratio: Double, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(AppTypography.micro)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                Spacer()
+                Text("\(Int(ratio * 100))%")
+                    .font(AppTypography.micro)
+                    .foregroundColor(AppColors.textPrimaryDark)
+            }
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(AppColors.backgroundPrimary)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(color)
+                        .frame(width: proxy.size.width * ratio)
+                }
+            }
+            .frame(height: 8)
+        }
+    }
+
+    private var fulfillmentCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("STORE FULFILLMENT STATUS")
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.accent)
+
+            if storeFulfillment.isEmpty {
+                Text("No active client-portal orders are waiting on store fulfillment.")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            } else {
+                ForEach(storeFulfillment.prefix(4)) { row in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(row.storeName)
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                if !row.location.isEmpty {
+                                    Text(row.location)
+                                        .font(AppTypography.micro)
+                                        .foregroundColor(AppColors.textSecondaryDark)
+                                }
+                            }
+                            Spacer()
+                            Text("\(row.totalOrders) open")
+                                .font(AppTypography.micro)
+                                .foregroundColor(AppColors.accent)
+                        }
+
+                        HStack(spacing: AppSpacing.xs) {
+                            fulfillmentPill(label: "Pending", count: row.pendingCount, color: AppColors.warning)
+                            fulfillmentPill(label: "Processing", count: row.processingCount, color: AppColors.info)
+                            fulfillmentPill(label: "Confirmed", count: row.confirmedCount, color: AppColors.success)
+                            fulfillmentPill(label: "Shipped", count: row.shippedCount, color: AppColors.secondary)
+                        }
+                    }
+                    .padding(AppSpacing.sm)
+                    .background(AppColors.backgroundPrimary)
+                    .cornerRadius(AppSpacing.radiusSmall)
+                }
+            }
+        }
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func fulfillmentPill(label: String, count: Int, color: Color) -> some View {
+        Text("\(label) \(count)")
+            .font(AppTypography.micro)
+            .foregroundColor(color)
+            .padding(.horizontal, AppSpacing.xs)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
+    }
+
+    private var filterTabs: some View {
+        Picker("", selection: $selectedTab) {
+            ForEach(AdminClientActivityTab.allCases) { tab in
+                Text(tab.rawValue).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: AppSpacing.xs) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(AppColors.textSecondaryDark)
+            TextField("Search customer, order, store or status", text: $searchText)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(AppColors.neutral500)
+                }
+            }
+        }
+        .padding(AppSpacing.sm)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusSmall)
+    }
+
+    @ViewBuilder
+    private var contentSection: some View {
+        switch selectedTab {
+        case .orders:
+            if filteredOrders.isEmpty {
+                emptyState("No client-portal orders match the current filters.")
+            } else {
+                VStack(spacing: AppSpacing.sm) {
+                    ForEach(filteredOrders) { order in
+                        orderRow(order)
+                    }
+                }
+            }
+        case .reservations:
+            if filteredReservations.isEmpty {
+                emptyState("No reservations match the current filters.")
+            } else {
+                VStack(spacing: AppSpacing.sm) {
+                    ForEach(filteredReservations) { reservation in
+                        reservationRow(reservation)
+                    }
+                }
+            }
+        case .returns:
+            if filteredReturns.isEmpty {
+                emptyState("No returns or exchange requests match the current filters.")
+            } else {
+                VStack(spacing: AppSpacing.sm) {
+                    ForEach(filteredReturns) { ticket in
+                        returnRow(ticket)
+                    }
+                }
+            }
+        case .fulfillment:
+            if storeFulfillment.isEmpty {
+                emptyState("No store fulfillment activity is pending.")
+            } else {
+                VStack(spacing: AppSpacing.sm) {
+                    ForEach(storeFulfillment) { row in
+                        fulfillmentDetailRow(row)
+                    }
+                }
+            }
+        }
+    }
+
+    private func orderRow(_ order: OrderDTO) -> some View {
+        let client = order.clientId.flatMap { clientsById[$0] }
+        let store = storesById[order.storeId]
+
+        return VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(order.orderNumber ?? "Order \(order.id.uuidString.prefix(8))")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(client?.fullName ?? "Guest Customer")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    if let email = client?.email {
+                        Text(email)
+                            .font(AppTypography.micro)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                }
+                Spacer()
+                Text(currency(order.grandTotal))
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.accent)
+            }
+
+            HStack(spacing: AppSpacing.xs) {
+                statusBadge(channelLabel(for: order.channel), color: channelColor(for: order.channel))
+                statusBadge(normalizedLabel(order.status), color: statusColor(for: order.status))
+            }
+
+            Text("Fulfillment: \(store?.name ?? "Unknown Store")")
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+
+            Text(order.createdAt.formatted(date: .abbreviated, time: .shortened))
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func reservationRow(_ reservation: ReservationDTO) -> some View {
+        let client = clientsById[reservation.clientId]
+        let product = productsById[reservation.productId] ?? reservation.product
+        let storeName = reservation.storeId.flatMap { storesById[$0]?.name } ?? "Boutique TBD"
+
+        return VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(product?.name ?? "Reserved Product")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(client?.fullName ?? "Unknown Client")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                Spacer()
+                statusBadge(normalizedLabel(reservation.status), color: reservationStatusColor(reservation.status))
+            }
+
+            Text(storeName)
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+
+            Text("Expires \(reservation.expiresAt.formatted(date: .abbreviated, time: .shortened))")
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func returnRow(_ ticket: ServiceTicketDTO) -> some View {
+        let client = ticket.clientId.flatMap { clientsById[$0] }
+        let order = ticket.orderId.flatMap { ordersById[$0] }
+        let store = storesById[ticket.storeId]
+
+        return VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(ticket.displayTicketNumber)
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(client?.fullName ?? "Unknown Client")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                Spacer()
+                statusBadge(normalizedLabel(ticket.status), color: statusColor(for: ticket.status))
+            }
+
+            HStack(spacing: AppSpacing.xs) {
+                statusBadge(normalizedLabel(ticket.type), color: AppColors.warning)
+                if let orderNumber = order?.orderNumber {
+                    statusBadge(orderNumber, color: AppColors.info)
+                }
+            }
+
+            Text("Store: \(store?.name ?? "Unknown Store")")
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func fulfillmentDetailRow(_ row: AdminStoreFulfillmentRow) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.storeName)
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    if !row.location.isEmpty {
+                        Text(row.location)
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                }
+                Spacer()
+                Text("\(row.totalOrders) active")
+                    .font(AppTypography.micro)
+                    .foregroundColor(AppColors.accent)
+            }
+
+            Text("Pending \(row.pendingCount) · Processing \(row.processingCount) · Confirmed \(row.confirmedCount) · Shipped \(row.shippedCount)")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private func statusBadge(_ label: String, color: Color) -> some View {
+        Text(label)
+            .font(AppTypography.micro)
+            .foregroundColor(color)
+            .padding(.horizontal, AppSpacing.xs)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
+    }
+
+    private func emptyState(_ message: String) -> some View {
+        Text(message)
+            .font(AppTypography.caption)
+            .foregroundColor(AppColors.textSecondaryDark)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(AppSpacing.xl)
+            .background(AppColors.backgroundSecondary)
+            .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    private var syncStatusText: String {
+        guard let lastSyncedAt else { return "Waiting for first sync from the client portal." }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return "Last synced \(formatter.localizedString(for: lastSyncedAt, relativeTo: Date()))."
+    }
+
+    private func exportChannelReport() async {
+        guard let snapshot else {
+            exportErrorMessage = "No snapshot is loaded yet."
+            showExportError = true
+            return
+        }
+
+        guard !isExporting else { return }
+        isExporting = true
+        defer { isExporting = false }
+
+        do {
+            let fileURL = try AdminReportExportService.exportChannelComparisonCSV(
+                snapshot: snapshot,
+                generatedBy: generatedBy
+            )
+            shareFile = ShareFile(url: fileURL)
+        } catch {
+            exportErrorMessage = "Could not export channel report: \(error.localizedDescription)"
+            showExportError = true
+        }
+    }
+
+    private func currency(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "INR"
+        return formatter.string(from: NSNumber(value: value)) ?? "INR \(value)"
+    }
+
+    private func normalizedLabel(_ raw: String) -> String {
+        raw.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    private func channelLabel(for channel: String) -> String {
+        switch channel.lowercased() {
+        case "online": return "Online Delivery"
+        case "bopis": return "BOPIS"
+        case "ship_from_store": return "Ship From Store"
+        case "in_store": return "In-Store"
+        default: return normalizedLabel(channel)
+        }
+    }
+
+    private func channelColor(for channel: String) -> Color {
+        switch channel.lowercased() {
+        case "online": return AppColors.accent
+        case "bopis": return AppColors.info
+        case "ship_from_store": return AppColors.secondary
+        case "in_store": return AppColors.success
+        default: return AppColors.textSecondaryDark
+        }
+    }
+
+    private func statusColor(for status: String) -> Color {
+        switch status.lowercased() {
+        case "pending", "requested", "intake":
+            return AppColors.warning
+        case "confirmed", "processing", "in_progress", "estimate_pending":
+            return AppColors.info
+        case "shipped", "delivered", "completed", "estimate_approved":
+            return AppColors.success
+        case "cancelled":
+            return AppColors.error
+        default:
+            return AppColors.textSecondaryDark
+        }
+    }
+
+    private func reservationStatusColor(_ status: String) -> Color {
+        switch status.lowercased() {
+        case "active", "reserved":
+            return AppColors.success
+        case "expired":
+            return AppColors.warning
+        case "cancelled":
+            return AppColors.error
+        default:
+            return AppColors.info
+        }
+    }
+
+    private func filter<T>(
+        text: String,
+        over source: [T],
+        fields: (T) -> [String]
+    ) -> [T] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return source }
+        return source.filter { item in
+            fields(item).contains { $0.lowercased().contains(trimmed) }
+        }
+    }
+}
+
+private enum AdminClientActivityTab: String, CaseIterable, Identifiable {
+    case orders = "Orders"
+    case reservations = "Reservations"
+    case returns = "Returns"
+    case fulfillment = "Fulfillment"
+
+    var id: String { rawValue }
+}
+
+private struct AdminStoreFulfillmentRow: Identifiable {
+    let storeId: UUID
+    let storeName: String
+    let location: String
+    let totalOrders: Int
+    let pendingCount: Int
+    let processingCount: Int
+    let confirmedCount: Int
+    let shippedCount: Int
+
+    var id: UUID { storeId }
 }
 
 #Preview {

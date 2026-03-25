@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CreateEventSheet: View {
     let onCreated: () -> Void
+    @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
     // Form fields

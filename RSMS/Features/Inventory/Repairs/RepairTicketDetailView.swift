@@ -12,6 +12,7 @@
 
 import SwiftUI
 
+@MainActor
 struct RepairTicketDetailView: View {
 
     // MARK: - State
@@ -27,10 +28,14 @@ struct RepairTicketDetailView: View {
 
     init(
         ticket: ServiceTicketDTO,
-        service: ServiceTicketServiceProtocol = ServiceTicketService.shared
+        service: ServiceTicketServiceProtocol
     ) {
         _ticket      = State(initialValue: ticket)
         self.service = service
+    }
+
+    init(ticket: ServiceTicketDTO) {
+        self.init(ticket: ticket, service: ServiceTicketService.shared)
     }
 
     // MARK: - Body

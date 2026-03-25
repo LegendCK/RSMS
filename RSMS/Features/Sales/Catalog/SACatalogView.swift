@@ -8,6 +8,10 @@
 import SwiftUI
 
 struct SACatalogView: View {
+    @State private var vm = SACatalogViewModel()
+    @Environment(SACartViewModel.self) private var cart
+    @State private var selectedProduct: ProductDTO?
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -170,6 +174,219 @@ struct SACatalogView: View {
             if vm.sortOption != .nameAZ {
                 filterPill(vm.sortOption.rawValue) {
                     vm.sortOption = .nameAZ
+                }
+            }
+        }
+        .padding(.horizontal, AppSpacing.screenHorizontal)
+        .padding(.vertical, AppSpacing.sm)
+        .background(AppColors.backgroundSecondary.opacity(0.55))
+    }
+
+    private func filterPill(_ label: String, onClear: @escaping () -> Void) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(AppTypography.micro)
+                .foregroundColor(AppColors.accent)
+            Button(action: onClear) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppColors.accent)
+            }
+        }
+        .padding(.horizontal, AppSpacing.xs)
+        .padding(.vertical, 6)
+        .background(AppColors.accent.opacity(0.12))
+        .clipShape(Capsule())
+    }
+
+    private func priceRangeLabel() -> String {
+        switch (vm.minPriceText.isEmpty, vm.maxPriceText.isEmpty) {
+        case (false, false):
+            return "₹\(vm.minPriceText)-₹\(vm.maxPriceText)"
+        case (false, true):
+            return "Min ₹\(vm.minPriceText)"
+        case (true, false):
+            return "Up to ₹\(vm.maxPriceText)"
+        case (true, true):
+            return "Price"
+        }
+    }
+
+    private var productList: some View {
+        Group {
+            if vm.isLoading && vm.filtered.isEmpty {
+                ProgressView()
+                    .tint(AppColors.accent)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.top, AppSpacing.xxl)
+            } else if let error = vm.errorMessage, vm.products.isEmpty {
+                VStack(spacing: AppSpacing.sm) {
+                    Image(systemName: "wifi.exclamationmark")
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundColor(AppColors.warning)
+                    Text("Could not load catalog")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(error)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .multilineTextAlignment(.center)
+                    Button("Retry") {
+                        Task { await vm.load() }
+                    }
+                    .foregroundColor(AppColors.accent)
+                }
+                .padding(AppSpacing.xl)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if vm.filtered.isEmpty {
+                VStack(spacing: AppSpacing.sm) {
+                    Image(systemName: "shippingbox")
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundColor(AppColors.neutral500)
+                    Text("No products match your filters")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Button("Clear Filters") {
+                        vm.clearFilters()
+                        vm.searchText = ""
+                    }
+                    .foregroundColor(AppColors.accent)
+                }
+                .padding(AppSpacing.xl)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: AppSpacing.sm) {
+                        ForEach(vm.filtered) { product in
+                            Button {
+                                selectedProduct = product
+                            } label: {
+                                productRow(product)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.vertical, AppSpacing.md)
+                }
+            }
+        }
+    }
+
+    private func productRow(_ product: ProductDTO) -> some View {
+        let stock = vm.stockInfo(for: product.id)
+
+        return HStack(spacing: AppSpacing.md) {
+            productArtwork(for: product)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(product.name)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                    .lineLimit(1)
+
+                Text(product.brand ?? "Maison Luxe")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    Text(product.formattedPrice)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.accent)
+                    Text(stock.label)
+                        .font(AppTypography.micro)
+                        .foregroundColor(stock.color)
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(AppTypography.chevron)
+                .foregroundColor(AppColors.neutral500)
+        }
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    @ViewBuilder
+    private func productArtwork(for product: ProductDTO) -> some View {
+        if let url = product.resolvedImageURLs.first {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                default:
+                    placeholderArtwork
+                }
+            }
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        } else {
+            placeholderArtwork
+                .frame(width: 64, height: 64)
+        }
+    }
+
+    private var placeholderArtwork: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(AppColors.backgroundTertiary)
+            .overlay(
+                Image(systemName: "bag.fill")
+                    .foregroundColor(AppColors.neutral500)
+            )
+    }
+}
+
+private struct SACatalogFilterSheet: View {
+    let vm: SACatalogViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        @Bindable var bindableVM = vm
+
+        NavigationStack {
+            Form {
+                Section("Availability") {
+                    Picker("Stock", selection: $bindableVM.availabilityFilter) {
+                        ForEach(SACatalogViewModel.AvailabilityFilter.allCases) { filter in
+                            Text(filter.rawValue).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                }
+
+                Section("Price Range") {
+                    TextField("Min price", text: $bindableVM.minPriceText)
+                        .keyboardType(.decimalPad)
+                    TextField("Max price", text: $bindableVM.maxPriceText)
+                        .keyboardType(.decimalPad)
+                }
+
+                Section("Sort") {
+                    Picker("Sort By", selection: $bindableVM.sortOption) {
+                        ForEach(SACatalogViewModel.SortOption.allCases) { option in
+                            Text(option.rawValue).tag(option)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                }
+            }
+            .navigationTitle("Filters")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Reset") {
+                        vm.clearFilters()
+                    }
+                    .foregroundColor(AppColors.accent)
                 }
             }
         }

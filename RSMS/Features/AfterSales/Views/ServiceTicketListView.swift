@@ -19,8 +19,12 @@ final class ServiceTicketListViewModel {
 
     private let ticketService: ServiceTicketServiceProtocol
 
-    init(ticketService: ServiceTicketServiceProtocol = ServiceTicketService.shared) {
+    init(ticketService: ServiceTicketServiceProtocol) {
         self.ticketService = ticketService
+    }
+
+    convenience init() {
+        self.init(ticketService: ServiceTicketService.shared)
     }
 
     var filteredTickets: [ServiceTicketDTO] {
@@ -62,6 +66,7 @@ final class ServiceTicketListViewModel {
     }
 }
 
+@MainActor
 struct ServiceTicketListView: View {
     @Environment(AppState.self) private var appState
     @State private var vm = ServiceTicketListViewModel()

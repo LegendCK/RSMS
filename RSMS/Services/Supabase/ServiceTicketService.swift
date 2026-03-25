@@ -281,8 +281,8 @@ final class ServiceTicketService: ServiceTicketServiceProtocol, @unchecked Senda
         try await client.storage
             .from(bucket)
             .upload(
-                path: fileName,
-                file: imageData,
+                fileName,
+                data: imageData,
                 options: .init(contentType: "image/jpeg", upsert: true)
             )
 

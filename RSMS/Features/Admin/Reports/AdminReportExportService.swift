@@ -103,6 +103,12 @@ enum AdminReportExportService {
             let totalOrders = snapshot.orders.count
             let totalProducts = snapshot.products.count
             let activeStores = snapshot.stores.filter { $0.isActive }.count
+            let onlineRevenue = snapshot.orders
+                .filter { $0.channel.lowercased() != "in_store" }
+                .reduce(0.0) { $0 + $1.grandTotal }
+            let inStoreRevenue = snapshot.orders
+                .filter { $0.channel.lowercased() == "in_store" }
+                .reduce(0.0) { $0 + $1.grandTotal }
             
             let summary = """
             Total Revenue: $\(String(format: "%.2f", totalRevenue))
@@ -110,7 +116,10 @@ enum AdminReportExportService {
             Active Stores: \(activeStores)
             Total Products: \(totalProducts)
             Total Clients: \(snapshot.clients.count)
+            Active Reservations: \(snapshot.reservations.count)
             Service Tickets: \(snapshot.serviceTickets.count)
+            Online / Omnichannel Revenue: $\(String(format: "%.2f", onlineRevenue))
+            In-Store Revenue: $\(String(format: "%.2f", inStoreRevenue))
             """
             
             summary.draw(
@@ -209,6 +218,22 @@ enum AdminReportExportService {
         for store in storePerformance {
             csvText += "\(csvEscape(store.name)),\(csvEscape(store.city)),\(csvEscape(store.country)),\(store.revenue),\(store.orderCount),\(store.isActive)\n"
         }
+
+        csvText += "\n"
+
+        csvText += "CHANNEL COMPARISON\n"
+        csvText += "Channel,Order Count,Revenue\n"
+        for item in calculateChannelPerformance(snapshot: snapshot) {
+            csvText += "\(csvEscape(item.name)),\(item.orderCount),\(item.revenue)\n"
+        }
+
+        csvText += "\n"
+
+        csvText += "RESERVATIONS\n"
+        csvText += "Reservation ID,Client ID,Product ID,Store ID,Status,Expires At,Created At\n"
+        for reservation in snapshot.reservations {
+            csvText += "\(reservation.id.uuidString),\(reservation.clientId.uuidString),\(reservation.productId.uuidString),\(reservation.storeId?.uuidString ?? "N/A"),\(csvEscape(reservation.status)),\(ISO8601DateFormatter().string(from: reservation.expiresAt)),\(ISO8601DateFormatter().string(from: reservation.createdAt))\n"
+        }
         
         let fileName = "AdminReport_\(scope.rawValue.replacingOccurrences(of: " ", with: "_"))_\(Date().timeIntervalSince1970).csv"
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -302,5 +327,67 @@ enum AdminReportExportService {
                 isActive: store.isActive
             )
         }.sorted { $0.revenue > $1.revenue }
+    }
+
+    private static func calculateChannelPerformance(snapshot: AdminInsightsSnapshot) -> [(name: String, orderCount: Int, revenue: Double)] {
+        let grouped = Dictionary(grouping: snapshot.orders) { order in
+            switch order.channel.lowercased() {
+            case "in_store": return "In-Store"
+            case "online": return "Online Delivery"
+            case "bopis": return "BOPIS"
+            case "ship_from_store": return "Ship From Store"
+            default: return order.channel.replacingOccurrences(of: "_", with: " ").capitalized
+            }
+        }
+
+        return grouped.map { key, orders in
+            (name: key, orderCount: orders.count, revenue: orders.reduce(0.0) { $0 + $1.grandTotal })
+        }
+        .sorted { $0.revenue > $1.revenue }
+    }
+
+    static func exportChannelComparisonCSV(
+        snapshot: AdminInsightsSnapshot,
+        generatedBy: String
+    ) throws -> URL {
+        let iso = ISO8601DateFormatter()
+        let onlineOrders = snapshot.orders.filter { $0.channel.lowercased() != "in_store" }
+        let inStoreOrders = snapshot.orders.filter { $0.channel.lowercased() == "in_store" }
+        let onlineRevenue = onlineOrders.reduce(0.0) { $0 + $1.grandTotal }
+        let inStoreRevenue = inStoreOrders.reduce(0.0) { $0 + $1.grandTotal }
+        let returnsCount = snapshot.serviceTickets.filter { ticket in
+            let type = ticket.type.lowercased()
+            let notes = ticket.notes?.lowercased() ?? ""
+            return type == "warranty_claim" || notes.contains("exchange") || notes.contains("return")
+        }.count
+
+        var csvText = "Client Activity Channel Report\n"
+        csvText += "Generated: \(iso.string(from: snapshot.syncedAt))\n"
+        csvText += "By: \(generatedBy)\n\n"
+        csvText += "SUMMARY\n"
+        csvText += "Metric,Value\n"
+        csvText += "Online / Omnichannel Orders,\(onlineOrders.count)\n"
+        csvText += "Online / Omnichannel Revenue,\(onlineRevenue)\n"
+        csvText += "In-Store Orders,\(inStoreOrders.count)\n"
+        csvText += "In-Store Revenue,\(inStoreRevenue)\n"
+        csvText += "Reservations,\(snapshot.reservations.count)\n"
+        csvText += "Returns / Exchange Tickets,\(returnsCount)\n\n"
+        csvText += "CHANNEL PERFORMANCE\n"
+        csvText += "Channel,Order Count,Revenue\n"
+
+        for item in calculateChannelPerformance(snapshot: snapshot) {
+            csvText += "\(csvEscape(item.name)),\(item.orderCount),\(item.revenue)\n"
+        }
+
+        csvText += "\nPORTAL ORDERS\n"
+        csvText += "Order Number,Channel,Status,Store ID,Client ID,Grand Total,Currency,Created At\n"
+        for order in onlineOrders {
+            csvText += "\(csvEscape(order.orderNumber ?? "N/A")),\(csvEscape(order.channel)),\(csvEscape(order.status)),\(order.storeId.uuidString),\(order.clientId?.uuidString ?? "Guest"),\(order.grandTotal),\(csvEscape(order.currency)),\(iso.string(from: order.createdAt))\n"
+        }
+
+        let fileName = "ClientActivity_ChannelReport_\(Date().timeIntervalSince1970).csv"
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        try csvText.write(to: tempURL, atomically: true, encoding: .utf8)
+        return tempURL
     }
 }
