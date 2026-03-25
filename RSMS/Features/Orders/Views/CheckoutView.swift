@@ -568,7 +568,7 @@ struct CheckoutView: View {
                         .font(AppTypography.bodyMedium)
                         .foregroundColor(AppColors.textPrimaryDark)
                     if let store = selectedPickupStore {
-                        Text("\(store.addressLine1), \(store.city)")
+                        Text("\(store.address ?? ""), \(store.city ?? "")")
                             .font(AppTypography.bodySmall)
                             .foregroundColor(AppColors.textSecondaryDark)
                     }

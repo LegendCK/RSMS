@@ -578,7 +578,7 @@ struct BuyNowSheetView: View {
                     if selectedFulfillment == .bopis, let store = selectedPickupStore {
                         reviewRow(icon: "building.2.fill", title: "Pick Up At", value: store.name)
                         GoldDivider()
-                        reviewRow(icon: "mappin.circle.fill", title: "Address", value: "\(store.addressLine1), \(store.city)")
+                        reviewRow(icon: "mappin.circle.fill", title: "Address", value: "\(store.address ?? ""), \(store.city ?? "")")
                         GoldDivider()
                         reviewRow(icon: "clock.fill", title: "Estimated Pickup", value: estimatedPickupTimeString)
                     } else if let addr = selectedAddress {

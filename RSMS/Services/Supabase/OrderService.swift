@@ -123,11 +123,19 @@ final class OrderService {
 
         print("[OrderService] Calling create-order edge function for order: \(orderNumber)")
 
-        // The Supabase Swift SDK automatically attaches the current session's
-        // access token and handles refresh transparently — no manual JWT management needed.
+        // Sometimes the Supabase Swift client suppresses the Authorization header for edge functions,
+        // so we manually inject the session's token and apikey to guarantee Kong validation pass.
+        var customHeaders = ["apikey": SupabaseConfig.anonKey]
+        if let session = try? await client.auth.session {
+            customHeaders["Authorization"] = "Bearer \(session.accessToken)"
+        }
+
         let response: EdgeResponse = try await client.functions.invoke(
             "create-order",
-            options: FunctionInvokeOptions(body: payload)
+            options: FunctionInvokeOptions(
+                headers: customHeaders,
+                body: payload
+            )
         )
 
         if let errorMsg = response.error {
