@@ -40,8 +40,19 @@ struct OrderDetailView: View {
         order.fulfillmentType == .bopis ? bopisStatusFlow : statusFlow
     }
 
+    private var timelineStatus: OrderStatus {
+        if activeFlow.contains(order.status) {
+            return order.status
+        }
+        // Standard/ship-from-store/in-store flows may end at Delivered even when backend marks Completed.
+        if order.status == .completed {
+            return activeFlow.last ?? .pending
+        }
+        return .pending
+    }
+
     private var currentStepIndex: Int {
-        activeFlow.firstIndex(of: order.status) ?? 0
+        activeFlow.firstIndex(of: timelineStatus) ?? 0
     }
 
     private var policy: PricingPolicySettings {
@@ -676,7 +687,7 @@ struct OrderDetailView: View {
         warrantyErrorsByItem[item.id] = nil
 
         do {
-            let result: WarrantyLookupResult
+            var result: WarrantyLookupResult
             if let productUUID = item.productUUID {
                 result = try await WarrantyService.shared.lookupWarranty(
                     mode: .productId,
@@ -688,6 +699,18 @@ struct OrderDetailView: View {
                     query: order.orderNumber
                 )
             }
+
+            // Local fallback: if Supabase has no record (order not synced yet,
+            // e.g. historical POS sync failure), derive warranty from local data.
+            if result.status == .notFound {
+                result = WarrantyService.shared.lookupWarrantyLocally(
+                    productId: item.productUUID,
+                    productName: item.name,
+                    brand: item.brand.isEmpty ? nil : item.brand,
+                    purchasedAt: order.createdAt
+                )
+            }
+
             warrantyResultsByItem[item.id] = result
         } catch {
             warrantyResultsByItem[item.id] = nil

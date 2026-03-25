@@ -29,6 +29,8 @@ struct ManagerInventoryView: View {
                         Text("Requests").tag(4)
                     }
                     .pickerStyle(.segmented)
+                    .padding(AppSpacing.sm)
+                    .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
                     .padding(.horizontal, AppSpacing.screenHorizontal)
                     .padding(.top, AppSpacing.sm)
                     .padding(.bottom, AppSpacing.sm)
@@ -222,7 +224,8 @@ struct InvStockSubview: View {
             Spacer()
             stockBadge(item.quantity, reorderPoint: item.reorderPoint)
         }
-        .padding(.vertical, AppSpacing.xs)
+        .padding(AppSpacing.sm)
+        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
     }
 
     private func stockBadge(_ count: Int, reorderPoint: Int) -> some View {
@@ -233,10 +236,11 @@ struct InvStockSubview: View {
         return Text(label)
             .font(AppTypography.editLink)
             .foregroundColor(color)
-            .frame(width: 36)
-            .padding(.vertical, 3)
+            .frame(minWidth: 40)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
             .background(color.opacity(0.12))
-            .cornerRadius(4)
+            .clipShape(Capsule())
     }
 
     private func invStat(value: String, label: String, color: Color) -> some View {
@@ -757,6 +761,7 @@ struct InvTransfersSubview: View {
             let existing = (try? modelContext.fetch(FetchDescriptor<Transfer>())) ?? []
             let existingById = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
             let localProducts = (try? modelContext.fetch(FetchDescriptor<Product>())) ?? []
+            let localInventoryRows = (try? modelContext.fetch(FetchDescriptor<InventoryByLocation>())) ?? []
 
             for row in relevant {
                 guard let rid = UUID(uuidString: row.id) else { continue }
@@ -765,7 +770,28 @@ struct InvTransfersSubview: View {
                 let received = max(row.received_quantity ?? 0, 0)
                 let transferNumber = row.transfer_number ?? "TRF-\(row.id.prefix(8).uppercased())"
                 let asnNumber = row.asn_number ?? "ASN-\(transferNumber)"
-                let productName = row.product_name ?? ""
+                let resolvedProductId: UUID? = {
+                    if let raw = row.product_id, let parsed = UUID(uuidString: raw) {
+                        return parsed
+                    }
+                    return nil
+                }()
+                let productName = {
+                    let remote = row.product_name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    if !remote.isEmpty { return remote }
+                    if let pid = resolvedProductId,
+                       let inv = localInventoryRows.first(where: { $0.productId == pid }),
+                       !inv.productName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       inv.productName != "Unknown Product" {
+                        return inv.productName
+                    }
+                    if let pid = resolvedProductId,
+                       let prod = localProducts.first(where: { $0.id == pid }),
+                       !prod.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        return prod.name
+                    }
+                    return ""
+                }()
                 let fromId = row.from_boutique_id ?? ""
                 let toId = row.to_boutique_id ?? ""
                 let requestedAt = parseBackendDate(row.requested_at) ?? Date()
@@ -779,7 +805,7 @@ struct InvTransfersSubview: View {
                     if let requester = row.requested_by_email, !requester.isEmpty { local.requestedByEmail = requester }
                     if let approver = row.approved_by_email, !approver.isEmpty { local.approvedByEmail = approver }
                     if let notes = row.notes, !notes.isEmpty { local.notes = notes }
-                    if let productId = row.product_id, let parsed = UUID(uuidString: productId) {
+                    if let parsed = resolvedProductId {
                         local.productId = parsed
                     } else if !productName.isEmpty,
                               let matched = localProducts.first(where: {
@@ -799,7 +825,7 @@ struct InvTransfersSubview: View {
                         transferNumber: transferNumber,
                         asnNumber: asnNumber,
                         productId: {
-                            if let raw = row.product_id, let parsed = UUID(uuidString: raw) {
+                            if let parsed = resolvedProductId {
                                 return parsed
                             }
                             if !productName.isEmpty,

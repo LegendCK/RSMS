@@ -16,6 +16,8 @@ struct SASaleCartView: View {
     @Environment(\.dismiss)            private var dismiss
 
     @State private var showClientPicker = false
+    @State private var quickClients: [ClientDTO] = []
+    @State private var isLoadingQuickClients = false
 
     var body: some View {
         NavigationStack {
@@ -34,7 +36,7 @@ struct SASaleCartView: View {
                         }
                         .padding(.horizontal, AppSpacing.screenHorizontal)
                         .padding(.top, AppSpacing.md)
-                        .padding(.bottom, 120)   // room for sticky checkout bar
+                        .padding(.bottom, AppSpacing.lg)
                     }
                 }
             }
@@ -67,8 +69,10 @@ struct SASaleCartView: View {
                     }
                 }
             }
-            .overlay(alignment: .bottom) {
-                if !cart.isEmpty { checkoutBar }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !cart.isEmpty {
+                    checkoutBar
+                }
             }
             .sheet(isPresented: $showClientPicker) {
                 SAClientPickerView { client in
@@ -94,6 +98,7 @@ struct SASaleCartView: View {
                     .presentationDetents([.large])
                     .interactiveDismissDisabled()
             }
+            .task { await loadQuickClientsIfNeeded() }
         }
     }
 
@@ -203,7 +208,29 @@ struct SASaleCartView: View {
     private var clientSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
             sectionLabel("CLIENT")
-            Button { showClientPicker = true } label: {
+            Menu {
+                Button("Walk-in Customer") {
+                    cart.selectedClient = nil
+                }
+
+                if isLoadingQuickClients {
+                    Section {
+                        Label("Loading clients…", systemImage: "clock")
+                    }
+                } else {
+                    ForEach(quickClients.prefix(12)) { client in
+                        Button(client.fullName) {
+                            cart.selectedClient = client
+                        }
+                    }
+                }
+
+                Divider()
+
+                Button("Browse All Clients…") {
+                    showClientPicker = true
+                }
+            } label: {
                 HStack(spacing: AppSpacing.md) {
                     ZStack {
                         Circle()
@@ -247,7 +274,7 @@ struct SASaleCartView: View {
                     }
 
                     Spacer()
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.down")
                         .font(AppTypography.chevron)
                         .foregroundColor(AppColors.neutral600)
                 }
@@ -379,8 +406,7 @@ struct SASaleCartView: View {
     // MARK: - Sticky Checkout Bar
 
     private var checkoutBar: some View {
-        VStack(spacing: 0) {
-            Divider()
+        VStack(spacing: AppSpacing.sm) {
             HStack(spacing: AppSpacing.md) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Total")
@@ -401,6 +427,9 @@ struct SASaleCartView: View {
                         .clipShape(Capsule())
                 }
             }
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.top, AppSpacing.sm)
+
             HStack(spacing: AppSpacing.sm) {
                 Button { cart.showCheckout = true } label: {
                     HStack(spacing: 6) {
@@ -418,7 +447,7 @@ struct SASaleCartView: View {
                 Spacer()
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
-            .padding(.top, 8)
+
             HStack {
                 Text("Split payment options are available on the next screen.")
                     .font(AppTypography.caption)
@@ -426,11 +455,11 @@ struct SASaleCartView: View {
                 Spacer()
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
-            .padding(.top, 6)
-            .padding(.horizontal, AppSpacing.screenHorizontal)
-            .padding(.top, 12)
-            .padding(.bottom, 28)
-            .background(.ultraThinMaterial)
+            .padding(.bottom, AppSpacing.md)
+        }
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .top) {
+            Divider()
         }
     }
 
@@ -459,6 +488,15 @@ struct SASaleCartView: View {
             .font(AppTypography.overline)
             .tracking(2)
             .foregroundColor(AppColors.accent)
+    }
+
+    @MainActor
+    private func loadQuickClientsIfNeeded() async {
+        guard quickClients.isEmpty, !isLoadingQuickClients else { return }
+        isLoadingQuickClients = true
+        defer { isLoadingQuickClients = false }
+        let fetched = (try? await ClientService.shared.fetchAllClients()) ?? []
+        quickClients = fetched.sorted { $0.fullName.localizedCaseInsensitiveCompare($1.fullName) == .orderedAscending }
     }
 }
 

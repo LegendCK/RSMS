@@ -111,6 +111,7 @@ struct ServiceTicketDTO: Codable, Identifiable {
 // MARK: - Insert Payload
 
 struct ServiceTicketInsertDTO: Codable {
+    let id: UUID?          // nil = DB generates; set client-side when you need the UUID before SELECT
     let clientId: UUID?
     let storeId: UUID
     let assignedTo: UUID?
@@ -125,7 +126,40 @@ struct ServiceTicketInsertDTO: Codable {
     let slaDueDate: String?
     let notes: String?
 
+    init(
+        id: UUID? = nil,
+        clientId: UUID?,
+        storeId: UUID,
+        assignedTo: UUID?,
+        productId: UUID?,
+        orderId: UUID?,
+        type: String,
+        status: String,
+        conditionNotes: String?,
+        intakePhotos: [String]?,
+        estimatedCost: Double?,
+        currency: String,
+        slaDueDate: String?,
+        notes: String?
+    ) {
+        self.id = id
+        self.clientId = clientId
+        self.storeId = storeId
+        self.assignedTo = assignedTo
+        self.productId = productId
+        self.orderId = orderId
+        self.type = type
+        self.status = status
+        self.conditionNotes = conditionNotes
+        self.intakePhotos = intakePhotos
+        self.estimatedCost = estimatedCost
+        self.currency = currency
+        self.slaDueDate = slaDueDate
+        self.notes = notes
+    }
+
     enum CodingKeys: String, CodingKey {
+        case id
         case clientId       = "client_id"
         case storeId        = "store_id"
         case assignedTo     = "assigned_to"

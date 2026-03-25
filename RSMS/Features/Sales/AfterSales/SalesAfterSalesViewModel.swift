@@ -162,7 +162,12 @@ final class SalesAfterSalesViewModel {
                 }
             }()
 
+            // Generate the UUID client-side so we can build a local stub
+            // without a SELECT-back (which can fail due to store-scoped RLS).
+            let ticketId = UUID()
+
             let payload = ServiceTicketInsertDTO(
+                id: ticketId,
                 clientId: result.clientId,
                 storeId: storeId,
                 assignedTo: assignedUserId,
@@ -178,7 +183,42 @@ final class SalesAfterSalesViewModel {
                 notes: buildNotes(for: result)
             )
 
-            createdTicket = try await ticketService.createTicket(payload)
+            // Plain insert — no SELECT-back avoids RLS failures for staff roles
+            // whose store-scoped SELECT policy may not cover the new row.
+            try await ticketService.insertTicket(payload)
+
+            // Build a local stub so downstream steps (approve, replacement, complete)
+            // have a valid ticket.id to work with.
+            let now = Date()
+            createdTicket = ServiceTicketDTO(
+                id: ticketId,
+                ticketNumber: nil,
+                clientId: result.clientId,
+                storeId: storeId,
+                assignedTo: assignedUserId,
+                productId: result.productId,
+                orderId: result.orderId,
+                type: ticketTypeRaw,
+                status: RepairStatus.intake.rawValue,
+                conditionNotes: payload.conditionNotes,
+                intakePhotos: nil,
+                estimatedCost: nil,
+                finalCost: nil,
+                estimateBreakdown: nil,
+                estimateSubtotal: nil,
+                estimateTax: nil,
+                estimateTotal: nil,
+                estimateSentAt: nil,
+                clientApprovalStatusRaw: nil,
+                clientApprovedAt: nil,
+                clientRejectedAt: nil,
+                approvedEstimateSnapshot: nil,
+                currency: "INR",
+                slaDueDate: nil,
+                notes: payload.notes,
+                createdAt: now,
+                updatedAt: now
+            )
 
             if requestType == .exchange {
                 replacementProductIdText = result.productId?.uuidString ?? ""
@@ -190,6 +230,7 @@ final class SalesAfterSalesViewModel {
 
         isCreatingTicket = false
     }
+
 
     func approveExchange() async {
         guard let ticket = createdTicket else { return }
