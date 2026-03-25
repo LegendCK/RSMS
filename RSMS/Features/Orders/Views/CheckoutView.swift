@@ -886,8 +886,8 @@ struct CheckoutView: View {
 
         // Decrement local product stock counts and per-location inventory
         for item in cartItems {
-            let fallbackStoreId = allInventory.first(where: { $0.productId == item.productId })?.locationId ?? allStores.first?.id
-            let resolvedStoreId = selectedPickupStore?.id ?? appState.currentStoreId ?? fallbackStoreId
+            // Resolve a fulfillment store only from explicit selections; do not fall back to an arbitrary store.
+            let resolvedStoreId = selectedPickupStore?.id ?? appState.currentStoreId
 
             if let product = allProducts.first(where: { $0.id == item.productId }) {
                 product.stockCount = max(0, product.stockCount - item.quantity)
