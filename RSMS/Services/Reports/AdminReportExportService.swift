@@ -76,7 +76,8 @@ enum AdminReportExportService {
             for order in snapshot.orders {
                 let grossTotal = order.grandTotal
                 let taxableAmount = order.subtotal
-                let complianceStatus = (order.status == "Completed" || order.status == "Delivered") ? "Audited" : "Compliant"
+                let status = order.status.lowercased()
+                let complianceStatus = (status == "completed" || status == "delivered") ? "Audited" : "Compliant"
                 lines.append(csv([
                     order.orderNumber ?? "",
                     iso(order.createdAt),
