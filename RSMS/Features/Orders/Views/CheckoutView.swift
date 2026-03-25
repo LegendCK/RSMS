@@ -16,7 +16,6 @@ struct CheckoutView: View {
     @Query private var allAddresses: [SavedAddress]
     @Query private var allProducts: [Product]
     @Query private var allCategories: [Category]
-    @Query private var allStores: [StoreLocation]
     @Query private var pricingPolicies: [PricingPolicySettings]
     @Query private var taxRules: [IndianTaxRule]
     @Query private var regionalPriceRules: [RegionalPriceRule]
@@ -45,7 +44,7 @@ struct CheckoutView: View {
     @State private var cardCVV     = ""
 
     // BOPIS store selection
-    @State private var selectedPickupStore: StoreLocation? = nil
+    @State private var selectedPickupStore: StoreDTO? = nil
     @State private var showStorePicker = false
 
     // Order
@@ -160,10 +159,7 @@ struct CheckoutView: View {
                 }
         }
         .sheet(isPresented: $showStorePicker) {
-            BOPISStorePickerSheet(
-                stores: allStores.filter { $0.isOperational },
-                selected: selectedPickupStore
-            ) { store in
+            BOPISStorePickerSheet(selected: selectedPickupStore) { store in
                 selectedPickupStore = store
             }
         }
@@ -321,7 +317,7 @@ struct CheckoutView: View {
                                 Text(store.name)
                                     .font(AppTypography.label)
                                     .foregroundColor(AppColors.textPrimaryDark)
-                                Text("\(store.addressLine1), \(store.city), \(store.country)")
+                                Text("\(store.address ?? ""), \(store.city ?? ""), \(store.country)")
                                     .font(AppTypography.caption)
                                     .foregroundColor(AppColors.textSecondaryDark)
                                 Text("Ready within 2 hours")
@@ -850,7 +846,7 @@ struct CheckoutView: View {
         )
         // Set boutique ID for BOPIS orders so the manager dashboard picks them up
         if selectedFulfillment == .bopis, let store = selectedPickupStore {
-            order.boutiqueId = store.code
+            order.boutiqueId = store.code ?? ""
         }
         modelContext.insert(order)
 
@@ -926,49 +922,80 @@ struct CheckoutView: View {
 // MARK: - BOPIS Store Picker Sheet
 
 struct BOPISStorePickerSheet: View {
-    let stores: [StoreLocation]
-    let selected: StoreLocation?
-    let onSelect: (StoreLocation) -> Void
+    let selected: StoreDTO?
+    let onSelect: (StoreDTO) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var stores: [StoreDTO] = []
+    @State private var isLoading = true
+    @State private var loadError: String? = nil
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(stores) { store in
-                    Button {
-                        onSelect(store)
-                        dismiss()
-                    } label: {
-                        HStack(spacing: AppSpacing.md) {
-                            ZStack {
-                                Circle()
-                                    .fill(AppColors.accent.opacity(0.1))
-                                    .frame(width: 36, height: 36)
-                                Image(systemName: "building.2.fill")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(AppColors.accent)
-                            }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(store.name)
-                                    .font(AppTypography.label)
-                                    .foregroundColor(AppColors.textPrimaryDark)
-                                Text("\(store.addressLine1), \(store.city)")
-                                    .font(AppTypography.caption)
-                                    .foregroundColor(AppColors.textSecondaryDark)
-                            }
-                            Spacer()
-                            if selected?.id == store.id {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(AppColors.accent)
-                            }
-                        }
-                        .padding(.vertical, AppSpacing.xs)
+            Group {
+                if isLoading {
+                    ProgressView("Loading boutiques…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let err = loadError {
+                    VStack(spacing: 12) {
+                        Image(systemName: "wifi.slash")
+                            .font(.system(size: 32, weight: .light))
+                            .foregroundColor(AppColors.warning)
+                        Text(err)
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                        Button("Retry") { Task { await loadStores() } }
+                            .foregroundColor(AppColors.accent)
                     }
-                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if stores.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "building.2")
+                            .font(.system(size: 32, weight: .ultraLight))
+                            .foregroundColor(AppColors.neutral300)
+                        Text("No boutiques available for pickup")
+                            .font(AppTypography.bodyMedium)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(stores) { store in
+                        Button {
+                            onSelect(store)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: AppSpacing.md) {
+                                ZStack {
+                                    Circle()
+                                        .fill(AppColors.accent.opacity(0.1))
+                                        .frame(width: 36, height: 36)
+                                    Image(systemName: "building.2.fill")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(AppColors.accent)
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(store.name)
+                                        .font(AppTypography.label)
+                                        .foregroundColor(AppColors.textPrimaryDark)
+                                    Text([store.address, store.city].compactMap { $0 }.joined(separator: ", "))
+                                        .font(AppTypography.caption)
+                                        .foregroundColor(AppColors.textSecondaryDark)
+                                }
+                                Spacer()
+                                if selected?.id == store.id {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(AppColors.accent)
+                                }
+                            }
+                            .padding(.vertical, AppSpacing.xs)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .listStyle(.plain)
                 }
             }
-            .listStyle(.plain)
             .navigationTitle("Choose Boutique")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -977,7 +1004,19 @@ struct BOPISStorePickerSheet: View {
                         .foregroundColor(AppColors.accent)
                 }
             }
+            .task { await loadStores() }
         }
+    }
+
+    private func loadStores() async {
+        isLoading = true
+        loadError = nil
+        do {
+            stores = try await StoreSyncService.shared.fetchActiveBoutiques()
+        } catch {
+            loadError = error.localizedDescription
+        }
+        isLoading = false
     }
 }
 

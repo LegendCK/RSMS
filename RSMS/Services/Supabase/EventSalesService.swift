@@ -75,6 +75,77 @@ final class EventSalesService {
             currency:        "INR",
             invitedSegment:  nil
         )
-        return try await createEvent(dto)
+        return try await client
+            .from("boutique_events")
+            .upsert(dto)
+            .select()
+            .single()
+            .execute()
+            .value
+    }
+
+    /// Update an existing event's fields.
+    func updateEvent(eventId: UUID, dto: EventUpdateDTO) async throws {
+        try await client
+            .from("boutique_events")
+            .update(dto)
+            .eq("id", value: eventId.uuidString.lowercased())
+            .execute()
+    }
+
+    // MARK: - Order Tagging
+
+    /// Tag an existing order with an event ID.
+    func tagOrder(orderId: UUID, eventId: UUID) async throws {
+        struct EventTag: Codable { let event_id: String }
+        try await client
+            .from("orders")
+            .update(EventTag(event_id: eventId.uuidString.lowercased()))
+            .eq("id", value: orderId.uuidString.lowercased())
+            .execute()
+    }
+
+    /// Remove the event tag from an order.
+    func untagOrder(orderId: UUID) async throws {
+        struct ClearTag: Codable { let event_id: String? }
+        try await client
+            .from("orders")
+            .update(ClearTag(event_id: nil))
+            .eq("id", value: orderId.uuidString.lowercased())
+            .execute()
+    }
+
+    // MARK: - Reports
+
+    /// Fetch all orders tagged to a specific event.
+    func fetchEventOrders(eventId: UUID) async throws -> [OrderDTO] {
+        try await client
+            .from("orders")
+            .select()
+            .eq("event_id", value: eventId.uuidString.lowercased())
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+    }
+
+    /// Fetch the aggregated sales summary for an event (one row per currency).
+    func fetchEventSummary(eventId: UUID) async throws -> [EventSalesSummaryDTO] {
+        try await client
+            .from("event_sales_summary")
+            .select()
+            .eq("event_id", value: eventId.uuidString.lowercased())
+            .execute()
+            .value
+    }
+
+    /// Fetch summary rows for ALL events in a store (manager overview).
+    func fetchAllEventSummaries(storeId: UUID) async throws -> [EventSalesSummaryDTO] {
+        try await client
+            .from("event_sales_summary")
+            .select()
+            .eq("store_id", value: storeId.uuidString.lowercased())
+            .order("scheduled_date", ascending: false)
+            .execute()
+            .value
     }
 }

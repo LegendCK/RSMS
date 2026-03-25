@@ -390,6 +390,21 @@ private struct SACatalogFilterSheet: View {
                 }
             }
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(AppColors.accent.opacity(0.1))
+        .clipShape(Capsule())
+    }
+
+    private func priceRangeLabel() -> String {
+        let min = vm.minPriceText.isEmpty ? nil : vm.minPriceText
+        let max = vm.maxPriceText.isEmpty ? nil : vm.maxPriceText
+        switch (min, max) {
+        case let (lo?, hi?): return "₹\(lo)–₹\(hi)"
+        case let (lo?, nil): return "₹\(lo)+"
+        case let (nil, hi?): return "Up to ₹\(hi)"
+        default:             return "Price"
+        }
     }
 }
 
