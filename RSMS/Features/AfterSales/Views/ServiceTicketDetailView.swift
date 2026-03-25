@@ -34,6 +34,7 @@ final class ServiceTicketDetailViewModel {
     var estimateTaxText: String = "0"
     var isSubmittingEstimate: Bool = false
     var isUpdatingApproval: Bool = false
+    var showPickupSheet: Bool = false
 
     private let ticketService: ServiceTicketServiceProtocol
     private let catalogService: CatalogService
@@ -356,6 +357,20 @@ struct ServiceTicketDetailView: View {
                 ticketId: vm.ticket.id,
                 storeId: vm.ticket.storeId,
                 allocatedByUserId: appState.currentUserProfile?.id
+            )
+        }
+        .sheet(isPresented: $vm.showPickupSheet) {
+            TicketPickupView(
+                vm: TicketPickupViewModel(
+                    ticket: vm.ticket,
+                    client: vm.client,
+                    product: vm.product,
+                    parts: [],          // parts loaded separately inside TicketPickupViewModel if needed
+                    storeName: appState.currentUserProfile?.storeId != nil ? "Boutique" : "Store",
+                    storeAddress: nil,
+                    specialistName: appState.currentUserProfile?.fullName ?? "Specialist",
+                    currentUserId: appState.currentUserProfile?.id
+                )
             )
         }
     }
@@ -895,6 +910,27 @@ private extension ServiceTicketDetailView {
                     )
                 }
                 .buttonStyle(.plain)
+
+                // ── Pickup & Handover ────────────────────────────────────────
+                if vm.ticket.ticketStatus == .completed {
+                    Button {
+                        vm.showPickupSheet = true
+                    } label: {
+                        HStack(spacing: AppSpacing.xs) {
+                            Image(systemName: "shippingbox.fill")
+                            Text("Schedule Pickup & Handover")
+                                .font(AppTypography.buttonSecondary)
+                        }
+                        .foregroundColor(AppColors.success)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                                .stroke(AppColors.success, lineWidth: 1.2)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(AppSpacing.cardPadding)
             .background(Color(.secondarySystemGroupedBackground))
