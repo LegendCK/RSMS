@@ -59,21 +59,24 @@ final class StoreAndInventorySyncService {
             .execute()
 
         let records = try JSONDecoder().decode([SupabaseInventoryWithProduct].self, from: response.data)
+        let fallbackProducts = try await fetchProductsById(productIds: records.map(\.product_id))
 
-        return records.compactMap { record -> InventoryByLocation? in
-            guard let product = record.products else { return nil }
-            guard let category = product.categories else { return nil }
+        return records.map { record in
+            let product = record.products ?? fallbackProducts[record.product_id]
+            let updatedAt = parseISODate(record.updated_at) ?? Date()
+            let fallbackSku = "SKU-\(record.product_id.prefix(8).uppercased())"
+            let categoryName = product?.categoryName ?? "Uncategorized"
 
             return InventoryByLocation(
                 locationId: storeId,
                 productId: UUID(uuidString: record.product_id) ?? UUID(),
-                sku: product.sku ?? "UNKNOWN",
-                productName: product.name ?? "Unknown",
-                categoryName: category.name ?? "Uncategorized",
+                sku: product?.sku ?? fallbackSku,
+                productName: product?.name ?? "Unknown Product",
+                categoryName: categoryName,
                 quantity: record.quantity,
                 reorderPoint: record.reorder_point ?? 0,
-                updatedAt: ISO8601DateFormatter().date(from: record.updated_at ?? "") ?? Date(),
-                imageUrl: product.image_urls?.first
+                updatedAt: updatedAt,
+                imageUrl: product?.image_urls?.first
             )
         }
     }
@@ -117,19 +120,63 @@ final class StoreAndInventorySyncService {
             predicate: #Predicate { $0.locationId == storeId }
         )
         let localInventory = try modelContext.fetch(descriptor)
+        let localByProductId = Dictionary(uniqueKeysWithValues: localInventory.map { ($0.productId, $0) })
+        let remoteProductIds = Set(remoteInventory.map(\.productId))
 
         // Update or insert
         for remote in remoteInventory {
-            if let existing = localInventory.first(where: { $0.productId == remote.productId }) {
+            if let existing = localByProductId[remote.productId] {
                 existing.quantity = remote.quantity
                 existing.reorderPoint = remote.reorderPoint
+                existing.updatedAt = remote.updatedAt
+                existing.sku = remote.sku
+                existing.productName = remote.productName
+                existing.categoryName = remote.categoryName
                 if let url = remote.imageUrl { existing.imageUrl = url }
             } else {
                 modelContext.insert(remote)
             }
         }
 
+        // Remove stale rows that no longer exist remotely for this store.
+        for local in localInventory where !remoteProductIds.contains(local.productId) {
+            modelContext.delete(local)
+        }
+
         try modelContext.save()
+    }
+
+    private func fetchProductsById(productIds: [String]) async throws -> [String: SupabaseProduct] {
+        let uniqueIds = Set(productIds.map { $0.lowercased() })
+        guard !uniqueIds.isEmpty else { return [:] }
+
+        let response = try await SupabaseManager.shared.client
+            .from("products")
+            .select("id, sku, name, image_urls, categories(name)")
+            .execute()
+
+        let rows = try JSONDecoder().decode([SupabaseProductLookupRow].self, from: response.data)
+        return rows.reduce(into: [String: SupabaseProduct]()) { dict, row in
+            let key = row.id.lowercased()
+            guard uniqueIds.contains(key) else { return }
+            dict[key] = SupabaseProduct(
+                sku: row.sku,
+                name: row.name,
+                image_urls: row.image_urls,
+                categoryName: row.categoryName
+            )
+        }
+    }
+
+    private func parseISODate(_ value: String?) -> Date? {
+        guard let value, !value.isEmpty else { return nil }
+        let withFractional = ISO8601DateFormatter()
+        withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFractional.date(from: value) { return date }
+
+        let basic = ISO8601DateFormatter()
+        basic.formatOptions = [.withInternetDateTime]
+        return basic.date(from: value)
     }
 }
 
@@ -164,7 +211,7 @@ struct SupabaseInventory: Codable {
     let updated_at: String?
 }
 
-struct SupabaseInventoryWithProduct: Codable {
+struct SupabaseInventoryWithProduct: Decodable {
     let id: String
     let store_id: String
     let product_id: String
@@ -176,17 +223,89 @@ struct SupabaseInventoryWithProduct: Codable {
     enum CodingKeys: String, CodingKey {
         case id, store_id, product_id, quantity, reorder_point, updated_at, products
     }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        store_id = try c.decode(String.self, forKey: .store_id)
+        product_id = try c.decode(String.self, forKey: .product_id)
+        quantity = try c.decode(Int.self, forKey: .quantity)
+        reorder_point = try c.decodeIfPresent(Int.self, forKey: .reorder_point)
+        updated_at = try c.decodeIfPresent(String.self, forKey: .updated_at)
+
+        if let single = try? c.decode(SupabaseProduct.self, forKey: .products) {
+            products = single
+        } else if let many = try? c.decode([SupabaseProduct].self, forKey: .products) {
+            products = many.first
+        } else {
+            products = nil
+        }
+    }
 }
 
-struct SupabaseProduct: Codable {
+struct SupabaseProduct: Decodable {
     let sku: String?
     let name: String?
     let image_urls: [String]?
-    let categories: SupabaseCategory?
+    let categoryName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case sku, name, image_urls, categories
+    }
+
+    init(sku: String?, name: String?, image_urls: [String]?, categoryName: String?) {
+        self.sku = sku
+        self.name = name
+        self.image_urls = image_urls
+        self.categoryName = categoryName
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sku = try c.decodeIfPresent(String.self, forKey: .sku)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        image_urls = try c.decodeIfPresent([String].self, forKey: .image_urls)
+
+        if let one = try? c.decode(SupabaseCategory.self, forKey: .categories) {
+            categoryName = one.name
+        } else if let many = try? c.decode([SupabaseCategory].self, forKey: .categories) {
+            categoryName = many.first?.name
+        } else {
+            categoryName = nil
+        }
+    }
 }
 
 struct SupabaseCategory: Codable {
     let name: String?
+}
+
+private struct SupabaseProductLookupRow: Decodable {
+    let id: String
+    let sku: String?
+    let name: String?
+    let image_urls: [String]?
+    let categoryName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, sku, name, image_urls, categories
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        sku = try c.decodeIfPresent(String.self, forKey: .sku)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        image_urls = try c.decodeIfPresent([String].self, forKey: .image_urls)
+
+        if let one = try? c.decode(SupabaseCategory.self, forKey: .categories) {
+            categoryName = one.name
+        } else if let many = try? c.decode([SupabaseCategory].self, forKey: .categories) {
+            categoryName = many.first?.name
+        } else {
+            categoryName = nil
+        }
+    }
 }
 
 struct SupabaseTransfer: Codable {

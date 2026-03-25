@@ -25,6 +25,7 @@ final class CreateServiceTicketViewModel {
     var selectedClient: ClientDTO?
     var searchedClients: [ClientDTO] = []
     var isSearchingClients: Bool = false
+    var availableClients: [ClientDTO] = []
 
     // Product
     var productSearchText: String = ""
@@ -81,6 +82,20 @@ final class CreateServiceTicketViewModel {
     }
 
     // MARK: - Client Search
+
+    func loadClients() async {
+        guard availableClients.isEmpty, !isSearchingClients else { return }
+        isSearchingClients = true
+        defer { isSearchingClients = false }
+
+        do {
+            availableClients = try await clientService.fetchAllClients()
+                .filter { $0.isActive }
+                .sorted { $0.fullName.localizedCaseInsensitiveCompare($1.fullName) == .orderedAscending }
+        } catch {
+            errorMessage = "Could not load clients: \(error.localizedDescription)"
+        }
+    }
 
     func searchClients() async {
         let query = clientSearchText.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -13,35 +13,38 @@ private struct ReplenishmentRequest: Identifiable, Decodable {
     let id: UUID
     let transferNumber: String
     let productId: String?
-    let productName: String?
     let quantity: Int
     let fromBoutiqueId: String?
     let toBoutiqueId: String?
-    let asnNumber: String?
-    let serialNumber: String?
-    let requestedByEmail: String?
-    let approvedByEmail: String?
-    let notes: String?
     let status: String
     let requestedAt: String?
     let updatedAt: String?
+
+    // Joined relations
+    let products: ProductRef?
+    let fromStore: StoreRef?
+    let toStore: StoreRef?
+
+    struct ProductRef: Decodable { let name: String }
+    struct StoreRef: Decodable { let name: String }
+
+    var productName: String? { products?.name }
+    var fromStoreName: String? { fromStore?.name }
+    var toStoreName: String? { toStore?.name }
 
     enum CodingKeys: String, CodingKey {
         case id
         case transferNumber = "transfer_number"
         case productId      = "product_id"
-        case productName    = "product_name"
         case quantity
         case fromBoutiqueId = "from_boutique_id"
         case toBoutiqueId   = "to_boutique_id"
-        case asnNumber      = "asn_number"
-        case serialNumber   = "serial_number"
-        case requestedByEmail = "requested_by_email"
-        case approvedByEmail  = "approved_by_email"
-        case notes
         case status
         case requestedAt    = "requested_at"
         case updatedAt      = "updated_at"
+        case products
+        case fromStore      = "from_store"
+        case toStore        = "to_store"
     }
 }
 
@@ -73,6 +76,13 @@ struct OperationsView: View {
                     Text("Transfers").tag(2)
                 }
                 .pickerStyle(.segmented)
+                .padding(AppSpacing.sm)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
+                        .stroke(AppColors.border.opacity(0.2), lineWidth: 0.8)
+                )
                 .padding(.horizontal, AppSpacing.screenHorizontal)
                 .padding(.top, AppSpacing.sm)
                 .padding(.bottom, AppSpacing.sm)
@@ -323,9 +333,12 @@ struct OperationsView: View {
                         sectionLabel("PENDING APPROVAL (\(pending.count))")
                         if pending.isEmpty {
                             Text("No pending replenishment requests")
-                                .font(AppTypography.caption)
+                                .font(AppTypography.bodySmall)
                                 .foregroundColor(AppColors.textSecondaryDark)
-                                .padding(.vertical, AppSpacing.sm)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(AppSpacing.md)
+                                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
                         } else {
                             ForEach(pending) { req in
                                 replenishmentRow(req)
@@ -367,53 +380,64 @@ struct OperationsView: View {
     }
 
     private func replenishmentRow(_ req: ReplenishmentRequest) -> some View {
-        HStack(spacing: AppSpacing.sm) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(req.transferNumber)
-                    .font(AppTypography.monoID)
-                    .foregroundColor(AppColors.textPrimaryDark)
-                    .lineLimit(1)
-                Text("Qty: \(req.quantity) · To: \(storeLabel(req.toBoutiqueId))")
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.textSecondaryDark)
-                if let requestedAt = req.requestedAt, !requestedAt.isEmpty {
-                    Text("Requested: \(requestedAt)")
-                        .font(AppTypography.micro)
-                        .foregroundColor(AppColors.neutral500)
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(alignment: .top, spacing: AppSpacing.sm) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(req.transferNumber)
+                        .font(AppTypography.monoID)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                        .lineLimit(1)
+                    Text(req.productName ?? "Unknown Product")
+                        .font(AppTypography.bodySmall)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                        .lineLimit(1)
+                    Text("Qty \(req.quantity) • To \(req.toStoreName ?? storeLabel(req.toBoutiqueId))")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                Spacer()
+
+                if req.status == "pending_admin_approval" {
+                    Button {
+                        Task { await approveReplenishment(req) }
+                    } label: {
+                        if approvingId == req.id {
+                            ProgressView().tint(.white).scaleEffect(0.75)
+                        } else {
+                            Text("Approve")
+                                .font(AppTypography.nano)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(AppColors.accent)
+                    .clipShape(Capsule())
+                    .disabled(approvingId != nil)
+                } else {
+                    Text("APPROVED")
+                        .font(AppTypography.nano)
+                        .foregroundColor(AppColors.success)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(AppColors.success.opacity(0.12))
+                        .clipShape(Capsule())
                 }
             }
-            Spacer()
 
-            if req.status == "pending_admin_approval" {
-                Button {
-                    Task { await approveReplenishment(req) }
-                } label: {
-                    if approvingId == req.id {
-                        ProgressView().tint(.white).scaleEffect(0.75)
-                    } else {
-                        Text("Approve")
-                            .font(AppTypography.nano)
-                            .foregroundColor(.white)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(AppColors.accent)
-                .cornerRadius(6)
-                .disabled(approvingId != nil)
-            } else {
-                Text("APPROVED")
-                    .font(AppTypography.nano)
-                    .foregroundColor(AppColors.success)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(AppColors.success.opacity(0.12))
-                    .cornerRadius(4)
+            if let requestedAt = req.requestedAt, !requestedAt.isEmpty {
+                Text("Requested \(formatTransferTimestamp(requestedAt))")
+                    .font(AppTypography.micro)
+                    .foregroundColor(AppColors.neutral500)
             }
         }
-        .padding(AppSpacing.sm)
-        .background(AppColors.backgroundSecondary)
-        .cornerRadius(AppSpacing.radiusMedium)
+        .padding(AppSpacing.md)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous)
+                .stroke(AppColors.border.opacity(0.15), lineWidth: 0.6)
+        )
     }
 
     private func storeLabel(_ storeId: String?) -> String {
@@ -429,7 +453,7 @@ struct OperationsView: View {
             let client = SupabaseManager.shared.client
             replenishmentRequests = try await client
                 .from("transfers")
-                .select()
+                .select("id,transfer_number,product_id,quantity,from_boutique_id,to_boutique_id,status,requested_at,updated_at,products(name),from_store:stores!transfers_from_boutique_id_fkey(name),to_store:stores!transfers_to_boutique_id_fkey(name)")
                 .in("status", values: ["pending_admin_approval", "approved"])
                 .order("requested_at", ascending: false)
                 .limit(50)
@@ -466,7 +490,23 @@ struct OperationsView: View {
             .font(AppTypography.overline)
             .tracking(2)
             .foregroundColor(AppColors.accent)
+            .padding(.bottom, 2)
     }
+
+}
+
+private func formatTransferTimestamp(_ raw: String) -> String {
+    let withFractional = ISO8601DateFormatter()
+    withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let date = withFractional.date(from: raw) {
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+    let basic = ISO8601DateFormatter()
+    basic.formatOptions = [.withInternetDateTime]
+    if let date = basic.date(from: raw) {
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+    return raw
 }
 
 private struct ReplenishmentDetailSheet: View {
@@ -482,44 +522,24 @@ private struct ReplenishmentDetailSheet: View {
                 VStack(spacing: AppSpacing.md) {
                     detailCard(title: "Transfer", rows: [
                         ("Transfer ID", request.transferNumber),
-                        ("Status", request.status),
-                        ("ASN", request.asnNumber ?? "N/A"),
-                        ("Serial", request.serialNumber ?? "N/A")
+                        ("Status", request.status.replacingOccurrences(of: "_", with: " ").capitalized)
                     ])
 
                     detailCard(title: "Inventory", rows: [
-                        ("Product", request.productName ?? request.productId ?? "Unknown"),
-                        ("Product ID", request.productId ?? "N/A"),
+                        ("Product", request.productName ?? "Unknown"),
+                        ("Product ID", request.productId.map { String($0.prefix(8)) + "…" } ?? "—"),
                         ("Quantity", "\(request.quantity)")
                     ])
 
                     detailCard(title: "Routing", rows: [
-                        ("From Store", request.fromBoutiqueId ?? "N/A"),
-                        ("To Store", request.toBoutiqueId ?? "N/A")
+                        ("From Store", request.fromStoreName ?? (request.fromBoutiqueId == nil ? "Warehouse" : "—")),
+                        ("To Store", request.toStoreName ?? "—")
                     ])
 
                     detailCard(title: "Audit", rows: [
-                        ("Requested By", request.requestedByEmail ?? "N/A"),
-                        ("Approved By", request.approvedByEmail ?? "—"),
-                        ("Requested At", request.requestedAt ?? "N/A"),
-                        ("Updated At", request.updatedAt ?? "N/A")
+                        ("Requested At", request.requestedAt.map { formatTransferTimestamp($0) } ?? "—"),
+                        ("Updated At", request.updatedAt.map { formatTransferTimestamp($0) } ?? "—")
                     ])
-
-                    if let notes = request.notes, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                            Text("Notes")
-                                .font(AppTypography.overline)
-                                .tracking(2)
-                                .foregroundColor(AppColors.accent)
-                            Text(notes)
-                                .font(AppTypography.bodySmall)
-                                .foregroundColor(AppColors.textPrimaryDark)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding(AppSpacing.md)
-                        .background(AppColors.backgroundSecondary)
-                        .cornerRadius(AppSpacing.radiusMedium)
-                    }
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
                 .padding(.top, AppSpacing.md)

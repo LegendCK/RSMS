@@ -29,6 +29,9 @@ private struct SubmitCustomerExchangeRPCResponse: Decodable, Sendable {
 protocol ServiceTicketServiceProtocol: Sendable {
     func resolveOrderContext(orderNumber: String) async throws -> ServiceTicketOrderContext?
     func createTicket(_ payload: ServiceTicketInsertDTO) async throws -> ServiceTicketDTO
+    /// Plain fire-and-forget insert — no SELECT-back. Use for staff roles where
+    /// RLS may allow INSERT but block the subsequent SELECT (store-scoped policies).
+    func insertTicket(_ payload: ServiceTicketInsertDTO) async throws
     func submitCustomerExchangeRequest(
         orderNumber: String,
         productId: UUID?,
@@ -117,6 +120,16 @@ final class ServiceTicketService: ServiceTicketServiceProtocol, @unchecked Senda
             .execute()
             .value
         return ticket
+    }
+
+    /// Plain insert — no SELECT-back. Avoids RLS failures where a staff role
+    /// can INSERT to service_tickets but their store-scoped SELECT policy
+    /// may not immediately cover the new row.
+    func insertTicket(_ payload: ServiceTicketInsertDTO) async throws {
+        try await client
+            .from("service_tickets")
+            .insert(payload)
+            .execute()
     }
 
     // MARK: - Customer Exchange Request

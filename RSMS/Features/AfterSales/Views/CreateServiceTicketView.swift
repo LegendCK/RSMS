@@ -70,6 +70,7 @@ struct CreateServiceTicketView: View {
     }
 
     private func loadInitialProducts() async {
+        await vm.loadClients()
         await vm.loadProducts()
     }
 
@@ -77,12 +78,6 @@ struct CreateServiceTicketView: View {
         Task { @MainActor in
             vm.selectedPhotoItems = newItems
             await vm.processSelectedPhotos()
-        }
-    }
-
-    private func triggerClientSearch() {
-        Task { @MainActor in
-            await vm.searchClients()
         }
     }
 
@@ -168,61 +163,62 @@ private extension CreateServiceTicketView {
                         .fill(AppColors.accent.opacity(0.08))
                 )
             } else {
-                HStack(spacing: AppSpacing.xs) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(AppColors.textSecondaryDark)
-                    TextField("Search client by name or email", text: $vm.clientSearchText)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
-                        .font(AppTypography.bodyMedium)
-                        .onChange(of: vm.clientSearchText) { _, _ in
-                            triggerClientSearch()
-                        }
-                }
-                .padding(.horizontal, AppSpacing.sm)
-                .padding(.vertical, AppSpacing.sm)
-                .background(
-                    RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                        .fill(AppColors.backgroundSecondary)
-                )
-
                 if vm.isSearchingClients {
                     HStack(spacing: AppSpacing.xs) {
                         ProgressView().tint(AppColors.accent)
-                        Text("Searching...")
+                        Text("Loading clients...")
                             .font(AppTypography.caption)
                             .foregroundColor(AppColors.textSecondaryDark)
                     }
-                }
-
-                if !vm.searchedClients.isEmpty {
+                } else if vm.availableClients.isEmpty {
                     VStack(spacing: 0) {
-                        ForEach(vm.searchedClients.prefix(5)) { client in
-                            Button { vm.selectClient(client) } label: {
-                                HStack(spacing: AppSpacing.sm) {
-                                    ZStack {
-                                        Circle().fill(AppColors.accent.opacity(0.1))
-                                            .frame(width: 32, height: 32)
-                                        Text(client.initials)
-                                            .font(AppTypography.nano)
-                                            .foregroundColor(AppColors.accent)
-                                    }
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(client.fullName)
-                                            .font(AppTypography.bodySmall)
-                                            .foregroundColor(AppColors.textPrimaryDark)
-                                        Text(client.email)
-                                            .font(AppTypography.caption)
-                                            .foregroundColor(AppColors.textSecondaryDark)
-                                    }
-                                    Spacer()
-                                }
-                                .padding(.vertical, AppSpacing.xs)
-                                .padding(.horizontal, AppSpacing.sm)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        Text("No clients found")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, AppSpacing.sm)
+                            .padding(.vertical, AppSpacing.sm)
                     }
+                    .background(
+                        RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                            .fill(AppColors.backgroundSecondary)
+                    )
+                } else {
+                    ScrollView(showsIndicators: true) {
+                        LazyVStack(spacing: AppSpacing.xs) {
+                            ForEach(vm.availableClients) { client in
+                                Button { vm.selectClient(client) } label: {
+                                    HStack(spacing: AppSpacing.sm) {
+                                        ZStack {
+                                            Circle().fill(AppColors.accent.opacity(0.1))
+                                                .frame(width: 32, height: 32)
+                                            Text(client.initials)
+                                                .font(AppTypography.nano)
+                                                .foregroundColor(AppColors.accent)
+                                        }
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(client.fullName)
+                                                .font(AppTypography.bodySmall)
+                                                .foregroundColor(AppColors.textPrimaryDark)
+                                            Text(client.email)
+                                                .font(AppTypography.caption)
+                                                .foregroundColor(AppColors.textSecondaryDark)
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, AppSpacing.xs)
+                                    .padding(.horizontal, AppSpacing.sm)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: AppSpacing.radiusSmall)
+                                            .fill(AppColors.backgroundPrimary)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(AppSpacing.xs)
+                    }
+                    .frame(maxHeight: 190)
                     .background(
                         RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
                             .fill(AppColors.backgroundSecondary)

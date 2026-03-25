@@ -851,7 +851,8 @@ struct CheckoutView: View {
         let itemsArr: [[String: Any]] = cartItems.map { item in
             let effectiveUnitPrice = pricing.lineItems.first(where: { $0.productId == item.productId })?.unitPrice ?? item.unitPrice
             return ["name": item.productName, "brand": item.productBrand,
-                    "qty": item.quantity, "price": effectiveUnitPrice, "image": item.productImageName]
+                    "qty": item.quantity, "price": effectiveUnitPrice, "image": item.productImageName,
+                    "productId": item.productId.uuidString]
         }
         let itemsJSON: String = {
             guard let data = try? JSONSerialization.data(withJSONObject: itemsArr),

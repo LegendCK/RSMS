@@ -858,7 +858,8 @@ struct BuyNowSheetView: View {
             "qty": 1, "price": effectiveUnitPrice,
             "color": selectedColor,
             "size": selectedSize ?? "",
-            "image": product.imageName
+            "image": product.imageName,
+            "productId": product.id.uuidString
         ]]
         let itemsJSON: String = {
             guard let data = try? JSONSerialization.data(withJSONObject: itemArr),
