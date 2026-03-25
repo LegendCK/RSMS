@@ -19,6 +19,7 @@ struct AdminInsightsSnapshot {
     var stores: [StoreDTO]
     var orders: [OrderDTO]
     var orderItems: [OrderItemDTO]
+    var reservations: [ReservationDTO]
     var inventory: [InventoryDTO]
     var users: [UserDTO]
     var appointments: [AppointmentDTO]

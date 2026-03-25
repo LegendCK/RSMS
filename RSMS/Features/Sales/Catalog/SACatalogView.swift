@@ -2,7 +2,7 @@
 //  SACatalogView.swift
 //  RSMS
 //
-//  Sales Associate catalog view — modern card layout with luxurious feel.
+//  Sales Associate catalog view — viewing products.
 //
 
 import SwiftUI
@@ -20,6 +20,7 @@ struct SACatalogView: View {
                 VStack(spacing: 0) {
                     categoryChips
                     filterBar
+                    Divider().background(AppColors.border)
                     productList
                 }
             }
@@ -27,17 +28,18 @@ struct SACatalogView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("CATALOG")
-                        .font(.system(size: 11, weight: .black))
-                        .tracking(4)
-                        .foregroundColor(.primary)
+                        .font(AppTypography.overline)
+                        .tracking(2)
+                        .foregroundColor(AppColors.accent)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 16) {
+                    HStack(spacing: AppSpacing.md) {
+
                         // Cart button with item-count badge
                         Button { cart.showCart = true } label: {
                             ZStack(alignment: .topTrailing) {
                                 Image(systemName: "cart")
-                                    .font(.system(size: 17, weight: .light))
+                                    .font(AppTypography.toolbarIcon)
                                     .foregroundColor(AppColors.accent)
                                 if cart.itemCount > 0 {
                                     Text("\(cart.itemCount)")
@@ -56,7 +58,7 @@ struct SACatalogView: View {
                         Button { vm.showFilters = true } label: {
                             ZStack(alignment: .topTrailing) {
                                 Image(systemName: "slider.horizontal.3")
-                                    .font(.system(size: 17, weight: .light))
+                                    .font(AppTypography.toolbarIcon)
                                     .foregroundColor(AppColors.accent)
                                 if vm.activeFilterCount > 0 {
                                     Text("\(vm.activeFilterCount)")
@@ -104,7 +106,7 @@ struct SACatalogView: View {
 
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: AppSpacing.xs) {
                 chip(label: "All", selected: vm.selectedCategoryId == nil) {
                     vm.selectedCategoryId = nil
                 }
@@ -114,31 +116,30 @@ struct SACatalogView: View {
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.vertical, AppSpacing.sm)
         }
-        .background(AppColors.backgroundPrimary)
     }
 
     private func chip(label: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                .foregroundColor(selected ? AppColors.accent : .secondary)
+                .font(.footnote.weight(selected ? .semibold : .regular))
+                .foregroundColor(selected ? AppColors.accent : AppColors.textPrimaryDark)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
                 .background(
                     Capsule()
                         .fill(selected
-                              ? AppColors.accent.opacity(0.10)
+                              ? AppColors.accent.opacity(0.12)
                               : AppColors.backgroundSecondary)
                 )
                 .overlay(
                     Capsule()
                         .stroke(selected
-                                ? AppColors.accent.opacity(0.35)
+                                ? AppColors.accent.opacity(0.4)
                                 : AppColors.border,
-                                lineWidth: 0.8)
+                                lineWidth: 0.6)
                 )
         }
         .buttonStyle(.plain)
@@ -148,21 +149,24 @@ struct SACatalogView: View {
     // MARK: - Filter Summary Bar
 
     private var filterBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: AppSpacing.sm) {
+            // Result count
             let count = vm.filtered.count
             Text("\(count) product\(count == 1 ? "" : "s")")
-                .font(.system(size: 11, weight: .regular))
-                .foregroundColor(.secondary)
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
 
             Spacer()
 
+            // Active filter pills
             if vm.availabilityFilter != .all {
                 filterPill(vm.availabilityFilter.rawValue) {
                     vm.availabilityFilter = .all
                 }
             }
             if !vm.minPriceText.isEmpty || !vm.maxPriceText.isEmpty {
-                filterPill(priceRangeLabel()) {
+                let label = priceRangeLabel()
+                filterPill(label) {
                     vm.minPriceText = ""
                     vm.maxPriceText = ""
                 }
@@ -173,150 +177,168 @@ struct SACatalogView: View {
                 }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
-        .background(AppColors.backgroundPrimary)
+        .padding(.horizontal, AppSpacing.screenHorizontal)
+        .padding(.vertical, AppSpacing.sm)
+        .background(AppColors.backgroundSecondary.opacity(0.55))
     }
 
-    // MARK: - Product List
-
-    private var productList: some View {
-        Group {
-            if vm.isLoading {
-                ProgressView()
-                    .tint(AppColors.accent)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.top, 80)
-            } else if vm.filtered.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 36, weight: .ultraLight))
-                        .foregroundColor(.secondary.opacity(0.4))
-                    Text("No products found")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, 80)
-            } else {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 10) {
-                        ForEach(vm.filtered) { product in
-                            productCard(product)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
-                }
-            }
-        }
-    }
-
-    private func productCard(_ product: ProductDTO) -> some View {
-        Button { selectedProduct = product } label: {
-            HStack(spacing: 14) {
-
-                // Thumbnail
-                Group {
-                    if let url = product.resolvedImageURLs.first {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let img):
-                                img.resizable().scaledToFill()
-                            default:
-                                ZStack {
-                                    AppColors.backgroundTertiary
-                                    ProgressView().scaleEffect(0.6).tint(AppColors.accent)
-                                }
-                            }
-                        }
-                    } else {
-                        ZStack {
-                            AppColors.backgroundTertiary
-                            Image(systemName: "bag.fill")
-                                .font(.system(size: 20, weight: .ultraLight))
-                                .foregroundColor(.secondary.opacity(0.4))
-                        }
-                    }
-                }
-                .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                // Text content
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(product.name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-                    if let brand = product.brand {
-                        Text(brand.uppercased())
-                            .font(.system(size: 9, weight: .semibold))
-                            .tracking(1.5)
-                            .foregroundColor(AppColors.accent.opacity(0.8))
-                    }
-
-                    Text(product.sku)
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(.secondary.opacity(0.6))
-                }
-
-                Spacer(minLength: 0)
-
-                // Price + stock
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text("₹\(product.price, specifier: "%.0f")")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.primary)
-
-                    let (label, color) = vm.stockInfo(for: product.id)
-                    Text(label)
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(color)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(color.opacity(0.10))
-                        .clipShape(Capsule())
-                }
-            }
-            .padding(14)
-            .background(AppColors.backgroundSecondary)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Filter Pill Helper
-
-    private func filterPill(_ label: String, onRemove: @escaping () -> Void) -> some View {
-        HStack(spacing: 4) {
+    private func filterPill(_ label: String, onClear: @escaping () -> Void) -> some View {
+        HStack(spacing: 6) {
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(AppTypography.micro)
                 .foregroundColor(AppColors.accent)
-            Button { onRemove() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
+            Button(action: onClear) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 12))
                     .foregroundColor(AppColors.accent)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(AppColors.accent.opacity(0.10))
+        .padding(.horizontal, AppSpacing.xs)
+        .padding(.vertical, 6)
+        .background(AppColors.accent.opacity(0.12))
         .clipShape(Capsule())
     }
 
     private func priceRangeLabel() -> String {
-        let min = vm.minPriceText.isEmpty ? nil : vm.minPriceText
-        let max = vm.maxPriceText.isEmpty ? nil : vm.maxPriceText
-        switch (min, max) {
-        case let (lo?, hi?): return "₹\(lo)–₹\(hi)"
-        case let (lo?, nil): return "₹\(lo)+"
-        case let (nil, hi?): return "Up to ₹\(hi)"
-        default:             return "Price"
+        switch (vm.minPriceText.isEmpty, vm.maxPriceText.isEmpty) {
+        case (false, false):
+            return "₹\(vm.minPriceText)-₹\(vm.maxPriceText)"
+        case (false, true):
+            return "Min ₹\(vm.minPriceText)"
+        case (true, false):
+            return "Up to ₹\(vm.maxPriceText)"
+        case (true, true):
+            return "Price"
         }
+    }
+
+    private var productList: some View {
+        Group {
+            if vm.isLoading && vm.filtered.isEmpty {
+                ProgressView()
+                    .tint(AppColors.accent)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.top, AppSpacing.xxl)
+            } else if let error = vm.errorMessage, vm.products.isEmpty {
+                VStack(spacing: AppSpacing.sm) {
+                    Image(systemName: "wifi.exclamationmark")
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundColor(AppColors.warning)
+                    Text("Could not load catalog")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(error)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .multilineTextAlignment(.center)
+                    Button("Retry") {
+                        Task { await vm.load() }
+                    }
+                    .foregroundColor(AppColors.accent)
+                }
+                .padding(AppSpacing.xl)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if vm.filtered.isEmpty {
+                VStack(spacing: AppSpacing.sm) {
+                    Image(systemName: "shippingbox")
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundColor(AppColors.neutral500)
+                    Text("No products match your filters")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Button("Clear Filters") {
+                        vm.clearFilters()
+                        vm.searchText = ""
+                    }
+                    .foregroundColor(AppColors.accent)
+                }
+                .padding(AppSpacing.xl)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: AppSpacing.sm) {
+                        ForEach(vm.filtered) { product in
+                            Button {
+                                selectedProduct = product
+                            } label: {
+                                productRow(product)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.vertical, AppSpacing.md)
+                }
+            }
+        }
+    }
+
+    private func productRow(_ product: ProductDTO) -> some View {
+        let stock = vm.stockInfo(for: product.id)
+
+        return HStack(spacing: AppSpacing.md) {
+            productArtwork(for: product)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(product.name)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                    .lineLimit(1)
+
+                Text(product.brand ?? "Maison Luxe")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    Text(product.formattedPrice)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.accent)
+                    Text(stock.label)
+                        .font(AppTypography.micro)
+                        .foregroundColor(stock.color)
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(AppTypography.chevron)
+                .foregroundColor(AppColors.neutral500)
+        }
+        .padding(AppSpacing.md)
+        .background(AppColors.backgroundSecondary)
+        .cornerRadius(AppSpacing.radiusMedium)
+    }
+
+    @ViewBuilder
+    private func productArtwork(for product: ProductDTO) -> some View {
+        if let url = product.resolvedImageURLs.first {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                default:
+                    placeholderArtwork
+                }
+            }
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        } else {
+            placeholderArtwork
+                .frame(width: 64, height: 64)
+        }
+    }
+
+    private var placeholderArtwork: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(AppColors.backgroundTertiary)
+            .overlay(
+                Image(systemName: "bag.fill")
+                    .foregroundColor(AppColors.neutral500)
+            )
     }
 }
 

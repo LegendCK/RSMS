@@ -54,13 +54,21 @@ final class CreateServiceTicketViewModel {
     private let clientService: ClientService
 
     init(
-        ticketService: ServiceTicketServiceProtocol = ServiceTicketService.shared,
-        catalogService: CatalogService = CatalogService.shared,
-        clientService: ClientService = ClientService.shared
+        ticketService: ServiceTicketServiceProtocol,
+        catalogService: CatalogService,
+        clientService: ClientService
     ) {
         self.ticketService = ticketService
         self.catalogService = catalogService
         self.clientService = clientService
+    }
+
+    convenience init() {
+        self.init(
+            ticketService: ServiceTicketService.shared,
+            catalogService: CatalogService.shared,
+            clientService: ClientService.shared
+        )
     }
 
     // MARK: - Validation

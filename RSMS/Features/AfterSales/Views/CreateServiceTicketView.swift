@@ -9,10 +9,12 @@
 import SwiftUI
 import PhotosUI
 
+@MainActor
 struct CreateServiceTicketView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var vm = CreateServiceTicketViewModel()
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
 
     var body: some View {
         ZStack {
@@ -61,9 +63,35 @@ struct CreateServiceTicketView: View {
                     .foregroundColor(AppColors.accent)
             }
         }
-        .task { await vm.loadProducts() }
-        .onChange(of: vm.selectedPhotoItems) { _, _ in
-            Task { await vm.processSelectedPhotos() }
+        .task { await loadInitialProducts() }
+        .onChange(of: selectedPhotoItems) { _, newItems in
+            handlePhotoSelectionChange(newItems)
+        }
+    }
+
+    private func loadInitialProducts() async {
+        await vm.loadProducts()
+    }
+
+    private func handlePhotoSelectionChange(_ newItems: [PhotosPickerItem]) {
+        Task { @MainActor in
+            vm.selectedPhotoItems = newItems
+            await vm.processSelectedPhotos()
+        }
+    }
+
+    private func triggerClientSearch() {
+        Task { @MainActor in
+            await vm.searchClients()
+        }
+    }
+
+    private func submitTicket() {
+        Task { @MainActor in
+            await vm.createTicket(
+                storeId: appState.currentStoreId,
+                assignedUserId: appState.currentUserProfile?.id
+            )
         }
     }
 }
@@ -148,7 +176,7 @@ private extension CreateServiceTicketView {
                         .autocorrectionDisabled(true)
                         .font(AppTypography.bodyMedium)
                         .onChange(of: vm.clientSearchText) { _, _ in
-                            Task { await vm.searchClients() }
+                            triggerClientSearch()
                         }
                 }
                 .padding(.horizontal, AppSpacing.sm)
@@ -377,20 +405,22 @@ private extension CreateServiceTicketView {
 
     // MARK: Photos
     var photosSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+        let selectedImages = vm.selectedImages
+
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
             sectionHeader("PRODUCT PHOTOS")
             Text("Upload photos of the product showing the issue and overall condition.")
                 .font(AppTypography.caption)
                 .foregroundColor(AppColors.textSecondaryDark)
 
             // Photo grid
-            if !vm.selectedImages.isEmpty {
+            if !selectedImages.isEmpty {
                 LazyVGrid(columns: [
                     GridItem(.flexible()),
                     GridItem(.flexible()),
                     GridItem(.flexible())
                 ], spacing: AppSpacing.xs) {
-                    ForEach(Array(vm.selectedImages.enumerated()), id: \.offset) { index, image in
+                    ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, image in
                         ZStack(alignment: .topTrailing) {
                             Image(uiImage: image)
                                 .resizable()
@@ -413,13 +443,13 @@ private extension CreateServiceTicketView {
             }
 
             PhotosPicker(
-                selection: $vm.selectedPhotoItems,
+                selection: $selectedPhotoItems,
                 maxSelectionCount: 10,
                 matching: .images
             ) {
                 HStack(spacing: AppSpacing.xs) {
                     Image(systemName: "camera.fill")
-                    Text(vm.selectedImages.isEmpty ? "Add Photos" : "Add More Photos")
+                    Text(selectedImages.isEmpty ? "Add Photos" : "Add More Photos")
                 }
                 .font(AppTypography.buttonSecondary)
                 .foregroundColor(AppColors.accent)
@@ -431,8 +461,8 @@ private extension CreateServiceTicketView {
                 )
             }
 
-            if !vm.selectedImages.isEmpty {
-                Text("\(vm.selectedImages.count) photo(s) selected")
+            if !selectedImages.isEmpty {
+                Text("\(selectedImages.count) photo(s) selected")
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
             }
@@ -487,12 +517,7 @@ private extension CreateServiceTicketView {
     // MARK: Create Button
     var createButton: some View {
         Button {
-            Task {
-                await vm.createTicket(
-                    storeId: appState.currentStoreId,
-                    assignedUserId: appState.currentUserProfile?.id
-                )
-            }
+            submitTicket()
         } label: {
             HStack(spacing: AppSpacing.xs) {
                 if vm.isCreatingTicket {

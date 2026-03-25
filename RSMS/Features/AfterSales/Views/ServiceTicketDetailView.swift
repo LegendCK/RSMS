@@ -24,14 +24,23 @@ final class ServiceTicketDetailViewModel {
 
     init(
         ticket: ServiceTicketDTO,
-        ticketService: ServiceTicketServiceProtocol = ServiceTicketService.shared,
-        catalogService: CatalogService = CatalogService.shared,
-        clientService: ClientService = ClientService.shared
+        ticketService: ServiceTicketServiceProtocol,
+        catalogService: CatalogService,
+        clientService: ClientService
     ) {
         self.ticket = ticket
         self.ticketService = ticketService
         self.catalogService = catalogService
         self.clientService = clientService
+    }
+
+    convenience init(ticket: ServiceTicketDTO) {
+        self.init(
+            ticket: ticket,
+            ticketService: ServiceTicketService.shared,
+            catalogService: CatalogService.shared,
+            clientService: ClientService.shared
+        )
     }
 
     func loadRelatedData() async {
@@ -86,6 +95,7 @@ final class ServiceTicketDetailViewModel {
     }
 }
 
+@MainActor
 struct ServiceTicketDetailView: View {
     @State private var vm: ServiceTicketDetailViewModel
     @Environment(AppState.self) private var appState

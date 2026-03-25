@@ -49,11 +49,19 @@ final class ManualRepairIntakeViewModel {
     init(
         storeId: UUID,
         assignedToUserId: UUID?,
-        service: ServiceTicketServiceProtocol = ServiceTicketService.shared
+        service: ServiceTicketServiceProtocol
     ) {
         self.storeId          = storeId
         self.assignedToUserId = assignedToUserId
         self.service          = service
+    }
+
+    convenience init(storeId: UUID, assignedToUserId: UUID?) {
+        self.init(
+            storeId: storeId,
+            assignedToUserId: assignedToUserId,
+            service: ServiceTicketService.shared
+        )
     }
 
     // MARK: Validation
@@ -82,7 +90,7 @@ final class ManualRepairIntakeViewModel {
             let results: [ProductDTO] = try await client
                 .from("products")
                 .select()
-                .ilike("name", value: "%\(query)%")
+                .ilike("name", pattern: "%\(query)%")
                 .limit(20)
                 .execute()
                 .value
@@ -139,6 +147,7 @@ final class ManualRepairIntakeViewModel {
 
 // MARK: - View
 
+@MainActor
 struct ManualRepairIntakeView: View {
 
     @Environment(\.dismiss) private var dismiss

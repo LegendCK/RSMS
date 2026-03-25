@@ -17,8 +17,12 @@ final class CustomerServiceTicketsViewModel {
 
     private let ticketService: ServiceTicketServiceProtocol
 
-    init(ticketService: ServiceTicketServiceProtocol = ServiceTicketService.shared) {
+    init(ticketService: ServiceTicketServiceProtocol) {
         self.ticketService = ticketService
+    }
+
+    convenience init() {
+        self.init(ticketService: ServiceTicketService.shared)
     }
 
     func loadTickets(clientId: UUID?) async {
@@ -40,6 +44,7 @@ final class CustomerServiceTicketsViewModel {
     }
 }
 
+@MainActor
 struct CustomerServiceTicketsView: View {
     @Environment(AppState.self) private var appState
     @State private var vm = CustomerServiceTicketsViewModel()
