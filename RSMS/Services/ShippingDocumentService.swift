@@ -236,7 +236,7 @@ enum ShippingDocumentService {
             ShippingDocumentItem(
                 name: dict["name"] as? String ?? "Product",
                 brand: dict["brand"] as? String ?? "",
-                sku: (dict["sku"] as? String) ?? "—",
+                sku: (dict["sku"] as? String) ?? "",
                 quantity: dict["qty"] as? Int ?? 1,
                 unitPrice: dict["price"] as? Double ?? 0
             )
