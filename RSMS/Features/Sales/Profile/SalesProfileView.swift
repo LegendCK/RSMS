@@ -74,13 +74,19 @@ struct SalesProfileView: View {
 
                 // Preferences
                 Section("Preferences") {
-                    Label("Notifications", systemImage: "bell")
-                    Label("Privacy & Security", systemImage: "lock.shield")
+                    NavigationLink(destination: NotificationCenterView().toolbar(.hidden, for: .tabBar)) {
+                        Label("Notifications", systemImage: "bell")
+                    }
+                    NavigationLink(destination: SalesSimpleInfoView(title: "Privacy & Security", message: "Manage account protection settings, access controls, and secure usage practices.").toolbar(.hidden, for: .tabBar)) {
+                        Label("Privacy & Security", systemImage: "lock.shield")
+                    }
                 }
 
                 // Support
                 Section("Support") {
-                    Label("Help & Support", systemImage: "questionmark.circle")
+                    NavigationLink(destination: SalesSimpleInfoView(title: "Help & Support", message: "Reach operations support, report app issues, and view support guidance for daily retail workflows.").toolbar(.hidden, for: .tabBar)) {
+                        Label("Help & Support", systemImage: "questionmark.circle")
+                    }
                 }
 
                 // Sign out
