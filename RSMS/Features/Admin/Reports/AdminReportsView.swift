@@ -271,10 +271,32 @@ struct AdminReportsView: View {
                 .padding(.horizontal, AppSpacing.screenHorizontal)
 
             VStack(spacing: AppSpacing.xs) {
-                reportLink(icon: "chart.bar.doc.horizontal", title: "Sales Report", subtitle: "Detailed transaction history")
-                reportLink(icon: "checkmark.shield", title: "Compliance Report", subtitle: "Regulatory & audit status")
+                Button {
+                    selectedReportScope = .sales
+                    handleExportTap()
+                } label: {
+                    reportLink(icon: "chart.bar.doc.horizontal", title: "Sales Report", subtitle: "Detailed transaction history")
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    selectedReportScope = .compliance
+                    handleExportTap()
+                } label: {
+                    reportLink(icon: "checkmark.shield", title: "Compliance & Tax Report", subtitle: "Regulatory & audit status")
+                }
+                .buttonStyle(.plain)
+
                 reportLink(icon: "person.2.fill", title: "Staff Performance", subtitle: "Employee sales metrics")
-                reportLink(icon: "shippingbox.fill", title: "Inventory Report", subtitle: "Stock levels & turnover")
+
+                Button {
+                    selectedReportScope = .inventory
+                    handleExportTap()
+                } label: {
+                    reportLink(icon: "shippingbox.fill", title: "Inventory Report", subtitle: "Stock levels & turnover")
+                }
+                .buttonStyle(.plain)
+
                 reportLink(icon: "building.2.fill", title: "Boutique Comparison", subtitle: "Cross-location analytics")
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)

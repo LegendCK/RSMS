@@ -20,6 +20,7 @@ struct CheckoutView: View {
     @Query private var taxRules: [IndianTaxRule]
     @Query private var regionalPriceRules: [RegionalPriceRule]
     @Query private var promotionRules: [PromotionRule]
+    @Query private var allInventory: [InventoryByLocation]
 
     @State private var currentStep = 0
 
@@ -169,6 +170,9 @@ struct CheckoutView: View {
             }
         }
         .onAppear {
+            if appState.currentUserRole != .customer && selectedFulfillment == .standard {
+                selectedFulfillment = .shipFromStore
+            }
             Task { @MainActor in
                 if savedAddresses.isEmpty,
                    !appState.isGuest,
@@ -260,16 +264,16 @@ struct CheckoutView: View {
             sectionHeader("FULFILLMENT")
             VStack(spacing: AppSpacing.sm) {
                 fulfillmentOption(
-                    .standard,
-                    title: "Standard Delivery",
+                    appState.currentUserRole == .customer ? .standard : .shipFromStore,
+                    title: appState.currentUserRole == .customer ? "Standard Delivery" : "Ship From Store",
                     subtitle: subtotal >= policy.freeShippingThreshold ? "Free · 5–7 days" : "\(formatCurrency(policy.standardShippingFee)) · 5–7 days",
                     icon: "shippingbox.fill"
                 )
-                fulfillmentOption(.bopis,    title: "Pick Up In Store",     subtitle: "Free · Ready in 2 hours", icon: "building.2.fill")
+                fulfillmentOption(.bopis,    title: "Pick Up In Store",     subtitle: "Free · Ready within 2 hours", icon: "building.2.fill")
             }
 
             // Address section (delivery only)
-            if selectedFulfillment == .standard {
+            if selectedFulfillment == .standard || selectedFulfillment == .shipFromStore {
                 sectionHeader("SHIPPING ADDRESS")
 
                 if savedAddresses.isEmpty {
@@ -320,9 +324,14 @@ struct CheckoutView: View {
                                 Text("\(store.address ?? ""), \(store.city ?? ""), \(store.country)")
                                     .font(AppTypography.caption)
                                     .foregroundColor(AppColors.textSecondaryDark)
-                                Text("Ready within 2 hours")
-                                    .font(AppTypography.caption)
-                                    .foregroundColor(AppColors.success)
+                                HStack(spacing: 4) {
+                                    Image(systemName: "clock.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(AppColors.success)
+                                    Text("Estimated Pickup: \(estimatedPickupTimeString)")
+                                        .font(AppTypography.caption)
+                                        .foregroundColor(AppColors.success)
+                                }
                             } else {
                                 Text("Select a boutique")
                                     .font(AppTypography.label)
@@ -555,9 +564,22 @@ struct CheckoutView: View {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 sectionHeader("DELIVERY")
                 if selectedFulfillment == .bopis {
-                    Text("Pick Up In Store — \(selectedPickupStore?.name ?? "Boutique")")
+                Text("Pick Up In Store — \(selectedPickupStore?.name ?? "Boutique")")
                         .font(AppTypography.bodyMedium)
                         .foregroundColor(AppColors.textPrimaryDark)
+                    if let store = selectedPickupStore {
+                        Text("\(store.address ?? ""), \(store.city ?? "")")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(AppColors.success)
+                        Text("Estimated Pickup: \(estimatedPickupTimeString)")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.success)
+                    }
                 } else if let addr = selectedAddress {
                     Text("Standard Delivery · \(addr.label)")
                         .font(AppTypography.bodyMedium)
@@ -675,6 +697,14 @@ struct CheckoutView: View {
 
     // MARK: - Helpers
 
+    /// Calculates a human-readable estimated pickup time (now + 2 hours).
+    private var estimatedPickupTimeString: String {
+        let pickupDate = Calendar.current.date(byAdding: .hour, value: 2, to: Date()) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return "~\(formatter.string(from: pickupDate))"
+    }
+
     private func sectionHeader(_ text: String) -> some View {
         Text(text)
             .font(AppTypography.overline)
@@ -723,7 +753,7 @@ struct CheckoutView: View {
     }
 
     private func persistInlineAddressIfNeeded() {
-        guard selectedFulfillment == .standard, selectedAddress == nil, saveInlineAddressForFuture, isInlineAddressComplete else { return }
+        guard (selectedFulfillment == .standard || selectedFulfillment == .shipFromStore), selectedAddress == nil, saveInlineAddressForFuture, isInlineAddressComplete else { return }
 
         let trimmedLine1 = addressLine1.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedCity = city.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -804,7 +834,7 @@ struct CheckoutView: View {
                       let s = String(data: data, encoding: .utf8) else { return "{}" }
                 return s
             }
-            if selectedFulfillment == .standard && !addressLine1.isEmpty {
+            if (selectedFulfillment == .standard || selectedFulfillment == .shipFromStore) && !addressLine1.isEmpty {
                 let d: [String: String] = [
                     "line1": addressLine1, "line2": addressLine2,
                     "city": city, "state": addrState, "zip": zip, "country": "IN"
@@ -850,14 +880,47 @@ struct CheckoutView: View {
         }
         modelContext.insert(order)
 
-        // Decrement local product stock counts
+        // Decrement local product stock counts and per-location inventory
         for item in cartItems {
+            // Resolve a fulfillment store only from explicit selections; do not fall back to an arbitrary store.
+            let resolvedStoreId = selectedPickupStore?.id ?? appState.currentStoreId
+
             if let product = allProducts.first(where: { $0.id == item.productId }) {
                 product.stockCount = max(0, product.stockCount - item.quantity)
+
+                // Update InventoryByLocation for real-time per-store visibility
+                if let storeId = resolvedStoreId {
+                    if let invRow = allInventory.first(where: { $0.locationId == storeId && $0.productId == item.productId }) {
+                        invRow.quantity = max(0, invRow.quantity - item.quantity)
+                        invRow.updatedAt = Date()
+                        
+                        // Force flush this row to Supabase immediately so the next sync doesn't overwrite it
+                        let snapshotRow = invRow
+                        Task { try? await InventorySyncService.shared.upsertInventory(snapshotRow) }
+                    } else {
+                        let newRow = InventoryByLocation(
+                            locationId: storeId,
+                            productId: item.productId,
+                            sku: product.sku.isEmpty ? product.id.uuidString : product.sku,
+                            productName: product.name,
+                            categoryName: product.categoryName,
+                            quantity: 0,
+                            reorderPoint: 2,
+                            updatedAt: Date()
+                        )
+                        modelContext.insert(newRow)
+                        
+                        let snapshotRow = newRow
+                        Task { try? await InventorySyncService.shared.upsertInventory(snapshotRow) }
+                    }
+                }
             }
             modelContext.delete(item)
         }
         try? modelContext.save()
+
+        // Notify dashboards that inventory changed
+        NotificationCenter.default.post(name: .inventoryStockUpdated, object: nil)
 
         // 2. Sync to Supabase so sales associates can view purchase history.
         //    Try currentUserProfile.id first (set by Supabase login), fall back to

@@ -10,6 +10,9 @@ import SwiftData
 
 struct SalesDashboardView: View {
     @Environment(AppState.self) private var appState
+    @State private var showAfterSales = false
+    @State private var showShippingDocs = false
+    @State private var showInventory = false
     @State private var vm = SalesDashboardViewModel()
     @State private var activeSheet: ActiveSalesSheet? = nil
     @State private var showCreateTicket = false
@@ -87,6 +90,20 @@ struct SalesDashboardView: View {
                             quickAction(title: "All Tickets", icon: "wrench.and.screwdriver", color: AppColors.neutral500)
                         }
                         .buttonStyle(.plain)
+
+                        Button {
+                            showShippingDocs = true
+                        } label: {
+                            quickAction(title: "Shipping Docs", icon: "doc.text.fill", color: AppColors.info)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            showInventory = true
+                        } label: {
+                            quickAction(title: "Inventory", icon: "shippingbox.fill", color: AppColors.success)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 28)
@@ -162,6 +179,12 @@ struct SalesDashboardView: View {
         }
         .navigationDestination(isPresented: $showTicketList) {
             ServiceTicketListView()
+        }
+        .navigationDestination(isPresented: $showShippingDocs) {
+            ShippingDocumentsListView()
+        }
+        .navigationDestination(isPresented: $showInventory) {
+            InventoryOverviewView()
         }
     }
 
