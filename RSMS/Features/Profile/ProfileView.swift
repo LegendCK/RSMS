@@ -12,6 +12,7 @@ struct ProfileView: View {
     @Environment(AppState.self) var appState
     @Environment(\.modelContext) private var modelContext
     @State private var showLogoutConfirmation = false
+    @State private var showSignIn = false
 
     var body: some View {
         NavigationStack {
@@ -32,16 +33,22 @@ struct ProfileView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(appState.currentUserName.isEmpty ? "Guest" : appState.currentUserName)
+                            Text(appState.isGuest ? "Guest" : appState.currentUserName)
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundColor(.black)
-                            Text(appState.currentUserEmail)
-                                .font(.system(size: 13, weight: .light))
-                                .foregroundColor(.secondary)
-                            Text(appState.currentUserRole.rawValue.uppercased())
+                            if appState.isGuest {
+                                Text("Browsing as guest")
+                                    .font(.system(size: 13, weight: .light))
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Text(appState.currentUserEmail)
+                                    .font(.system(size: 13, weight: .light))
+                                    .foregroundColor(.secondary)
+                            }
+                            Text(appState.isGuest ? "GUEST" : appState.currentUserRole.rawValue.uppercased())
                                 .font(.system(size: 9, weight: .semibold))
                                 .tracking(2)
-                                .foregroundColor(AppColors.accent)
+                                .foregroundColor(appState.isGuest ? .secondary : AppColors.accent)
                         }
 
                         Spacer()
@@ -76,13 +83,15 @@ struct ProfileView: View {
                     }
                 }
 
-                // Boutique section
-                Section("Boutique") {
-                    NavigationLink(destination: MyReservationsView()) {
-                        Label("My Reservations", systemImage: "clock.arrow.circlepath")
-                    }
-                    NavigationLink(destination: CustomerBookAppointmentView()) {
-                        Label("Book an Appointment", systemImage: "calendar")
+                // Boutique section — hidden for guests
+                if !appState.isGuest {
+                    Section("Boutique") {
+                        NavigationLink(destination: MyReservationsView()) {
+                            Label("My Reservations", systemImage: "clock.arrow.circlepath")
+                        }
+                        NavigationLink(destination: CustomerBookAppointmentView()) {
+                            Label("Book an Appointment", systemImage: "calendar")
+                        }
                     }
                 }
 
@@ -109,15 +118,27 @@ struct ProfileView: View {
                     }
                 }
 
-                // Sign out
+                // Sign in / Sign out
                 Section {
-                    Button(action: { showLogoutConfirmation = true }) {
-                        HStack {
-                            Spacer()
-                            Text("Sign Out")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(AppColors.error)
-                            Spacer()
+                    if appState.isGuest {
+                        Button(action: { showSignIn = true }) {
+                            HStack {
+                                Spacer()
+                                Text("Sign In / Create Account")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(AppColors.accent)
+                                Spacer()
+                            }
+                        }
+                    } else {
+                        Button(action: { showLogoutConfirmation = true }) {
+                            HStack {
+                                Spacer()
+                                Text("Sign Out")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(AppColors.error)
+                                Spacer()
+                            }
                         }
                     }
                 }
@@ -146,6 +167,9 @@ struct ProfileView: View {
                 Button("Sign Out", role: .destructive) { appState.logout() }
             } message: {
                 Text("Are you sure you want to sign out?")
+            }
+            .sheet(isPresented: $showSignIn) {
+                GuestAuthGateView(pendingAction: "access your account")
             }
             .task {
                 await syncWishlistFromBackend()

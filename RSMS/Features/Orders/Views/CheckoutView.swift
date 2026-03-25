@@ -149,7 +149,9 @@ struct CheckoutView: View {
             }
         }
         .sheet(isPresented: $showAddressManager) {
-            AddressManagerView(onSelect: { addr in selectedAddress = addr })
+            NavigationStack {
+                AddressManagerView(onSelect: { addr in selectedAddress = addr })
+            }
         }
         .sheet(isPresented: $showAddNewAddress) {
             AddressEditView()

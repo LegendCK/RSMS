@@ -139,9 +139,11 @@ struct BuyNowSheetView: View {
                 // Removed cancel/cross button as per design update
             }
             .sheet(isPresented: $showAddressManager) {
-                AddressManagerView(onSelect: { addr in
-                    selectedAddress = addr
-                })
+                NavigationStack {
+                    AddressManagerView(onSelect: { addr in
+                        selectedAddress = addr
+                    })
+                }
             }
             .sheet(isPresented: $showAddNewAddress) {
                 AddressEditView()

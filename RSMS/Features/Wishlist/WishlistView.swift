@@ -15,57 +15,55 @@ struct WishlistView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary
-                    .ignoresSafeArea()
+        ZStack {
+            AppColors.backgroundPrimary
+                .ignoresSafeArea()
 
-                if wishlistProducts.isEmpty {
-                    emptyState
-                } else {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: AppSpacing.md) {
-                            // Header
-                            HStack {
-                                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                                    Text("YOUR WISHLIST")
-                                        .font(AppTypography.overline)
-                                        .tracking(3)
-                                        .foregroundColor(AppColors.accent)
+            if wishlistProducts.isEmpty {
+                emptyState
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: AppSpacing.md) {
+                        // Header
+                        HStack {
+                            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                                Text("YOUR WISHLIST")
+                                    .font(AppTypography.overline)
+                                    .tracking(3)
+                                    .foregroundColor(AppColors.accent)
 
-                                    Text("\(wishlistProducts.count) \(wishlistProducts.count == 1 ? "item" : "items")")
-                                        .font(AppTypography.bodySmall)
-                                        .foregroundColor(AppColors.textSecondaryDark)
-                                }
-                                Spacer()
+                                Text("\(wishlistProducts.count) \(wishlistProducts.count == 1 ? "item" : "items")")
+                                    .font(AppTypography.bodySmall)
+                                    .foregroundColor(AppColors.textSecondaryDark)
                             }
-                            .padding(.horizontal, AppSpacing.screenHorizontal)
-                            .padding(.top, AppSpacing.md)
-
-                            // Wishlist items
-                            ForEach(wishlistProducts) { product in
-                                NavigationLink(destination: ProductDetailView(product: product)) {
-                                    wishlistRow(product)
-                                }
-                            }
-                            .padding(.horizontal, AppSpacing.screenHorizontal)
+                            Spacer()
                         }
-                        .padding(.bottom, AppSpacing.xxxl)
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                        .padding(.top, AppSpacing.md)
+
+                        // Wishlist items
+                        ForEach(wishlistProducts) { product in
+                            NavigationLink(destination: ProductDetailView(product: product)) {
+                                wishlistRow(product)
+                            }
+                        }
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
                     }
+                    .padding(.bottom, AppSpacing.xxxl)
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Wishlist")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Wishlist")
+                    .font(AppTypography.navTitle)
+                    .foregroundColor(AppColors.textPrimaryDark)
             }
-            .task {
-                await hydrateFromBackend()
-            }
+        }
+        .task {
+            await hydrateFromBackend()
         }
     }
 
