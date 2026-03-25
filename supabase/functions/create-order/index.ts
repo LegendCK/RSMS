@@ -19,15 +19,21 @@ interface CartItemPayload {
 }
 
 interface CreateOrderPayload {
+  clientId?: string;      // explicit client UUID for POS/in-store sales (SA selects client)
   orderNumber: string;
   cartItems: CartItemPayload[];
   subtotal: number;
   discountTotal?: number;
   taxTotal: number;
   grandTotal: number;
-  channel: string;    // "online" | "bopis" | "in_store" | "ship_from_store"
-  currency?: string;  // defaults to "INR"
-  storeId?: string;   // client-resolved store UUID — used directly when present, geo-routing only as fallback
+  channel: string;        // "online" | "bopis" | "in_store" | "ship_from_store"
+  currency?: string;      // defaults to "INR"
+  storeId?: string;       // client-resolved store UUID — used directly when present, geo-routing only as fallback
+  isTaxFree?: boolean;    // true for international visitors / tax-exempt purchases
+  taxFreeReason?: string; // eligibility note captured by the sales associate
+  notes?: string;         // free-form checkout notes from POS
+  deliveryCity?: string;  // delivery-address city hint from app checkout
+  deliveryState?: string; // delivery-address state hint from app checkout
 }
 
 interface StoreRow {
@@ -51,7 +57,9 @@ const corsHeaders = {
 // Tries city match → state/region match → fallback (first active store).
 async function resolveStore(
   admin: ReturnType<typeof createClient>,
-  clientId: string
+  clientId: string,
+  deliveryCityHint?: string,
+  deliveryStateHint?: string
 ): Promise<StoreRow> {
   // Fetch all active stores once (ordered deterministically)
   const { data: allStores, error: storesError } = await admin
@@ -64,17 +72,26 @@ async function resolveStore(
     throw new Error("No active stores found");
   }
 
-  // Fetch the client's city + state for location matching
-  const { data: clientAddr } = await admin
-    .from("clients")
-    .select("city, state")
-    .eq("id", clientId)
-    .maybeSingle() as { data: ClientAddressRow | null };
+  // Prefer explicit delivery-address hints (from checkout form), then fall back
+  // to client profile city/state if hints are absent.
+  const hintedCity = deliveryCityHint?.trim().toLowerCase() ?? "";
+  const hintedState = deliveryStateHint?.trim().toLowerCase() ?? "";
 
-  const clientCity  = clientAddr?.city?.trim().toLowerCase()  ?? "";
-  const clientState = clientAddr?.state?.trim().toLowerCase() ?? "";
+  let clientCity = hintedCity;
+  let clientState = hintedState;
 
-  console.log(`[create-order] Client location — city: "${clientCity}", state: "${clientState}"`);
+  if (!clientCity && !clientState) {
+    const { data: clientAddr } = await admin
+      .from("clients")
+      .select("city, state")
+      .eq("id", clientId)
+      .maybeSingle() as { data: ClientAddressRow | null };
+
+    clientCity  = clientAddr?.city?.trim().toLowerCase()  ?? "";
+    clientState = clientAddr?.state?.trim().toLowerCase() ?? "";
+  }
+
+  console.log(`[create-order] Routing location — city: "${clientCity}", state: "${clientState}"`);
 
   // Tier 1: exact city match (e.g. "Mumbai" → Mumbai store)
   if (clientCity) {
@@ -117,58 +134,84 @@ serve(async (req: Request) => {
       return json({ error: "Missing Authorization header" }, 401);
     }
 
-    const jwt = authHeader.replace(/^Bearer\s+/i, "");
+    // ── 2. Verify identity via user-scoped client (recommended pattern) ─────────
+    // Using a user-context client with auth.getUser() is more reliable than
+    // admin.auth.getUser(jwt) across Supabase SDK versions — it calls the simpler
+    // GET /auth/v1/user endpoint rather than the admin JWT-decode path.
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
 
-    // ── 2. Admin client — bypasses RLS ─────────────────────────────────────────
-    // Use admin.auth.getUser(jwt) — the recommended Supabase edge function pattern.
-    // This avoids creating a throwaway user-scoped client and is more reliable.
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    if (userError || !user) {
+      console.error("[create-order] Auth verification failed:", userError?.message);
+      return json({ error: "Unauthorized: " + (userError?.message ?? "no user") }, 401);
+    }
+
+    // ── 2b. Admin client — bypasses RLS for privileged DB operations ───────────
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: { user }, error: userError } = await admin.auth.getUser(jwt);
-    if (userError || !user) {
-      console.error("[create-order] JWT validation failed:", userError?.message);
-      return json({ error: "Unauthorized: " + (userError?.message ?? "no user") }, 401);
-    }
-
     // ── 3. Resolve client_id ───────────────────────────────────────────────────
-    // Pass 1: clients.id == auth.uid (self-registered customers)
-    let clientId: string = user.id;
+    // For POS/in-store sales the caller is a sales associate, not the client.
+    // For online sales the JWT owner IS the client — resolve by auth.uid or email.
+    const payload: CreateOrderPayload = await req.json();
+    const isPOS = payload.channel === "in_store";
 
-    const { data: clientById } = await admin
-      .from("clients")
-      .select("id")
-      .eq("id", user.id)
-      .maybeSingle();
+    let clientId: string | null = null;
 
-    if (!clientById) {
-      // Pass 2: match by email (client pre-created by sales associate)
-      const email = user.email?.toLowerCase() ?? "";
-      if (!email) {
-        return json({ error: "Cannot resolve client: no matching clients row" }, 400);
-      }
-      const { data: clientByEmail } = await admin
+    if (payload.clientId) {
+      // POS sale with known client — SA explicitly provided the UUID
+      clientId = payload.clientId;
+      console.log(`[create-order] Client from payload (POS sale): ${clientId}`);
+    } else if (!isPOS) {
+      // Online sale — resolve client from JWT (caller IS the client)
+      clientId = user.id;
+
+      const { data: clientById } = await admin
         .from("clients")
         .select("id")
-        .eq("email", email)
+        .eq("id", user.id)
         .maybeSingle();
 
-      if (clientByEmail) {
-        clientId = clientByEmail.id;
-        console.log(`[create-order] Resolved client by email: ${clientId}`);
+      if (!clientById) {
+        // Fallback: match by email (client pre-created by sales associate)
+        const email = user.email?.toLowerCase() ?? "";
+        if (!email) {
+          return json({ error: "Cannot resolve client: no matching clients row" }, 400);
+        }
+        const { data: clientByEmail } = await admin
+          .from("clients")
+          .select("id")
+          .eq("email", email)
+          .maybeSingle();
+
+        if (clientByEmail) {
+          clientId = clientByEmail.id;
+          console.log(`[create-order] Resolved client by email: ${clientId}`);
+        } else {
+          return json({ error: "No client profile found for this user" }, 400);
+        }
       } else {
-        return json({ error: "No client profile found for this user" }, 400);
+        console.log(`[create-order] Resolved client by id: ${clientId}`);
       }
     } else {
-      console.log(`[create-order] Resolved client by id: ${clientId}`);
+      // Walk-in POS sale — no client profile; client_id will be null
+      console.log(`[create-order] Walk-in POS sale — no client linked`);
     }
 
-    // ── 4. Parse payload ───────────────────────────────────────────────────────
-    const payload: CreateOrderPayload = await req.json();
+    // ── 4. Destructure payload ─────────────────────────────────────────────────
     const currency = payload.currency ?? "INR";
     const discountTotal = payload.discountTotal ?? 0;
+    const baseNotes = payload.notes?.trim() ?? "";
+    const taxNote = payload.taxFreeReason?.trim()
+      ? `TAX-FREE: ${payload.taxFreeReason.trim()}`
+      : "";
+    const combinedNotes = [baseNotes, taxNote].filter((x) => x.length > 0).join(" | ") || null;
 
     // ── 5. Resolve store ───────────────────────────────────────────────────────
     // Priority:
@@ -188,10 +231,27 @@ serve(async (req: Request) => {
         console.log(`[create-order] ✅ Store from client hint: ${store.name} (${store.id})`);
       } else {
         console.warn(`[create-order] ⚠️ Client storeId ${payload.storeId} not found — falling back to geo-routing`);
-        try { store = await resolveStore(admin, clientId); } catch (e) { return json({ error: String(e) }, 400); }
+        if (clientId) {
+          try {
+            store = await resolveStore(admin, clientId, payload.deliveryCity, payload.deliveryState);
+          } catch (e) { return json({ error: String(e) }, 400); }
+        } else {
+          const { data: fb } = await admin.from("stores").select("id, name, city, region").eq("is_active", true).order("created_at", { ascending: true });
+          if (!fb || fb.length === 0) return json({ error: "No active stores found" }, 400);
+          store = (fb as StoreRow[])[0];
+        }
       }
+    } else if (clientId) {
+      try {
+        store = await resolveStore(admin, clientId, payload.deliveryCity, payload.deliveryState);
+      } catch (e) { return json({ error: String(e) }, 400); }
     } else {
-      try { store = await resolveStore(admin, clientId); } catch (e) { return json({ error: String(e) }, 400); }
+      // Walk-in with no storeId hint — fallback to first active store
+      const { data: allStores } = await admin
+        .from("stores").select("id, name, city, region").eq("is_active", true).order("created_at", { ascending: true });
+      if (!allStores || allStores.length === 0) return json({ error: "No active stores found" }, 400);
+      store = (allStores as StoreRow[])[0];
+      console.log(`[create-order] Walk-in fallback store: ${store.name}`);
     }
 
     // ── 6. Insert order header ─────────────────────────────────────────────────
@@ -201,16 +261,16 @@ serve(async (req: Request) => {
         order_number: payload.orderNumber,
         client_id: clientId,
         store_id: store.id,
-        associate_id: null,
+        associate_id: isPOS ? user.id : null,
         channel: payload.channel,
-        status: "pending",
+        status: isPOS ? "completed" : "pending",
         subtotal: payload.subtotal,
         discount_total: discountTotal,
         tax_total: payload.taxTotal,
         grand_total: payload.grandTotal,
         currency: currency,
-        is_tax_free: false,
-        notes: null,
+        is_tax_free: payload.isTaxFree ?? false,
+        notes: combinedNotes,
       })
       .select()
       .single();
@@ -226,16 +286,20 @@ serve(async (req: Request) => {
     await admin.from("order_events").insert({
       order_id:    order.id,
       from_status: null,
-      to_status:   "pending",
+      to_status:   isPOS ? "completed" : "pending",
       actor_id:    user.id,
-      actor_role:  "customer",
-      notes:       `Order placed via ${payload.channel}`,
+      actor_role:  isPOS ? "sales_associate" : "customer",
+      notes:       isPOS
+        ? `In-store POS sale completed${payload.isTaxFree ? " (tax-free)" : ""}`
+        : `Order placed via ${payload.channel}`,
     });
 
     // ── 8. Insert order_items (best-effort) ────────────────────────────────────
     let itemsInserted = 0;
     if (payload.cartItems && payload.cartItems.length > 0) {
-      const taxRate = payload.subtotal > 0 ? payload.taxTotal / payload.subtotal : 0.08;
+      const taxRate = (payload.isTaxFree || payload.subtotal === 0)
+        ? 0
+        : payload.taxTotal / payload.subtotal;
 
       const items = payload.cartItems.map((item) => {
         const lineTotal = item.unitPrice * item.quantity;
@@ -254,8 +318,13 @@ serve(async (req: Request) => {
         .insert(items);
 
       if (itemsError) {
-        // Non-fatal: order header already committed, associate can still see totals
-        console.warn("[create-order] order_items insert failed (non-fatal):", itemsError.message);
+        // Keep order header + items atomic for downstream sync reliability.
+        await admin
+          .from("orders")
+          .delete()
+          .eq("id", order.id);
+        console.error("[create-order] order_items insert failed, rolled back order:", itemsError.message);
+        return json({ error: "Failed to create order items: " + itemsError.message }, 500);
       } else {
         itemsInserted = items.length;
         console.log(`[create-order] ${itemsInserted} order item(s) inserted`);

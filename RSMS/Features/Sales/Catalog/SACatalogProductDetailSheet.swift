@@ -16,12 +16,42 @@ struct SACatalogProductDetailSheet: View {
     @Environment(SACartViewModel.self) private var cart
     @State private var currentImageIndex = 0
     @State private var addedToCart = false
+    @State private var showFullscreen = false
+    @State private var selectedColorIndex = 0
+    @State private var selectedSizeIndex: Int? = nil
 
     // Derived
     private var resolvedURLs: [URL] { product.resolvedImageURLs }
     private var stockQty: Int { vm.stockQty(for: product.id) }
     private var stockInfo: (label: String, color: Color) { vm.stockInfo(for: product.id) }
     private var categoryName: String? { vm.categoryName(for: product.categoryId) }
+
+    // MARK: - Variant data (category-based defaults, matching customer-facing logic)
+
+    private var colorVariants: [String] {
+        let cat = (categoryName ?? "").lowercased()
+        if cat.contains("jewel") || cat.contains("ring") || cat.contains("necklace") || cat.contains("bracelet") {
+            return ["Yellow Gold", "White Gold", "Rose Gold", "Platinum"]
+        }
+        if cat.contains("watch") { return ["Steel", "Gold", "Black PVD", "Two-Tone"] }
+        if cat.contains("shoe") || cat.contains("footwear") { return ["Black", "Tan", "White", "Nude"] }
+        if cat.contains("cloth") || cat.contains("apparel") || cat.contains("wear") {
+            return ["Black", "White", "Navy", "Camel"]
+        }
+        return ["Noir", "Fauve", "Bordeaux", "Marine", "Étoupe"]
+    }
+
+    private var sizeVariants: [String] {
+        let cat = (categoryName ?? "").lowercased()
+        if cat.contains("shoe") || cat.contains("footwear") { return ["36", "37", "38", "39", "40", "41"] }
+        if cat.contains("ring") { return ["5", "6", "7", "8", "9", "10"] }
+        if cat.contains("cloth") || cat.contains("apparel") || cat.contains("wear") {
+            return ["XS", "S", "M", "L", "XL"]
+        }
+        return []
+    }
+
+    private var showSizes: Bool { !sizeVariants.isEmpty }
 
     var body: some View {
         NavigationStack {
@@ -60,7 +90,7 @@ struct SACatalogProductDetailSheet: View {
                         .foregroundColor(AppColors.neutral600)
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 300)
+                .frame(height: 340)
             } else {
                 TabView(selection: $currentImageIndex) {
                     ForEach(resolvedURLs.indices, id: \.self) { idx in
@@ -68,8 +98,14 @@ struct SACatalogProductDetailSheet: View {
                             switch phase {
                             case .success(let img):
                                 img.resizable()
-                                    .scaledToFill()
-                                    .clipped()
+                                    .scaledToFit()
+                            case .failure:
+                                ZStack {
+                                    AppColors.backgroundTertiary
+                                    Image(systemName: "photo")
+                                        .font(.system(size: 40, weight: .ultraLight))
+                                        .foregroundColor(AppColors.neutral500)
+                                }
                             default:
                                 ZStack {
                                     AppColors.backgroundTertiary
@@ -81,21 +117,43 @@ struct SACatalogProductDetailSheet: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 300)
-
-                // Page dots
-                if resolvedURLs.count > 1 {
-                    HStack(spacing: 5) {
-                        ForEach(resolvedURLs.indices, id: \.self) { idx in
-                            Circle()
-                                .fill(idx == currentImageIndex ? AppColors.accent : Color.white.opacity(0.6))
-                                .frame(width: idx == currentImageIndex ? 6 : 4,
-                                       height: idx == currentImageIndex ? 6 : 4)
-                        }
+                .frame(height: 340)
+                .onTapGesture { showFullscreen = true }
+                .overlay(alignment: .topTrailing) {
+                    // Fullscreen expand hint
+                    Button { showFullscreen = true } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(.ultraThinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
-                    .padding(.bottom, 10)
+                    .padding(12)
                 }
+
+                // Page dots + image count
+                VStack(spacing: 4) {
+                    if resolvedURLs.count > 1 {
+                        HStack(spacing: 5) {
+                            ForEach(resolvedURLs.indices, id: \.self) { idx in
+                                Circle()
+                                    .fill(idx == currentImageIndex ? AppColors.accent : Color.white.opacity(0.7))
+                                    .frame(width: idx == currentImageIndex ? 7 : 5,
+                                           height: idx == currentImageIndex ? 7 : 5)
+                                    .animation(.easeInOut(duration: 0.15), value: currentImageIndex)
+                            }
+                        }
+                        Text("\(currentImageIndex + 1) / \(resolvedURLs.count)")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                }
+                .padding(.bottom, 12)
             }
+        }
+        .sheet(isPresented: $showFullscreen) {
+            FullscreenImageViewer(urls: resolvedURLs, startIndex: currentImageIndex)
         }
     }
 
@@ -147,6 +205,10 @@ struct SACatalogProductDetailSheet: View {
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
 
+            // Variant selector
+            variantsSection
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+
             GoldDivider(opacity: 0.2)
                 .padding(.horizontal, AppSpacing.screenHorizontal)
 
@@ -180,12 +242,121 @@ struct SACatalogProductDetailSheet: View {
         }
     }
 
+    // MARK: - Variants Section
+
+    private var variantsSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+
+            // Color picker
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                HStack(spacing: 4) {
+                    Text("COLOUR")
+                        .font(AppTypography.overline)
+                        .tracking(2)
+                        .foregroundColor(AppColors.accent)
+                    Text("— \(colorVariants[selectedColorIndex])")
+                        .font(AppTypography.overline)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppSpacing.sm) {
+                        ForEach(colorVariants.indices, id: \.self) { idx in
+                            colorChip(idx)
+                        }
+                    }
+                }
+            }
+
+            // Size picker (only for relevant categories)
+            if showSizes {
+                VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                    HStack(spacing: 4) {
+                        Text("SIZE")
+                            .font(AppTypography.overline)
+                            .tracking(2)
+                            .foregroundColor(AppColors.accent)
+                        if let s = selectedSizeIndex {
+                            Text("— \(sizeVariants[s])")
+                                .font(AppTypography.overline)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                        }
+                    }
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: AppSpacing.xs) {
+                            ForEach(sizeVariants.indices, id: \.self) { idx in
+                                sizeChip(idx)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: selectedColorIndex)
+        .animation(.easeInOut(duration: 0.15), value: selectedSizeIndex)
+    }
+
+    private func colorChip(_ idx: Int) -> some View {
+        let selected = selectedColorIndex == idx
+        return Button {
+            withAnimation(.spring(response: 0.25)) { selectedColorIndex = idx }
+        } label: {
+            VStack(spacing: 5) {
+                ZStack {
+                    Circle()
+                        .fill(selected ? AppColors.accent.opacity(0.12) : AppColors.backgroundSecondary)
+                        .overlay(
+                            Circle()
+                                .stroke(selected ? AppColors.accent : AppColors.border.opacity(0.5),
+                                        lineWidth: selected ? 1.5 : 1)
+                        )
+                        .frame(width: 48, height: 48)
+                    Text(String(colorVariants[idx].prefix(2)))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(selected ? AppColors.accent : AppColors.neutral700)
+                }
+                Text(colorVariants[idx])
+                    .font(AppTypography.pico)
+                    .foregroundColor(selected ? AppColors.accent : AppColors.textSecondaryDark)
+                    .lineLimit(1)
+            }
+            .frame(width: 60)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func sizeChip(_ idx: Int) -> some View {
+        let selected = selectedSizeIndex == idx
+        return Button {
+            withAnimation(.spring(response: 0.25)) {
+                selectedSizeIndex = selected ? nil : idx
+            }
+        } label: {
+            Text(sizeVariants[idx])
+                .font(AppTypography.label)
+                .foregroundColor(selected ? AppColors.textPrimaryLight : AppColors.textPrimaryDark)
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, AppSpacing.sm)
+                .background(selected ? AppColors.accent : AppColors.backgroundSecondary)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(selected ? AppColors.accent : AppColors.border.opacity(0.5),
+                                lineWidth: selected ? 0 : 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Add to Sale Button
 
     private var addToSaleButton: some View {
         Button {
             guard stockQty > 0 else { return }
-            cart.addItem(product)
+            cart.addItem(product,
+                         color: colorVariants[selectedColorIndex],
+                         size: selectedSizeIndex.map { sizeVariants[$0] })
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                 addedToCart = true
             }

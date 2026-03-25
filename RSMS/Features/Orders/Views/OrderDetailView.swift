@@ -545,8 +545,11 @@ struct OrderDetailView: View {
             currencyCode: "INR",
             items: invoiceItems,
             subtotal: order.subtotal,
+            discountTotal: order.discount,
             taxBreakdown: InvoiceTaxBreakdown(cgst: cgst, sgst: sgst, igst: igst, cess: 0, other: 0),
-            total: order.total
+            total: order.total,
+            isTaxFree: order.isTaxFree,
+            taxFreeReason: order.taxFreeReason
         )
     }
 

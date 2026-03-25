@@ -43,6 +43,8 @@ final class Order {
     var notes: String
     var salesAssociateEmail: String
     var boutiqueId: String
+    var isTaxFree: Bool
+    var taxFreeReason: String
     var createdAt: Date
     var updatedAt: Date
 
@@ -70,7 +72,9 @@ final class Order {
         paymentMethod: String = "",
         notes: String = "",
         salesAssociateEmail: String = "",
-        boutiqueId: String = ""
+        boutiqueId: String = "",
+        isTaxFree: Bool = false,
+        taxFreeReason: String = ""
     ) {
         self.id = UUID()
         self.orderNumber = orderNumber
@@ -87,6 +91,8 @@ final class Order {
         self.notes = notes
         self.salesAssociateEmail = salesAssociateEmail
         self.boutiqueId = boutiqueId
+        self.isTaxFree = isTaxFree
+        self.taxFreeReason = taxFreeReason
         self.createdAt = Date()
         self.updatedAt = Date()
     }
