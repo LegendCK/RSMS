@@ -798,12 +798,12 @@ struct BuyNowSheetView: View {
 
     // MARK: - Helpers
 
-    /// Calculates a human-readable estimated pickup time (now + 2 hours).
+    /// Calculates a human-readable estimated pickup time (now + 2 hours) as a time string.
     private var estimatedPickupTimeString: String {
         let pickupDate = Calendar.current.date(byAdding: .hour, value: 2, to: Date()) ?? Date()
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
-        return "By ~\(formatter.string(from: pickupDate))"
+        return formatter.string(from: pickupDate)
     }
 
     private func sectionHeader(_ text: String) -> some View {
