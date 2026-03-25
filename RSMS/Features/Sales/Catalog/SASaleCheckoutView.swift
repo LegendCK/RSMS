@@ -219,59 +219,189 @@ struct SASaleCheckoutView: View {
 
     // MARK: - Tax-Free Section
 
+    @State private var showExemptionPicker = false
+
     @ViewBuilder
     private var taxFreeSection: some View {
         @Bindable var cartBinding = cart
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
             sectionLabel("TAX-FREE SALE")
             VStack(spacing: 0) {
+                // Toggle row
                 HStack(spacing: AppSpacing.md) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .fill(cart.isTaxFree
-                                  ? AppColors.warning.opacity(0.12)
+                                  ? AppColors.success.opacity(0.12)
                                   : AppColors.backgroundTertiary)
                             .frame(width: 40, height: 40)
-                        Image(systemName: "doc.text.magnifyingglass")
+                        Image(systemName: cart.isTaxFree ? "checkmark.seal.fill" : "percent")
                             .font(.system(size: 16, weight: .light))
-                            .foregroundColor(cart.isTaxFree ? AppColors.warning : AppColors.neutral500)
+                            .foregroundColor(cart.isTaxFree ? AppColors.success : AppColors.neutral500)
                     }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("International / Tax-Exempt")
+                        Text("Tax-Free Transaction")
                             .font(AppTypography.label)
                             .foregroundColor(AppColors.textPrimaryDark)
-                        Text("Eligibility must be verified — tax zeroed on toggle")
+                        Text(cart.isTaxFree
+                             ? "GST exemption active — verify eligibility below"
+                             : "Enable for eligible customers (GST exempt)")
                             .font(AppTypography.caption)
                             .foregroundColor(AppColors.textSecondaryDark)
                     }
                     Spacer()
                     Toggle("", isOn: $cartBinding.isTaxFree)
-                        .tint(AppColors.warning)
+                        .tint(AppColors.success)
                 }
                 .padding(.horizontal, AppSpacing.md)
                 .padding(.vertical, 12)
 
                 if cart.isTaxFree {
                     Divider().padding(.leading, 60)
+
+                    // Exemption category selector
+                    Button { showExemptionPicker = true } label: {
+                        HStack(spacing: AppSpacing.sm) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(AppColors.accent.opacity(0.1))
+                                    .frame(width: 32, height: 32)
+                                Image(systemName: cart.selectedExemptionReason.icon)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(AppColors.accent)
+                            }
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("EXEMPTION CATEGORY")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .tracking(1.2)
+                                    .foregroundColor(AppColors.accent)
+                                Text(cart.selectedExemptionReason.rawValue)
+                                    .font(AppTypography.bodySmall)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(AppColors.neutral500)
+                        }
+                        .padding(.horizontal, AppSpacing.md)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+
+                    Divider().padding(.leading, 60)
+
+                    // Verification hint
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppColors.info)
+                            .padding(.top, 1)
+                        Text(cart.selectedExemptionReason.verificationHint)
+                            .font(.system(size: 11))
+                            .foregroundColor(AppColors.info)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, AppSpacing.md)
+                    .padding(.vertical, 8)
+                    .background(AppColors.info.opacity(0.06))
+
+                    Divider().padding(.leading, 60)
+
+                    // Document reference input
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("ELIGIBILITY VERIFICATION")
+                        Text("DOCUMENT / REFERENCE NUMBER")
                             .font(.system(size: 9, weight: .semibold))
-                            .tracking(1.5)
-                            .foregroundColor(AppColors.warning)
-                        TextField("Passport / ID reference or reason…", text: $cartBinding.taxFreeReason)
+                            .tracking(1.2)
+                            .foregroundColor(AppColors.accent)
+                        TextField("e.g. Passport no., LUT ref, PO number…", text: $cartBinding.taxFreeReason)
                             .font(AppTypography.bodySmall)
                             .foregroundColor(AppColors.textPrimaryDark)
                     }
                     .padding(.horizontal, AppSpacing.md)
                     .padding(.vertical, 10)
+
+                    // Tax savings preview
+                    if cart.discountedSubtotal > 0 {
+                        Divider().padding(.leading, 60)
+                        HStack(spacing: 8) {
+                            Image(systemName: "indianrupeesign.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(AppColors.success)
+                            Text("Saving \(cart.fmt(cart.discountedSubtotal * cart.taxRate)) GST")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(AppColors.success)
+                            Spacer()
+                        }
+                        .padding(.horizontal, AppSpacing.md)
+                        .padding(.vertical, 10)
+                        .background(AppColors.success.opacity(0.06))
+                    }
                 }
             }
             .background(AppColors.backgroundSecondary)
             .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
-                    .stroke(cart.isTaxFree ? AppColors.warning.opacity(0.4) : Color.clear, lineWidth: 1)
+                    .stroke(cart.isTaxFree ? AppColors.success.opacity(0.4) : Color.clear, lineWidth: 1)
             )
+            .animation(.easeInOut(duration: 0.25), value: cart.isTaxFree)
+        }
+        .sheet(isPresented: $showExemptionPicker) {
+            exemptionPickerSheet
+        }
+    }
+
+    // MARK: - Exemption Picker Sheet
+
+    private var exemptionPickerSheet: some View {
+        NavigationStack {
+            List {
+                ForEach(TaxExemptionReason.allCases) { reason in
+                    Button {
+                        cart.selectedExemptionReason = reason
+                        showExemptionPicker = false
+                    } label: {
+                        HStack(spacing: AppSpacing.md) {
+                            ZStack {
+                                Circle()
+                                    .fill(cart.selectedExemptionReason == reason
+                                          ? AppColors.accent.opacity(0.12)
+                                          : AppColors.backgroundSecondary)
+                                    .frame(width: 40, height: 40)
+                                Image(systemName: reason.icon)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(cart.selectedExemptionReason == reason
+                                                     ? AppColors.accent : AppColors.neutral500)
+                            }
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(reason.rawValue)
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Text(reason.code)
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            }
+                            Spacer()
+                            if cart.selectedExemptionReason == reason {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(AppColors.accent)
+                            }
+                        }
+                        .padding(.vertical, AppSpacing.xxs)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle("Exemption Category")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { showExemptionPicker = false }
+                        .foregroundColor(AppColors.accent)
+                }
+            }
         }
     }
 
@@ -357,18 +487,24 @@ struct SASaleCheckoutView: View {
                             Text("Tax")
                                 .font(AppTypography.bodySmall)
                                 .foregroundColor(AppColors.textSecondaryDark)
-                            Text("TAX-FREE")
+                            Text("EXEMPT")
                                 .font(.system(size: 9, weight: .bold))
                                 .tracking(1)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(AppColors.warning)
+                                .background(AppColors.success)
                                 .clipShape(Capsule())
                             Spacer()
-                            Text(cart.formattedTax)
-                                .font(AppTypography.label)
-                                .foregroundColor(AppColors.textPrimaryDark)
+                            HStack(spacing: 6) {
+                                Text(cart.fmt(cart.discountedSubtotal * cart.taxRate))
+                                    .font(AppTypography.bodySmall)
+                                    .strikethrough(true, color: AppColors.error.opacity(0.6))
+                                    .foregroundColor(AppColors.textSecondaryDark.opacity(0.5))
+                                Text(cart.formattedTax)
+                                    .font(AppTypography.label)
+                                    .foregroundColor(AppColors.success)
+                            }
                         }
                         .padding(.horizontal, AppSpacing.md)
                         .padding(.vertical, 12)
@@ -382,6 +518,49 @@ struct SASaleCheckoutView: View {
                 }
                 .background(AppColors.backgroundSecondary)
                 .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
+            }
+
+            // Tax-free verification summary (if applicable)
+            if cart.isTaxFree {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    sectionLabel("TAX EXEMPTION")
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: AppSpacing.sm) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(AppColors.success)
+                            Text(cart.selectedExemptionReason.rawValue)
+                                .font(AppTypography.label)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                        }
+                        if !cart.taxFreeReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            HStack(spacing: 6) {
+                                Text("Ref:")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                                Text(cart.taxFreeReason)
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                            }
+                        }
+                        HStack(spacing: 6) {
+                            Image(systemName: "indianrupeesign.circle.fill")
+                                .font(.system(size: 13))
+                                .foregroundColor(AppColors.success)
+                            Text("Saving \(cart.fmt(cart.discountedSubtotal * cart.taxRate)) GST")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(AppColors.success)
+                        }
+                    }
+                    .padding(AppSpacing.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppColors.success.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
+                            .stroke(AppColors.success.opacity(0.3), lineWidth: 1)
+                    )
+                }
             }
 
             // Payment method

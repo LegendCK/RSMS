@@ -31,7 +31,8 @@ final class SACartViewModel {
 
     // MARK: - Tax-free sale
     var isTaxFree: Bool    = false
-    var taxFreeReason: String = ""   // e.g. "International visitor — Passport: AB123"
+    var taxFreeReason: String = ""   // e.g. document reference number
+    var selectedExemptionReason: TaxExemptionReason = .diplomaticMission
 
     // MARK: - Checkout flow state
     var showCart        = false
@@ -98,7 +99,7 @@ final class SACartViewModel {
     var formattedTax:       String { fmt(tax) }
     var formattedTotal:     String { fmt(total) }
 
-    private func fmt(_ v: Double) -> String {
+    func fmt(_ v: Double) -> String {
         let f = NumberFormatter()
         f.numberStyle  = .currency
         f.currencyCode = "INR"
@@ -143,6 +144,7 @@ final class SACartViewModel {
         discountMode           = .percent
         isTaxFree              = false
         taxFreeReason          = ""
+        selectedExemptionReason = .diplomaticMission
         completedOrderNumber   = nil
         completedPaymentMethod = ""
         showCart               = false
@@ -167,6 +169,16 @@ final class SACartViewModel {
 
         let orderNumber = generateOrderNumber()
 
+        // Build formatted tax-free reason with exemption category for audit trail
+        let formattedTaxFreeReason: String = {
+            guard isTaxFree else { return "" }
+            var parts = [selectedExemptionReason.rawValue]
+            let ref = taxFreeReason.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !ref.isEmpty { parts.append("Ref: \(ref)") }
+            if let name = associateProfile?.fullName { parts.append("Verified by: \(name)") }
+            return parts.joined(separator: " | ")
+        }()
+
         // 1 ── Local SwiftData save (always succeeds)
         let order = Order(
             orderNumber:         orderNumber,
@@ -183,7 +195,7 @@ final class SACartViewModel {
             salesAssociateEmail: associateProfile?.email ?? "",
             boutiqueId:          associateProfile?.storeId?.uuidString ?? "",
             isTaxFree:           isTaxFree,
-            taxFreeReason:       taxFreeReason
+            taxFreeReason:       formattedTaxFreeReason
         )
         modelContext.insert(order)
         try? modelContext.save()
@@ -210,7 +222,7 @@ final class SACartViewModel {
                         grandTotal: self.total,
                         storeId: associateProfile?.storeId,
                         isTaxFree: self.isTaxFree,
-                        taxFreeReason: self.taxFreeReason,
+                        taxFreeReason: formattedTaxFreeReason,
                         notes: notes
                     )
                 }

@@ -349,7 +349,31 @@ struct SASaleCartView: View {
                 summaryRow("Discount", value: "−\(cart.formattedDiscount)", valueColor: AppColors.success)
             }
             Divider().padding(.horizontal, AppSpacing.md)
-            summaryRow("Tax (8%)", value: cart.formattedTax)
+            if cart.isTaxFree {
+                HStack {
+                    HStack(spacing: 4) {
+                        Text("Tax")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                        Text("EXEMPT")
+                            .font(.system(size: 8, weight: .bold))
+                            .tracking(0.5)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(AppColors.success)
+                            .clipShape(Capsule())
+                    }
+                    Spacer()
+                    Text(cart.formattedTax)
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.success)
+                }
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, 13)
+            } else {
+                summaryRow("Tax (\(Int(cart.taxRate * 100))%)", value: cart.formattedTax)
+            }
             Divider().padding(.horizontal, AppSpacing.md)
             summaryRow("Total", value: cart.formattedTotal,
                        labelFont: .system(size: 16, weight: .bold),
