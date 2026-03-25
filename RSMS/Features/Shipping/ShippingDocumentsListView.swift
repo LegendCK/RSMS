@@ -11,7 +11,6 @@ import SwiftData
 
 struct ShippingDocumentsListView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Order.createdAt, order: .reverse) private var allOrders: [Order]
     @Query private var stores: [StoreLocation]
 
