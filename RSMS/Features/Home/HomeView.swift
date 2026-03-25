@@ -7,6 +7,34 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - Gender / Lifestyle Filter
+
+enum GenderFilter: String, CaseIterable {
+    case all       = "All"
+    case men       = "Men"
+    case women     = "Women"
+    case kids      = "Kids"
+    case lifestyle = "Lifestyle"
+
+    /// Keywords matched against product `categoryName` (case-insensitive).
+    var keywords: [String] {
+        switch self {
+        case .all:       return []
+        case .men:       return ["men", "male", "gentleman", "groom"]
+        case .women:     return ["women", "female", "lady", "ladies", "bridal"]
+        case .kids:      return ["kid", "kids", "child", "children", "baby", "infant", "junior"]
+        case .lifestyle: return ["lifestyle", "home", "décor", "decor", "fragrance", "candle", "wellness", "beauty", "gift"]
+        }
+    }
+
+    func matches(_ product: Product) -> Bool {
+        guard self != .all else { return true }
+        let cat = product.categoryName.lowercased()
+        let name = product.name.lowercased()
+        return keywords.contains(where: { cat.contains($0) || name.contains($0) })
+    }
+}
+
 private struct BannerData {
     let label: String
     let title: String
@@ -23,6 +51,7 @@ struct HomeView: View {
     @Query private var allProducts: [Product]
 
     @State private var selectedCategoryName: String? = nil
+    @State private var selectedGender: GenderFilter = .all
     @State private var currentBanner = 0
     @State private var showAllCategories = false
     @State private var showAllFeatured = false
@@ -35,8 +64,19 @@ struct HomeView: View {
     ]
 
     private var filteredProducts: [Product] {
-        guard let name = selectedCategoryName else { return allProducts }
-        return allProducts.filter { $0.categoryName == name }
+        var products = allProducts
+        if selectedGender != .all {
+            products = products.filter { selectedGender.matches($0) }
+        }
+        if let name = selectedCategoryName {
+            products = products.filter { $0.categoryName == name }
+        }
+        return products
+    }
+
+    private var genderFilteredFeatured: [Product] {
+        if selectedGender == .all { return featuredProducts }
+        return featuredProducts.filter { selectedGender.matches($0) }
     }
 
     var body: some View {
@@ -56,6 +96,7 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
                     bannerCarousel
+                    genderFilterSection
                     categorySection
                     featuredSection
                     newArrivalsSection
@@ -229,12 +270,12 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 0) {
             sectionHeader(title: "FEATURED", action: { showAllFeatured = true })
 
-            if featuredProducts.isEmpty {
+            if genderFilteredFeatured.isEmpty {
                 emptyBanner(icon: "star", message: "No featured products yet")
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        ForEach(featuredProducts) { product in
+                        ForEach(genderFilteredFeatured) { product in
                             NavigationLink(destination: ProductDetailView(product: product)) {
                                 featuredCard(product)
                             }
@@ -250,7 +291,8 @@ struct HomeView: View {
     }
 
     private func featuredCard(_ product: Product) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let isOutOfStock = product.stockCount == 0
+        return VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 ZStack(alignment: .bottomLeading) {
                     ProductArtworkView(
@@ -261,6 +303,11 @@ struct HomeView: View {
                     .frame(width: 150, height: 200)
                     .clipped()
                     .background(Color(.systemGray6))
+                    .overlay {
+                        if isOutOfStock {
+                            Color.white.opacity(0.55)
+                        }
+                    }
 
                     if product.isLimitedEdition {
                         Text("LIMITED")
@@ -273,6 +320,19 @@ struct HomeView: View {
                     }
                 }
                 .frame(width: 150, height: 200)
+                .overlay(alignment: .topLeading) {
+                    if isOutOfStock {
+                        Text("OUT OF STOCK")
+                            .font(.system(size: 7, weight: .bold))
+                            .tracking(1)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(3)
+                            .padding(6)
+                    }
+                }
 
                 Image(systemName: "bookmark")
                     .font(.system(size: 12, weight: .medium))
@@ -287,10 +347,10 @@ struct HomeView: View {
                 Text(product.brand.uppercased())
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(2)
-                    .foregroundColor(AppColors.accent)
+                    .foregroundColor(isOutOfStock ? .secondary : AppColors.accent)
                 Text(product.name)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.primary)
+                    .foregroundColor(isOutOfStock ? .secondary : .primary)
                     .lineLimit(1)
                 Text(product.formattedPrice)
                     .font(.system(size: 13, weight: .light))
@@ -336,7 +396,8 @@ struct HomeView: View {
     }
 
     private func productCard(_ product: Product) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let isOutOfStock = product.stockCount == 0
+        return VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 GeometryReader { geo in
                     ZStack(alignment: .bottomLeading) {
@@ -348,6 +409,11 @@ struct HomeView: View {
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
                         .background(Color(.systemGray6))
+                        .overlay {
+                            if isOutOfStock {
+                                Color.white.opacity(0.55)
+                            }
+                        }
 
                         if product.isLimitedEdition {
                             Text("LIMITED")
@@ -361,6 +427,19 @@ struct HomeView: View {
                     }
                 }
                 .aspectRatio(3/4, contentMode: .fit)
+                .overlay(alignment: .topLeading) {
+                    if isOutOfStock {
+                        Text("OUT OF STOCK")
+                            .font(.system(size: 7, weight: .bold))
+                            .tracking(1)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(3)
+                            .padding(6)
+                    }
+                }
 
                 Image(systemName: "bookmark")
                     .font(.system(size: 12, weight: .medium))
@@ -375,10 +454,10 @@ struct HomeView: View {
                 Text(product.brand.uppercased())
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(2)
-                    .foregroundColor(AppColors.accent)
+                    .foregroundColor(isOutOfStock ? .secondary : AppColors.accent)
                 Text(product.name)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.primary)
+                    .foregroundColor(isOutOfStock ? .secondary : .primary)
                     .lineLimit(1)
                 Text(product.formattedPrice)
                     .font(.system(size: 13, weight: .light))
@@ -390,6 +469,41 @@ struct HomeView: View {
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 1)
+    }
+
+    // MARK: - Gender Filter Section
+
+    private var genderFilterSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(GenderFilter.allCases, id: \.self) { gender in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedGender = gender
+                        }
+                    } label: {
+                        Text(gender.rawValue.uppercased())
+                            .font(.system(size: 11, weight: selectedGender == gender ? .bold : .medium))
+                            .tracking(1.5)
+                            .foregroundColor(selectedGender == gender ? .white : .primary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(selectedGender == gender ? Color.black : Color.clear)
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule().strokeBorder(
+                                    selectedGender == gender ? Color.clear : Color(.systemGray4),
+                                    lineWidth: 1
+                                )
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.top, 16)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Shared Helpers

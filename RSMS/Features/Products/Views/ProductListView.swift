@@ -15,6 +15,7 @@ struct ProductListView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var sortOption: SortOption = .featured
+    @State private var selectedGender: GenderFilter = .all
 
     enum SortOption: String, CaseIterable {
         case featured = "Featured"
@@ -32,6 +33,9 @@ struct ProductListView: View {
         }
         if let typeFilter = productTypeFilter {
             filtered = filtered.filter { $0.productTypeName == typeFilter }
+        }
+        if selectedGender != .all {
+            filtered = filtered.filter { selectedGender.matches($0) }
         }
         switch sortOption {
         case .featured: return filtered.sorted { $0.isFeatured && !$1.isFeatured }
@@ -90,6 +94,37 @@ struct ProductListView: View {
                         .fill(Color.black.opacity(0.07))
                         .frame(height: 1)
 
+                    // Gender filter pills
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(GenderFilter.allCases, id: \.self) { gender in
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        selectedGender = gender
+                                    }
+                                } label: {
+                                    Text(gender.rawValue.uppercased())
+                                        .font(.system(size: 10, weight: selectedGender == gender ? .bold : .medium))
+                                        .tracking(1.5)
+                                        .foregroundColor(selectedGender == gender ? .white : .black)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 7)
+                                        .background(selectedGender == gender ? Color.black : Color.clear)
+                                        .clipShape(Capsule())
+                                        .overlay(
+                                            Capsule().strokeBorder(
+                                                selectedGender == gender ? Color.clear : Color(.systemGray4),
+                                                lineWidth: 1
+                                            )
+                                        )
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                    .padding(.vertical, 10)
+
                     // 2-column grid with 1pt gap (Zara-style)
                     LazyVGrid(columns: columns, spacing: 1) {
                         ForEach(filteredProducts) { product in
@@ -114,7 +149,8 @@ struct ProductListView: View {
     }
 
     private func productTile(_ product: Product) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let isOutOfStock = product.stockCount == 0
+        return VStack(alignment: .leading, spacing: 0) {
             // Fixed 3:4 aspect ratio image area — uniform across all tiles
             GeometryReader { geo in
                 ZStack(alignment: .bottom) {
@@ -126,6 +162,11 @@ struct ProductListView: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                     .clipped()
                     .background(Color(.systemGray6))
+                    .overlay {
+                        if isOutOfStock {
+                            Color.white.opacity(0.55)
+                        }
+                    }
 
                     // Limited badge at bottom-left
                     if product.isLimitedEdition {
@@ -139,6 +180,19 @@ struct ProductListView: View {
                                 .background(AppColors.accent)
                             Spacer()
                         }
+                    }
+                }
+                .overlay(alignment: .topLeading) {
+                    if isOutOfStock {
+                        Text("OUT OF STOCK")
+                            .font(.system(size: 7, weight: .bold))
+                            .tracking(1)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(3)
+                            .padding(6)
                     }
                 }
                 .overlay(alignment: .topTrailing) {
@@ -164,10 +218,10 @@ struct ProductListView: View {
                 Text(product.brand.uppercased())
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(2)
-                    .foregroundColor(AppColors.accent)
+                    .foregroundColor(isOutOfStock ? .secondary : AppColors.accent)
                 Text(product.name)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.black)
+                    .foregroundColor(isOutOfStock ? .secondary : .black)
                     .lineLimit(1)
                 Text(product.formattedPrice)
                     .font(.system(size: 13, weight: .light))

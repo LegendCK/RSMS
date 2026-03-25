@@ -5,6 +5,7 @@ enum AdminReportScope: String, CaseIterable, Hashable {
     case sales = "Sales"
     case inventory = "Inventory"
     case products = "Products"
+    case compliance = "Compliance"
     case all = "All"
 
     var filenameToken: String {
@@ -63,6 +64,29 @@ enum AdminReportExportService {
                     dec(order.grandTotal),
                     order.currency,
                     iso(order.createdAt)
+                ]))
+            }
+            lines.append("")
+        }
+
+        if scope == .compliance || scope == .all {
+            lines.append("[Compliance & Tax Data]")
+            lines.append("order_number,created_at,store_name,fulfillment_type,subtotal,tax_collected,gross_total,taxable_amount,regulatory_status")
+            let storeLookup = Dictionary(uniqueKeysWithValues: snapshot.stores.map { ($0.id, $0.name) })
+            for order in snapshot.orders {
+                let grossTotal = order.grandTotal
+                let taxableAmount = order.subtotal
+                let complianceStatus = (order.status == "Completed" || order.status == "Delivered") ? "Audited" : "Compliant"
+                lines.append(csv([
+                    order.orderNumber ?? "",
+                    iso(order.createdAt),
+                    storeLookup[order.storeId] ?? "Unknown Store",
+                    order.channel,
+                    dec(order.subtotal),
+                    dec(order.taxTotal),
+                    dec(grossTotal),
+                    dec(taxableAmount),
+                    complianceStatus
                 ]))
             }
             lines.append("")
@@ -153,6 +177,26 @@ enum AdminReportExportService {
                 row("Revenue", money(snapshot.orders.reduce(0) { $0 + $1.grandTotal }))
                 row("Tax", money(snapshot.orders.reduce(0) { $0 + $1.taxTotal }))
                 y += 8
+            }
+
+            if scope == .compliance || scope == .all {
+                let taxableTransactions = snapshot.orders.filter { $0.taxTotal > 0 }
+                let totalSubtotal = snapshot.orders.reduce(0) { $0 + $1.subtotal }
+                let totalTax = snapshot.orders.reduce(0) { $0 + $1.taxTotal }
+                let avgEffectiveTax = totalSubtotal > 0 ? (totalTax / totalSubtotal) * 100 : 0.0
+                
+                draw("Tax & Compliance Summary", font: .systemFont(ofSize: 12, weight: .semibold), y: y)
+                y += 17
+                row("Total Transactions", "\(snapshot.orders.count)")
+                row("Taxable Transactions", "\(taxableTransactions.count)")
+                row("Total Tax Liabilities collected", money(totalTax))
+                row("Avg Effective Tax Rate", String(format: "%.2f%%", avgEffectiveTax))
+                y += 15
+                let italicFont = UIFont.italicSystemFont(ofSize: 8)
+                draw("This document serves as an official summary of tax liabilities", font: italicFont, color: .darkGray, y: y)
+                y += 10
+                draw("and regulatory compliance for the specified reporting period.", font: italicFont, color: .darkGray, y: y)
+                y += 15
             }
 
             if scope == .inventory || scope == .all {

@@ -153,7 +153,7 @@ struct CartView: View {
                     .foregroundColor(AppColors.textSecondaryDark)
                     .multilineTextAlignment(.center)
             }
-            SecondaryButton(title: "Continue Shopping") { dismiss() }
+            SecondaryButton(title: "Continue Shopping") { appState.navigateToHome() }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
         }
         .padding(.horizontal, AppSpacing.xxl)

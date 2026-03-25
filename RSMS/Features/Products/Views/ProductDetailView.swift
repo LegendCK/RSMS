@@ -23,6 +23,7 @@ struct ProductDetailView: View {
     @Query private var allCartItems: [CartItem]
     @Query(sort: \Category.displayOrder) private var allCategories: [Category]
     @Query private var allReservations: [ReservationItem]
+    @Query private var allStores: [StoreLocation]
     
     private var hasActiveReservation: Bool {
         allReservations.contains {
@@ -49,6 +50,7 @@ struct ProductDetailView: View {
     // Guest auth gate
     @State private var showGuestGate   = false
     @State private var guestGateAction = "Add to Bag"
+    @State private var showSizeRequiredAlert = false
 
     // Add-to-bag animation
     @State private var bagIconScale: CGFloat = 1.0
@@ -300,6 +302,11 @@ struct ProductDetailView: View {
             if let url = exportAllPDFURL {
                 ShareSheet(activityItems: [url])
             }
+        }
+        .alert("Select a Size", isPresented: $showSizeRequiredAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Please select a size before adding this item to your bag.")
         }
     }
 
@@ -929,52 +936,67 @@ struct ProductDetailView: View {
                 }
             }
 
-            HStack(spacing: 10) {
-                Button(action: { handleAddToBag() }) {
-                    Text(
-                        (variantStockCount > 0 || hasActiveReservation)
-                        ? (addedToBag ? "Added To Bag" : (cartItemQuantity > 0 ? "Add Another To Bag" : "Add To Bag"))
-                        : "Out of Stock"
-                    )
-                    .font(AppTypography.buttonPrimary)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(addedToBag ? AppColors.success : AppColors.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .animation(.spring(response: 0.3), value: addedToBag)
-                    .scaleEffect(bagIconScale)
-                }
-                .opacity((variantStockCount > 0 || hasActiveReservation) ? 1 : 0.45)
-                .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
+            // Primary: Add to Bag (full width)
+            Button(action: { handleAddToBag() }) {
+                Text(
+                    (variantStockCount > 0 || hasActiveReservation)
+                    ? (addedToBag ? "Added To Bag" : (cartItemQuantity > 0 ? "Add Another To Bag" : "Add To Bag"))
+                    : "Out of Stock"
+                )
+                .font(AppTypography.buttonPrimary)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(addedToBag ? AppColors.success : AppColors.accent)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .animation(.spring(response: 0.3), value: addedToBag)
+                .scaleEffect(bagIconScale)
+            }
+            .opacity((variantStockCount > 0 || hasActiveReservation) ? 1 : 0.45)
+            .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
 
+            // Secondary row: Buy Now + Reserve
+            HStack(spacing: 10) {
                 Button(action: { handleBuyNow() }) {
                     Text(hasActiveReservation ? "Buy Reserved" : "Buy Now")
-                        .font(AppTypography.buttonPrimary)
+                        .font(AppTypography.buttonSecondary)
                         .foregroundColor((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3))
-                        .frame(width: 126)
-                        .frame(height: 48)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 42)
                         .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .stroke((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3), lineWidth: 1.5)
                         )
                 }
                 .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
+
+                Button(action: { handleReserve() }) {
+                    Text(hasActiveReservation ? "Reserved" : "Reserve")
+                        .font(AppTypography.buttonSecondary)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 42)
+                        .background(AppColors.backgroundSecondary)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .disabled((variantStockCount == 0 || hasActiveReservation) && !appState.isGuest)
+                .opacity((variantStockCount > 0 && !hasActiveReservation) ? 1 : 0.45)
             }
 
-            Button(action: { handleReserve() }) {
-                Text(hasActiveReservation ? "Already Reserved" : "Reserve In Boutique")
-                    .font(AppTypography.buttonSecondary)
-                    .foregroundColor(AppColors.textSecondaryDark)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 42)
-                    .background(AppColors.backgroundSecondary)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            // Store availability hint
+            if let store = allStores.first(where: { $0.isOperational }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "building.2")
+                        .font(.system(size: 10))
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    Text("Available at \(store.name)")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                .padding(.top, 2)
             }
-            .disabled((variantStockCount == 0 || hasActiveReservation) && !appState.isGuest)
-            .opacity((variantStockCount > 0 && !hasActiveReservation) ? 1 : 0.45)
         }
         .padding(12)
         .background(
@@ -1052,6 +1074,11 @@ struct ProductDetailView: View {
     // MARK: - Actions
 
     private func handleAddToBag() {
+        if needsSizeSelector && selectedSizeIndex == nil {
+            showSizeRequiredAlert = true
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            return
+        }
         guard variantStockCount > 0 || appState.isGuest else { return }
         if appState.isGuest {
             guestGateAction = "Add to Bag"
@@ -1063,6 +1090,11 @@ struct ProductDetailView: View {
     }
 
     private func handleBuyNow() {
+        if needsSizeSelector && selectedSizeIndex == nil {
+            showSizeRequiredAlert = true
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            return
+        }
         if appState.isGuest {
             guestGateAction = "Buy Now"
             showGuestGate   = true

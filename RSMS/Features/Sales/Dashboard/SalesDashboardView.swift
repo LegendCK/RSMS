@@ -11,6 +11,8 @@ import SwiftData
 struct SalesDashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var showAfterSales = false
+    @State private var showShippingDocs = false
+    @State private var showInventory = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -69,6 +71,20 @@ struct SalesDashboardView: View {
                             quickAction(title: "Service Ticket", icon: "wrench.and.screwdriver", color: AppColors.secondary)
                         }
                         .buttonStyle(.plain)
+
+                        Button {
+                            showShippingDocs = true
+                        } label: {
+                            quickAction(title: "Shipping Docs", icon: "doc.text.fill", color: AppColors.info)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            showInventory = true
+                        } label: {
+                            quickAction(title: "Inventory", icon: "shippingbox.fill", color: AppColors.success)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 28)
@@ -111,6 +127,12 @@ struct SalesDashboardView: View {
         }
         .sheet(isPresented: $showAfterSales) {
             SalesAfterSalesView()
+        }
+        .navigationDestination(isPresented: $showShippingDocs) {
+            ShippingDocumentsListView()
+        }
+        .navigationDestination(isPresented: $showInventory) {
+            InventoryOverviewView()
         }
     }
 

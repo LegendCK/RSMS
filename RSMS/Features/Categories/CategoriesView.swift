@@ -10,6 +10,15 @@ import SwiftData
 
 struct CategoriesView: View {
     @Query(sort: \Category.displayOrder) private var categories: [Category]
+    @State private var selectedGender: GenderFilter = .all
+
+    private var filteredCategories: [Category] {
+        guard selectedGender != .all else { return categories }
+        return categories.filter { cat in
+            let name = cat.name.lowercased()
+            return selectedGender.keywords.contains(where: { name.contains($0) })
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -37,13 +46,44 @@ struct CategoriesView: View {
                     .padding(.top, 24)
                     .padding(.bottom, 28)
 
+                    // Gender filter pills
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(GenderFilter.allCases, id: \.self) { gender in
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        selectedGender = gender
+                                    }
+                                } label: {
+                                    Text(gender.rawValue.uppercased())
+                                        .font(.system(size: 10, weight: selectedGender == gender ? .bold : .medium))
+                                        .tracking(1.5)
+                                        .foregroundColor(selectedGender == gender ? .white : .black)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 7)
+                                        .background(selectedGender == gender ? Color.black : Color.clear)
+                                        .clipShape(Capsule())
+                                        .overlay(
+                                            Capsule().strokeBorder(
+                                                selectedGender == gender ? Color.clear : Color(.systemGray4),
+                                                lineWidth: 1
+                                            )
+                                        )
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                    .padding(.bottom, 14)
+
                     Rectangle()
                         .fill(Color.black.opacity(0.08))
                         .frame(height: 1)
 
                     // Category list — editorial style
                     VStack(spacing: 0) {
-                        ForEach(categories) { category in
+                        ForEach(filteredCategories) { category in
                             NavigationLink(destination: ProductListView(categoryFilter: category.name)) {
                                 categoryRow(category)
                             }
