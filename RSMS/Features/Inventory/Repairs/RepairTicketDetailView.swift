@@ -284,17 +284,18 @@ struct RepairTicketDetailView: View {
     private func detailRow(
         label: String,
         value: String,
-        valueColor: Color = AppColors.textPrimaryDark,
+        valueColor: Color? = nil,
         multiline: Bool = false
     ) -> some View {
-        HStack(alignment: multiline ? .top : .center, spacing: AppSpacing.sm) {
+        let resolvedValueColor = valueColor ?? AppColors.textPrimaryDark
+        return HStack(alignment: multiline ? .top : .center, spacing: AppSpacing.sm) {
             Text(label)
                 .font(AppTypography.caption)
                 .foregroundColor(AppColors.textSecondaryDark)
                 .frame(width: 88, alignment: .leading)
             Text(value)
                 .font(AppTypography.bodySmall)
-                .foregroundColor(valueColor)
+                .foregroundColor(resolvedValueColor)
                 .lineLimit(multiline ? 5 : 1)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

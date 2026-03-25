@@ -224,15 +224,16 @@ private extension ServiceTicketListView {
         }
     }
 
-    func filterChip(label: String, isSelected: Bool, color: Color = AppColors.accent, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    func filterChip(label: String, isSelected: Bool, color: Color? = nil, action: @escaping () -> Void) -> some View {
+        let resolvedColor = color ?? AppColors.accent
+        return Button(action: action) {
             Text(label)
                 .font(AppTypography.caption)
                 .foregroundColor(isSelected ? .white : .primary)
                 .padding(.horizontal, AppSpacing.sm)
                 .padding(.vertical, AppSpacing.xs)
                 .background(
-                    Capsule().fill(isSelected ? color : Color(.secondarySystemGroupedBackground))
+                    Capsule().fill(isSelected ? resolvedColor : Color(.secondarySystemGroupedBackground))
                 )
         }
         .buttonStyle(.plain)

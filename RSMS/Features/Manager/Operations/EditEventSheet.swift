@@ -336,7 +336,7 @@ struct EditEventSheet: View {
         )
 
         do {
-            try await EventSalesService.shared.updateEvent(eventId: event.id, dto: dto)
+            _ = try await EventSalesService.shared.updateEvent(eventId: event.id, dto: dto)
             onUpdated()
             dismiss()
         } catch {

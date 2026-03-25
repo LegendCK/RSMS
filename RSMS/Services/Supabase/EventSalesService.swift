@@ -84,15 +84,6 @@ final class EventSalesService {
             .value
     }
 
-    /// Update an existing event's fields.
-    func updateEvent(eventId: UUID, dto: EventUpdateDTO) async throws {
-        try await client
-            .from("boutique_events")
-            .update(dto)
-            .eq("id", value: eventId.uuidString.lowercased())
-            .execute()
-    }
-
     // MARK: - Order Tagging
 
     /// Tag an existing order with an event ID.

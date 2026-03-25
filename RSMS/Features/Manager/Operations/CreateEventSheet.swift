@@ -4,7 +4,6 @@ struct CreateEventSheet: View {
     let onCreated: () -> Void
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
-    @Environment(AppState.self) private var appState
 
     // Form fields
     @State private var eventName       = ""

@@ -90,7 +90,7 @@ final class ManualRepairIntakeViewModel {
             let results: [ProductDTO] = try await client
                 .from("products")
                 .select()
-                .ilike("name", value: "%\(query)%")
+                .ilike("name", pattern: "%\(query)%")
                 .limit(20)
                 .execute()
                 .value
