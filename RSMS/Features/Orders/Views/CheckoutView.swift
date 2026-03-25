@@ -706,7 +706,7 @@ struct CheckoutView: View {
         let pickupDate = Calendar.current.date(byAdding: .hour, value: 2, to: Date()) ?? Date()
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
-        return "By ~\(formatter.string(from: pickupDate))"
+        return "~\(formatter.string(from: pickupDate))"
     }
 
     private func sectionHeader(_ text: String) -> some View {
