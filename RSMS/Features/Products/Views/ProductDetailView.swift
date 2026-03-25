@@ -197,7 +197,7 @@ struct ProductDetailView: View {
                         sectionDivider
                         detailsSection
 
-                        if !isAdminMode {
+                        if !isAdminMode && appState.isAuthenticated && !appState.isGuest {
                             sectionDivider
                             warrantySection
                         }
@@ -231,6 +231,7 @@ struct ProductDetailView: View {
             }
         }
         .task {
+            guard canViewInventory else { return }
             await fetchInventoryItems()
         }
         .navigationBarTitleDisplayMode(.inline)

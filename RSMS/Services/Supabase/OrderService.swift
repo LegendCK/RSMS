@@ -123,17 +123,15 @@ final class OrderService {
 
         print("[OrderService] Calling create-order edge function for order: \(orderNumber)")
 
-        // Sometimes the Supabase Swift client suppresses the Authorization header for edge functions,
-        // so we manually inject the session's token and apikey to guarantee Kong validation pass.
-        var customHeaders = ["apikey": SupabaseConfig.anonKey]
-        if let session = try? await client.auth.session {
-            customHeaders["Authorization"] = "Bearer \(session.accessToken)"
-        }
+        // Fetch the session token explicitly — the FunctionsClient's internal
+        // auth-header injection can silently fall back to the anon key when the
+        // session storage lookup runs in a non-isolated async context.
+        let accessToken = try await client.auth.session.accessToken
 
         let response: EdgeResponse = try await client.functions.invoke(
             "create-order",
             options: FunctionInvokeOptions(
-                headers: customHeaders,
+                headers: ["Authorization": "Bearer \(accessToken)"],
                 body: payload
             )
         )
