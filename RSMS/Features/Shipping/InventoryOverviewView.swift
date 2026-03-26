@@ -85,12 +85,16 @@ struct InventoryOverviewView: View {
                 }
             }
         }
-        .navigationTitle("Inventory")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "Search products, SKUs…")
         .refreshable { await refreshInventory() }
         .task { await refreshInventory() }
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Inventory")
+                    .font(AppTypography.navTitle)
+                    .foregroundColor(AppColors.textPrimaryDark)
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 if isRefreshing {
                     ProgressView()

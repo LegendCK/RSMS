@@ -46,14 +46,14 @@ final class TicketPartsViewModel {
         ticketId: UUID,
         storeId: UUID,
         allocatedByUserId: UUID?,
-        partsService: ServiceTicketPartsServiceProtocol = ServiceTicketPartsService.shared,
-        catalogService: CatalogService = CatalogService.shared
+        partsService: ServiceTicketPartsServiceProtocol? = nil,
+        catalogService: CatalogService? = nil
     ) {
         self.ticketId = ticketId
         self.storeId = storeId
         self.allocatedByUserId = allocatedByUserId
-        self.partsService = partsService
-        self.catalogService = catalogService
+        self.partsService = partsService ?? ServiceTicketPartsService.shared
+        self.catalogService = catalogService ?? CatalogService.shared
     }
 
     // MARK: - Filtered products
