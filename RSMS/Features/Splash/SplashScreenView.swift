@@ -38,16 +38,8 @@ struct SplashScreenView: View {
                             .stroke(AppColors.accent.opacity(0.3), lineWidth: 1)
                             .frame(width: 120, height: 120)
 
-                        // Inner diamond icon
-                        Image(systemName: "diamond.fill")
-                            .font(AppTypography.brandIconSplash)
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [AppColors.accent, AppColors.accentLight],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                        // Native Maison Luxe Logo
+                        MaisonLuxeLogo(size: 90)
                     }
                     .scaleEffect(logoScale)
                     .opacity(logoOpacity)
@@ -57,7 +49,7 @@ struct SplashScreenView: View {
                         Text("MAISON")
                             .font(AppTypography.displayLarge)
                             .tracking(8)
-                            .foregroundColor(AppColors.textPrimaryDark)
+                            .foregroundColor(.primary)
 
                         Text("LUXE")
                             .font(AppTypography.displayMedium)
@@ -86,7 +78,7 @@ struct SplashScreenView: View {
                 Text("The Art of Luxury")
                     .font(AppTypography.bodyMedium)
                     .tracking(3)
-                    .foregroundColor(AppColors.textSecondaryDark)
+                    .foregroundColor(.secondary)
                     .opacity(taglineOpacity)
 
                 Spacer()

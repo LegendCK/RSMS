@@ -55,14 +55,17 @@ struct AppSpacing {
     // MARK: - Corner Radius
 
     /// Small radius — tags, badges
-    static let radiusSmall: CGFloat = 6
+    static let radiusSmall: CGFloat = 8
 
-    /// Medium radius — buttons, inputs
-    static let radiusMedium: CGFloat = 12
+    /// Medium radius — buttons, inputs, cards
+    static let radiusMedium: CGFloat = 20
 
-    /// Large radius — cards, sheets
-    static let radiusLarge: CGFloat = 16
+    /// Large radius — cards, sheets (same as medium for symmetry)
+    static let radiusLarge: CGFloat = 20
 
     /// Extra large radius — modals
     static let radiusXL: CGFloat = 24
+
+    /// Pill radius — fully rounded buttons
+    static let radiusPill: CGFloat = 100
 }
