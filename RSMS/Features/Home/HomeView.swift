@@ -101,6 +101,7 @@ struct HomeView: View {
                     genderFilterSection
                     categorySection
                     featuredSection
+                    RecommendedForYouSection()
                     newArrivalsSection
                     Spacer().frame(height: 48)
                 }

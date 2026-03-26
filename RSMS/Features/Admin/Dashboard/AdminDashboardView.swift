@@ -142,6 +142,18 @@ struct AdminDashboardView: View {
         return allOrders.reduce(0) { $0 + $1.total }
     }
     private var totalSalesText: String { formatCurrency(totalSales) }
+
+    private var adminAIInsights: [AIInsightsEngine.DashboardInsight] {
+        AIInsightsEngine.shared.generateAdminInsights(
+            totalRevenue: totalSales,
+            totalOrders: remoteOrders?.count ?? allOrders.count,
+            totalProducts: allProducts.count,
+            lowStockCount: lowStockAlerts.count,
+            activeStaff: activeStaffCount,
+            totalClients: remoteClients?.count ?? allClients.count,
+            storeCount: activeStoreCount
+        )
+    }
     private var totalUnitsSold: Int {
         if let remoteOrderItems {
             return remoteOrderItems.reduce(0) { $0 + $1.quantity }
@@ -187,6 +199,11 @@ struct AdminDashboardView: View {
                 VStack(spacing: 16) {
                     welcomeHeader
                     metricsGrid
+
+                    // AI Insights
+                    AIInsightsCard(insights: adminAIInsights)
+                        .padding(.horizontal, 16)
+
                     systemHealthBar
                     lowStockSection
                     alertsSection

@@ -66,7 +66,7 @@ class AuthViewModel {
             defer { isLoading = false }
             do {
                 let profile = try await AuthService.shared.signIn(email: email, password: password)
-                appState.login(profile: profile)
+                appState.login(profile: profile, isFreshLogin: true)
             } catch {
                 showErrorMessage(friendlyError(error))
             }

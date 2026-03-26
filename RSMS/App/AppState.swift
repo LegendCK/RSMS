@@ -108,7 +108,9 @@ class AppState {
 
     // MARK: - Login (called after Supabase Auth succeeds)
 
-    func login(profile: UserDTO) {
+    /// - Parameter isFreshLogin: `true` when the user just entered their password (triggers OTP).
+    ///   `false` when restoring a saved session (skips OTP).
+    func login(profile: UserDTO, isFreshLogin: Bool = false) {
         isGuest            = false
         currentUserProfile = profile
         currentUserName    = profile.fullName
@@ -121,7 +123,7 @@ class AppState {
         withAnimation(.easeInOut(duration: 0.5)) {
             if profile.mustResetPassword {
                 currentFlow = .forcePasswordReset
-            } else if profile.userRole == .customer && FeatureFlags.isCustomerOTPEnabled {
+            } else if isFreshLogin && profile.userRole == .customer && FeatureFlags.isCustomerOTPEnabled {
                 currentFlow = .emailOTPVerification
             } else {
                 switch profile.userRole {
