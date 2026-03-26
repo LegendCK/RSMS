@@ -55,8 +55,19 @@ struct OrderDetailView: View {
         }
     }
 
+    private var timelineStatus: OrderStatus {
+        if activeFlow.contains(order.status) {
+            return order.status
+        }
+        // Standard/ship-from-store/in-store flows may end at Delivered even when backend marks Completed.
+        if order.status == .completed {
+            return activeFlow.last ?? .pending
+        }
+        return .pending
+    }
+
     private var currentStepIndex: Int {
-        activeFlow.firstIndex(of: order.status) ?? 0
+        activeFlow.firstIndex(of: timelineStatus) ?? 0
     }
 
     /// Whether this was an in-store hand-over (completed immediately).
@@ -760,12 +771,14 @@ struct OrderDetailView: View {
     }
 
     private var paymentIcon: String {
-        switch order.paymentMethod {
-        case "Credit Card": return "creditcard.fill"
-        case "Apple Pay": return "apple.logo"
-        case "Pay In Store": return "banknote.fill"
-        default: return "creditcard"
-        }
+        let payment = order.paymentMethod.lowercased()
+        if payment.contains("split:") { return "rectangle.3.group.fill" }
+        if payment.contains("cash") { return "banknote.fill" }
+        if payment.contains("bank") || payment.contains("transfer") { return "building.columns.fill" }
+        if payment.contains("apple") { return "apple.logo" }
+        if payment.contains("complimentary") || payment.contains("voucher") { return "gift.fill" }
+        if payment.contains("card") { return "creditcard.fill" }
+        return "creditcard"
     }
 
     private var selectedExchangeItem: ParsedItem? {
@@ -852,7 +865,7 @@ struct OrderDetailView: View {
         warrantyErrorsByItem[item.id] = nil
 
         do {
-            let result: WarrantyLookupResult
+            var result: WarrantyLookupResult
             if let productUUID = item.productUUID {
                 result = try await WarrantyService.shared.lookupWarranty(
                     mode: .productId,
@@ -864,6 +877,18 @@ struct OrderDetailView: View {
                     query: order.orderNumber
                 )
             }
+
+            // Local fallback: if Supabase has no record (order not synced yet,
+            // e.g. historical POS sync failure), derive warranty from local data.
+            if result.status == .notFound {
+                result = WarrantyService.shared.lookupWarrantyLocally(
+                    productId: item.productUUID,
+                    productName: item.name,
+                    brand: item.brand.isEmpty ? nil : item.brand,
+                    purchasedAt: order.createdAt
+                )
+            }
+
             warrantyResultsByItem[item.id] = result
         } catch {
             warrantyResultsByItem[item.id] = nil

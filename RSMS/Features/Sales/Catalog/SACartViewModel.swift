@@ -165,7 +165,8 @@ final class SACartViewModel {
     /// Saves locally, syncs to Supabase, decrements inventory, then signals confirmation.
     @MainActor
     func completeSale(
-        paymentMethod: String,
+        paymentSummary: String,
+        paymentSplits: [OrderService.PaymentSplitInput],
         notes: String,
         associateProfile: UserDTO?,
         modelContext: ModelContext
@@ -203,7 +204,7 @@ final class SACartViewModel {
             discount:            discountAmount,
             total:               total,
             fulfillmentType:     fulfillment,
-            paymentMethod:       paymentMethod,
+            paymentMethod:       paymentSummary,
             notes:               notes,
             salesAssociateEmail: associateProfile?.email ?? "",
             boutiqueId:          associateProfile?.storeId?.uuidString ?? "",
@@ -237,7 +238,8 @@ final class SACartViewModel {
                         storeId: associateProfile?.storeId,
                         isTaxFree: self.isTaxFree,
                         taxFreeReason: formattedTaxFreeReason,
-                        notes: notes
+                        notes: notes,
+                        paymentSplits: paymentSplits
                     )
                 }
                 group.addTask {
@@ -259,7 +261,7 @@ final class SACartViewModel {
         }
 
         completedOrderNumber   = orderNumber
-        completedPaymentMethod = paymentMethod
+        completedPaymentMethod = paymentSummary
         completedIsHandover    = isHandoverNow
         showCheckout           = false
         showConfirmation       = true
@@ -313,7 +315,8 @@ final class SACartViewModel {
         storeId: UUID?,
         isTaxFree: Bool,
         taxFreeReason: String,
-        notes: String
+        notes: String,
+        paymentSplits: [OrderService.PaymentSplitInput]
     ) async throws {
         let maxAttempts = 2
         var lastError: Error?
@@ -332,7 +335,8 @@ final class SACartViewModel {
                     storeId:       storeId,
                     isTaxFree:     isTaxFree,
                     taxFreeReason: taxFreeReason,
-                    notes:         notes
+                    notes:         notes,
+                    paymentSplits: paymentSplits
                 )
                 return
             } catch {

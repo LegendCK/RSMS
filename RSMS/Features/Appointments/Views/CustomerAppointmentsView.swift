@@ -4,6 +4,7 @@ struct CustomerAppointmentsView: View {
     @Environment(AppState.self) private var appState
     @State private var vm = CustomerAppointmentsViewModel()
     @State private var selectedSection = 0 // 0 upcoming, 1 past
+    @State private var showSignIn = false
 
     var body: some View {
         NavigationStack {
@@ -120,6 +121,10 @@ struct CustomerAppointmentsView: View {
             } message: {
                 Text(vm.errorMessage)
             }
+            // ── Guest sign-in gate ───────────────────────────────────────────
+            .sheet(isPresented: $showSignIn) {
+                GuestAuthGateView(pendingAction: "manage your appointments")
+            }
         }
     }
 
@@ -150,15 +155,33 @@ struct CustomerAppointmentsView: View {
     }
 
     private var unavailableState: some View {
-        VStack(spacing: AppSpacing.md) {
-            Image(systemName: "person.crop.circle.badge.exclamationmark")
-                .font(AppTypography.iconDecorative)
-                .foregroundColor(AppColors.warning)
-            Text("Sign in as a customer to view appointments")
-                .font(AppTypography.bodyMedium)
-                .foregroundColor(AppColors.textPrimaryDark)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, AppSpacing.screenHorizontal)
+        VStack(spacing: AppSpacing.lg) {
+            ZStack {
+                Circle()
+                    .fill(AppColors.backgroundSecondary)
+                    .frame(width: 88, height: 88)
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 34, weight: .light))
+                    .foregroundColor(AppColors.accent.opacity(0.7))
+            }
+
+            VStack(spacing: AppSpacing.xs) {
+                Text("Sign In to View Appointments")
+                    .font(AppTypography.heading3)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                    .multilineTextAlignment(.center)
+                Text("Book boutique consultations and track\nyour upcoming visits.")
+                    .font(AppTypography.bodyMedium)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+            }
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+
+            PrimaryButton(title: "Sign In / Create Account") {
+                showSignIn = true
+            }
+            .padding(.horizontal, AppSpacing.screenHorizontal)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

@@ -67,6 +67,12 @@ enum WarrantyServiceError: LocalizedError {
 
 protocol WarrantyServiceProtocol: Sendable {
     func lookupWarranty(mode: WarrantyLookupMode, query: String) async throws -> WarrantyLookupResult
+    func lookupWarrantyLocally(
+        productId: UUID?,
+        productName: String,
+        brand: String?,
+        purchasedAt: Date
+    ) -> WarrantyLookupResult
 }
 
 final class WarrantyService: WarrantyServiceProtocol, @unchecked Sendable {
@@ -77,9 +83,10 @@ final class WarrantyService: WarrantyServiceProtocol, @unchecked Sendable {
 
     private init() {}
 
+    // MARK: - Public Interface
+
     func lookupWarranty(mode: WarrantyLookupMode, query: String) async throws -> WarrantyLookupResult {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-
         switch mode {
         case .productId:
             return try await lookupByProductId(trimmedQuery)
@@ -87,215 +94,226 @@ final class WarrantyService: WarrantyServiceProtocol, @unchecked Sendable {
             return try await lookupByPurchaseRecord(trimmedQuery)
         }
     }
+
+    /// Local-only warranty lookup — uses SwiftData order information without any
+    /// Supabase calls. Used as a fallback when an order hasn't synced to Supabase
+    /// (e.g. historical POS sync failures).
+    func lookupWarrantyLocally(
+        productId: UUID?,
+        productName: String,
+        brand: String?,
+        purchasedAt: Date
+    ) -> WarrantyLookupResult {
+        // Fetch a cached remote policy if already available (best-effort), else use heuristic.
+        // Since this is sync and we can't await here, we use the name-based heuristic directly.
+        let policy = warrantyPolicy(for: productName)
+        return resolveStatus(
+            lookupMode: .purchaseRecord,
+            query: productName,
+            productId: productId,
+            productName: productName,
+            brand: brand,
+            orderId: nil,
+            orderNumber: nil,
+            clientId: nil,
+            storeId: nil,
+            purchasedAt: purchasedAt,
+            policyOverride: policy
+        )
+    }
+}
+
+// MARK: - File-private free functions for warranty RPC calls
+// Placing these outside any class/extension avoids the actor-isolation
+// taint that prevents passing Encodable & Sendable params to client.rpc().
+
+private func _warrantyRPCByProduct(
+    client: SupabaseClient,
+    productId: UUID
+) async throws -> WarrantyRPCRow? {
+    do {
+        let wrapper: WarrantyRPCNullableWrapper = try await client
+            .rpc("lookup_warranty_by_product",
+                 params: ["p_product_id": productId.uuidString.lowercased()])
+            .execute()
+            .value
+        return wrapper.value
+    } catch {
+        print("[WarrantyService] RPC 'lookup_warranty_by_product' failed — migration may not be applied: \(error.localizedDescription)")
+        return nil
+    }
+}
+
+private func _warrantyRPCByOrder(
+    client: SupabaseClient,
+    orderNumber: String
+) async throws -> WarrantyRPCRow? {
+    do {
+        let wrapper: WarrantyRPCNullableWrapper = try await client
+            .rpc("lookup_warranty_by_order",
+                 params: ["p_order_number": orderNumber])
+            .execute()
+            .value
+        return wrapper.value
+    } catch {
+        print("[WarrantyService] RPC 'lookup_warranty_by_order' failed — migration may not be applied: \(error.localizedDescription)")
+        return nil
+    }
+}
+
+// MARK: - Private RPC-based Lookup
+
+private struct WarrantyRPCRow: Decodable, Sendable {
+    let productId: UUID?
+    let productName: String?
+    let brand: String?
+    let orderId: UUID?
+    let orderNumber: String?
+    let clientId: UUID?
+    let storeId: UUID?
+    let purchasedAt: Date?
+    let coverageMonths: Int?
+    let eligibleServices: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case productId       = "product_id"
+        case productName     = "product_name"
+        case brand
+        case orderId         = "order_id"
+        case orderNumber     = "order_number"
+        case clientId        = "client_id"
+        case storeId         = "store_id"
+        case purchasedAt     = "purchased_at"
+        case coverageMonths  = "coverage_months"
+        case eligibleServices = "eligible_services"
+    }
+}
+
+/// Typed params for `lookup_warranty_by_product` RPC — must be `Encodable & Sendable`.
+private struct ProductWarrantyParams: Encodable, Sendable {
+    let p_product_id: String
+}
+
+/// Typed params for `lookup_warranty_by_order` RPC — must be `Encodable & Sendable`.
+private struct OrderWarrantyParams: Encodable, Sendable {
+    let p_order_number: String
+}
+
+/// Decodes the nullable JSON object returned by the warranty RPCs.
+private struct WarrantyRPCNullableWrapper: Decodable {
+    let value: WarrantyRPCRow?
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            value = nil
+        } else {
+            value = try container.decode(WarrantyRPCRow.self)
+        }
+    }
 }
 
 private extension WarrantyService {
-
-    struct ProductRow: Decodable {
-        let id: UUID
-        let name: String
-        let brand: String?
-    }
-
-    struct OrderRow: Decodable {
-        let id: UUID
-        let orderNumber: String?
-        let clientId: UUID?
-        let storeId: UUID?
-        let createdAt: Date
-
-        enum CodingKeys: String, CodingKey {
-            case id
-            case orderNumber = "order_number"
-            case clientId = "client_id"
-            case storeId = "store_id"
-            case createdAt = "created_at"
-        }
-    }
-
-    struct OrderItemWithJoinsRow: Decodable {
-        let productId: UUID
-        let orderId: UUID
-        let createdAt: Date?
-        let products: ProductRow?
-        let orders: OrderRow?
-
-        enum CodingKeys: String, CodingKey {
-            case productId = "product_id"
-            case orderId = "order_id"
-            case createdAt = "created_at"
-            case products
-            case orders
-        }
-    }
-
-    struct OrderItemProductRow: Decodable {
-        let productId: UUID
-        let products: ProductRow?
-
-        enum CodingKeys: String, CodingKey {
-            case productId = "product_id"
-            case products
-        }
-    }
-
-    struct WarrantyPolicy {
-        let coverageMonths: Int
-        let eligibleServices: [String]
-    }
-
-    struct WarrantyPolicyRow: Decodable {
-        let productId: UUID
-        let coverageMonths: Int
-        let eligibleServices: [String]
-
-        enum CodingKeys: String, CodingKey {
-            case productId = "product_id"
-            case coverageMonths = "coverage_months"
-            case eligibleServices = "eligible_services"
-        }
-    }
 
     func lookupByProductId(_ query: String) async throws -> WarrantyLookupResult {
         guard let productId = UUID(uuidString: query) else {
             throw WarrantyServiceError.invalidProductId
         }
 
-        let product: ProductRow? = try? await client
-            .from("products")
-            .select("id,name,brand")
-            .eq("id", value: productId.uuidString.lowercased())
-            .single()
-            .execute()
-            .value
+        // Call the SECURITY DEFINER RPC — bypasses store-scoped RLS on order_items.
+        let row: WarrantyRPCRow? = try await callProductWarrantyRPC(productId: productId)
 
-        let rows: [OrderItemWithJoinsRow] = try await client
-            .from("order_items")
-            .select("product_id,order_id,created_at,products(id,name,brand),orders(id,order_number,client_id,store_id,created_at)")
-            .eq("product_id", value: productId.uuidString.lowercased())
-            .order("created_at", ascending: false)
-            .limit(1)
-            .execute()
-            .value
-
-        guard let row = rows.first else {
-            return WarrantyLookupResult(
-                status: .notFound,
-                lookupMode: .productId,
-                lookupQuery: query,
-                productId: product?.id ?? productId,
-                productName: product?.name,
-                brand: product?.brand,
-                orderId: nil,
-                orderNumber: nil,
-                clientId: nil,
-                storeId: nil,
-                purchasedAt: nil,
-                coverageStart: nil,
-                coverageEnd: nil,
-                eligibleServices: []
-            )
+        guard let row else {
+            return notFoundResult(mode: .productId, query: query, productId: productId)
         }
 
-        let remotePolicy = try await fetchRemotePolicy(productId: row.productId)
-
+        let policy = buildPolicy(from: row)
         return resolveStatus(
             lookupMode: .productId,
             query: query,
-            productId: row.productId,
-            productName: row.products?.name ?? product?.name,
-            brand: row.products?.brand ?? product?.brand,
+            productId: row.productId ?? productId,
+            productName: row.productName,
+            brand: row.brand,
             orderId: row.orderId,
-            orderNumber: row.orders?.orderNumber,
-            clientId: row.orders?.clientId,
-            storeId: row.orders?.storeId,
-            purchasedAt: row.orders?.createdAt ?? row.createdAt,
-            policyOverride: remotePolicy
+            orderNumber: row.orderNumber,
+            clientId: row.clientId,
+            storeId: row.storeId,
+            purchasedAt: row.purchasedAt,
+            policyOverride: policy
         )
     }
 
+    // ── Purchase-record (order number) lookup via SECURITY DEFINER RPC ─────────
+
     func lookupByPurchaseRecord(_ query: String) async throws -> WarrantyLookupResult {
-        let orderRows: [OrderRow]
-        if let orderId = UUID(uuidString: query) {
-            orderRows = try await client
-                .from("orders")
-                .select("id,order_number,client_id,store_id,created_at")
-                .eq("id", value: orderId.uuidString.lowercased())
-                .limit(1)
-                .execute()
-                .value
-        } else {
-            orderRows = try await client
-                .from("orders")
-                .select("id,order_number,client_id,store_id,created_at")
-                .eq("order_number", value: query)
-                .limit(1)
-                .execute()
-                .value
+        // Resolve by order number. UUID-format queries also work since
+        // the RPC matches on order_number (string), not order ID.
+        let row: WarrantyRPCRow? = try await callOrderWarrantyRPC(orderNumber: query)
+
+        guard let row else {
+            return notFoundResult(mode: .purchaseRecord, query: query, productId: nil)
         }
 
-        guard let order = orderRows.first else {
-            return WarrantyLookupResult(
-                status: .notFound,
-                lookupMode: .purchaseRecord,
-                lookupQuery: query,
-                productId: nil,
-                productName: nil,
-                brand: nil,
-                orderId: nil,
-                orderNumber: nil,
-                clientId: nil,
-                storeId: nil,
-                purchasedAt: nil,
-                coverageStart: nil,
-                coverageEnd: nil,
-                eligibleServices: []
-            )
-        }
-
-        let itemRows: [OrderItemProductRow] = try await client
-            .from("order_items")
-            .select("product_id,products(id,name,brand)")
-            .eq("order_id", value: order.id.uuidString.lowercased())
-            .order("created_at", ascending: false)
-            .limit(1)
-            .execute()
-            .value
-
-        guard let item = itemRows.first else {
-            return WarrantyLookupResult(
-                status: .notFound,
-                lookupMode: .purchaseRecord,
-                lookupQuery: query,
-                productId: nil,
-                productName: nil,
-                brand: nil,
-                orderId: order.id,
-                orderNumber: order.orderNumber,
-                clientId: order.clientId,
-                storeId: order.storeId,
-                purchasedAt: order.createdAt,
-                coverageStart: nil,
-                coverageEnd: nil,
-                eligibleServices: []
-            )
-        }
-
-        let remotePolicy = try await fetchRemotePolicy(productId: item.productId)
-
+        let policy = buildPolicy(from: row)
         return resolveStatus(
             lookupMode: .purchaseRecord,
             query: query,
-            productId: item.productId,
-            productName: item.products?.name,
-            brand: item.products?.brand,
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            clientId: order.clientId,
-            storeId: order.storeId,
-            purchasedAt: order.createdAt,
-            policyOverride: remotePolicy
+            productId: row.productId,
+            productName: row.productName,
+            brand: row.brand,
+            orderId: row.orderId,
+            orderNumber: row.orderNumber,
+            clientId: row.clientId,
+            storeId: row.storeId,
+            purchasedAt: row.purchasedAt,
+            policyOverride: policy
         )
+    }
+
+    // ── RPC callers forward to file-private free functions ────────────────────
+
+    func callProductWarrantyRPC(productId: UUID) async throws -> WarrantyRPCRow? {
+        try await _warrantyRPCByProduct(client: client, productId: productId)
+    }
+
+    func callOrderWarrantyRPC(orderNumber: String) async throws -> WarrantyRPCRow? {
+        try await _warrantyRPCByOrder(client: client, orderNumber: orderNumber)
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    func buildPolicy(from row: WarrantyRPCRow) -> WarrantyPolicy? {
+        guard let months = row.coverageMonths else { return nil }
+        return WarrantyPolicy(coverageMonths: months, eligibleServices: row.eligibleServices)
+    }
+
+    func notFoundResult(
+        mode: WarrantyLookupMode,
+        query: String,
+        productId: UUID?
+    ) -> WarrantyLookupResult {
+        WarrantyLookupResult(
+            status: .notFound,
+            lookupMode: mode,
+            lookupQuery: query,
+            productId: productId,
+            productName: nil,
+            brand: nil,
+            orderId: nil,
+            orderNumber: nil,
+            clientId: nil,
+            storeId: nil,
+            purchasedAt: nil,
+            coverageStart: nil,
+            coverageEnd: nil,
+            eligibleServices: []
+        )
+    }
+
+    // ── Status resolution (unchanged from original) ────────────────────────────
+
+    struct WarrantyPolicy {
+        let coverageMonths: Int
+        let eligibleServices: [String]
     }
 
     func resolveStatus(
@@ -358,23 +376,7 @@ private extension WarrantyService {
         )
     }
 
-    func fetchRemotePolicy(productId: UUID) async throws -> WarrantyPolicy? {
-        do {
-            let rows: [WarrantyPolicyRow] = try await client
-                .from("product_warranty_policies")
-                .select("product_id,coverage_months,eligible_services")
-                .eq("product_id", value: productId.uuidString.lowercased())
-                .limit(1)
-                .execute()
-                .value
-
-            guard let row = rows.first else { return nil }
-            return WarrantyPolicy(coverageMonths: row.coverageMonths, eligibleServices: row.eligibleServices)
-        } catch {
-            // Backward compatibility: if migration isn't applied yet, keep legacy policy behavior.
-            return nil
-        }
-    }
+    // ── Name-based heuristic fallback (unchanged from original) ───────────────
 
     func warrantyPolicy(for productName: String?) -> WarrantyPolicy {
         let value = (productName ?? "").lowercased()

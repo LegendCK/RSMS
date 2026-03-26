@@ -555,7 +555,7 @@ struct ICDashboardView: View {
             let response = try await client
                 .from("scan_logs")
                 .select("id", head: false, count: .exact)
-                .gte("created_at", value: startStr)
+                .gte("scanned_at", value: startStr)
                 .execute()
 
             todayScans = response.count ?? 0

@@ -29,6 +29,8 @@ struct ManagerInventoryView: View {
                         Text("Requests").tag(4)
                     }
                     .pickerStyle(.segmented)
+                    .padding(AppSpacing.sm)
+                    .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
                     .padding(.horizontal, AppSpacing.screenHorizontal)
                     .padding(.top, AppSpacing.sm)
                     .padding(.bottom, AppSpacing.sm)
@@ -222,7 +224,8 @@ struct InvStockSubview: View {
             Spacer()
             stockBadge(item.quantity, reorderPoint: item.reorderPoint)
         }
-        .padding(.vertical, AppSpacing.xs)
+        .padding(AppSpacing.sm)
+        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
     }
 
     private func stockBadge(_ count: Int, reorderPoint: Int) -> some View {
@@ -233,10 +236,11 @@ struct InvStockSubview: View {
         return Text(label)
             .font(AppTypography.editLink)
             .foregroundColor(color)
-            .frame(width: 36)
-            .padding(.vertical, 3)
+            .frame(minWidth: 40)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
             .background(color.opacity(0.12))
-            .cornerRadius(4)
+            .clipShape(Capsule())
     }
 
     private func invStat(value: String, label: String, color: Color) -> some View {
@@ -757,6 +761,7 @@ struct InvTransfersSubview: View {
             let existing = (try? modelContext.fetch(FetchDescriptor<Transfer>())) ?? []
             let existingById = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
             let localProducts = (try? modelContext.fetch(FetchDescriptor<Product>())) ?? []
+            let localInventoryRows = (try? modelContext.fetch(FetchDescriptor<InventoryByLocation>())) ?? []
 
             for row in relevant {
                 guard let rid = UUID(uuidString: row.id) else { continue }
@@ -765,7 +770,28 @@ struct InvTransfersSubview: View {
                 let received = max(row.received_quantity ?? 0, 0)
                 let transferNumber = row.transfer_number ?? "TRF-\(row.id.prefix(8).uppercased())"
                 let asnNumber = row.asn_number ?? "ASN-\(transferNumber)"
-                let productName = row.product_name ?? ""
+                let resolvedProductId: UUID? = {
+                    if let raw = row.product_id, let parsed = UUID(uuidString: raw) {
+                        return parsed
+                    }
+                    return nil
+                }()
+                let productName = {
+                    let remote = row.product_name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    if !remote.isEmpty { return remote }
+                    if let pid = resolvedProductId,
+                       let inv = localInventoryRows.first(where: { $0.productId == pid }),
+                       !inv.productName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       inv.productName != "Unknown Product" {
+                        return inv.productName
+                    }
+                    if let pid = resolvedProductId,
+                       let prod = localProducts.first(where: { $0.id == pid }),
+                       !prod.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        return prod.name
+                    }
+                    return ""
+                }()
                 let fromId = row.from_boutique_id ?? ""
                 let toId = row.to_boutique_id ?? ""
                 let requestedAt = parseBackendDate(row.requested_at) ?? Date()
@@ -779,7 +805,7 @@ struct InvTransfersSubview: View {
                     if let requester = row.requested_by_email, !requester.isEmpty { local.requestedByEmail = requester }
                     if let approver = row.approved_by_email, !approver.isEmpty { local.approvedByEmail = approver }
                     if let notes = row.notes, !notes.isEmpty { local.notes = notes }
-                    if let productId = row.product_id, let parsed = UUID(uuidString: productId) {
+                    if let parsed = resolvedProductId {
                         local.productId = parsed
                     } else if !productName.isEmpty,
                               let matched = localProducts.first(where: {
@@ -799,7 +825,7 @@ struct InvTransfersSubview: View {
                         transferNumber: transferNumber,
                         asnNumber: asnNumber,
                         productId: {
-                            if let raw = row.product_id, let parsed = UUID(uuidString: raw) {
+                            if let parsed = resolvedProductId {
                                 return parsed
                             }
                             if !productName.isEmpty,
@@ -2310,11 +2336,28 @@ struct StartCountSheet: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var inventory: [InventoryByLocation] = []
-    @State private var counts: [UUID: Int] = [:]         // productId → counted qty
+    @State private var counts: [UUID: Int] = [:]         // productId → actual counted qty
     @State private var isLoading = true
     @State private var isSaving = false
     @State private var saved = false
     @State private var errorMessage: String? = nil
+
+    private var enteredItemsCount: Int {
+        inventory.reduce(0) { partial, item in
+            partial + (counts[item.productId] == nil ? 0 : 1)
+        }
+    }
+
+    private var totalVarianceUnits: Int {
+        inventory.reduce(0) { partial, item in
+            guard let counted = counts[item.productId] else { return partial }
+            return partial + (counted - item.quantity)
+        }
+    }
+
+    private var isReadyToSave: Bool {
+        !inventory.isEmpty && enteredItemsCount == inventory.count && !saved
+    }
 
     var body: some View {
         NavigationStack {
@@ -2356,7 +2399,7 @@ struct StartCountSheet: View {
                     } else {
                         Button("Save") { Task { await saveCount() } }
                             .foregroundColor(AppColors.accent)
-                            .disabled(counts.isEmpty || saved)
+                            .disabled(!isReadyToSave)
                     }
                 }
             }
@@ -2386,7 +2429,25 @@ struct StartCountSheet: View {
                     .padding(.bottom, AppSpacing.md)
                 }
 
-                Text("Enter the physical count for each item. Leave blank to keep current value.")
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    Text("Blind Count Mode")
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text("Expected quantities are hidden. Enter actual counted quantity for every item.")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    Text("Items counted: \(enteredItemsCount)/\(inventory.count) · Net variance: \(totalVarianceUnits >= 0 ? "+" : "")\(totalVarianceUnits)")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
+                .padding(AppSpacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppColors.backgroundSecondary)
+                .cornerRadius(AppSpacing.radiusMedium)
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.bottom, AppSpacing.sm)
+
+                Text("Enter the physical count for each item.")
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
                     .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -2409,27 +2470,34 @@ struct StartCountSheet: View {
                     .font(AppTypography.label)
                     .foregroundColor(AppColors.textPrimaryDark)
                     .lineLimit(1)
-                Text("System: \(item.quantity)")
+                Text("Expected quantity hidden")
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
+                if let variance = variance(for: item) {
+                    Text("Variance: \(variance >= 0 ? "+" : "")\(variance)")
+                        .font(AppTypography.caption)
+                        .foregroundColor(variance == 0 ? AppColors.info : (variance > 0 ? AppColors.success : AppColors.error))
+                }
             }
             Spacer()
-            // Stepper for counted quantity
+            // Enter actual counted quantity.
             HStack(spacing: AppSpacing.sm) {
                 Button {
-                    let current = counts[item.productId] ?? item.quantity
+                    let current = counts[item.productId] ?? 0
                     if current > 0 { counts[item.productId] = current - 1 }
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .font(.system(size: 22))
                         .foregroundColor(AppColors.accent)
                 }
-                Text("\(counts[item.productId] ?? item.quantity)")
+                TextField("0", text: countBinding(for: item.productId))
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.center)
                     .font(AppTypography.heading3)
                     .foregroundColor(AppColors.textPrimaryDark)
-                    .frame(minWidth: 32, alignment: .center)
+                    .frame(minWidth: 56)
                 Button {
-                    let current = counts[item.productId] ?? item.quantity
+                    let current = counts[item.productId] ?? 0
                     counts[item.productId] = current + 1
                 } label: {
                     Image(systemName: "plus.circle.fill")
@@ -2452,8 +2520,6 @@ struct StartCountSheet: View {
                 sortBy: [SortDescriptor(\.productName)]
             )
             inventory = (try? modelContext.fetch(desc)) ?? []
-            // Pre-fill counts with system values
-            for item in inventory { counts[item.productId] = item.quantity }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -2466,8 +2532,7 @@ struct StartCountSheet: View {
         let client = SupabaseManager.shared.client
         do {
             for item in inventory {
-                let counted = counts[item.productId] ?? item.quantity
-                guard counted != item.quantity else { continue }   // skip unchanged
+                guard let counted = counts[item.productId] else { continue }
                 let payload = InventoryUpsertDTO(
                     storeId:      storeId,
                     productId:    item.productId,
@@ -2488,6 +2553,30 @@ struct StartCountSheet: View {
             errorMessage = error.localizedDescription
         }
         isSaving = false
+    }
+
+    private func countBinding(for productId: UUID) -> Binding<String> {
+        Binding(
+            get: {
+                if let value = counts[productId] { return String(value) }
+                return ""
+            },
+            set: { newValue in
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    counts[productId] = nil
+                    return
+                }
+                if let parsed = Int(trimmed), parsed >= 0 {
+                    counts[productId] = parsed
+                }
+            }
+        )
+    }
+
+    private func variance(for item: InventoryByLocation) -> Int? {
+        guard let counted = counts[item.productId] else { return nil }
+        return counted - item.quantity
     }
 }
 

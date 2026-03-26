@@ -27,69 +27,67 @@ struct AddressManagerView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary.ignoresSafeArea()
+        ZStack {
+            AppColors.backgroundPrimary.ignoresSafeArea()
 
-                if addresses.isEmpty {
-                    emptyState
-                } else {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: AppSpacing.sm) {
-                            ForEach(addresses) { address in
-                                addressCard(address)
-                            }
-                            addNewButton
+            if addresses.isEmpty {
+                emptyState
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: AppSpacing.sm) {
+                        ForEach(addresses) { address in
+                            addressCard(address)
                         }
-                        .padding(.horizontal, AppSpacing.screenHorizontal)
-                        .padding(.vertical, AppSpacing.lg)
+                        addNewButton
                     }
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Saved Addresses")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showAddNew = true }) {
-                        Image(systemName: "plus")
-                            .foregroundColor(AppColors.accent)
-                    }
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                Button { dismiss() } label: {
-                    Text("Done")
-                        .frame(maxWidth: .infinity)
-                }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .buttonBorderShape(.roundedRectangle)
                     .padding(.horizontal, AppSpacing.screenHorizontal)
-                    .padding(.top, AppSpacing.xs)
-                    .padding(.bottom, AppSpacing.xs)
-                    .background(.bar)
+                    .padding(.vertical, AppSpacing.lg)
+                }
             }
-            .sheet(isPresented: $showAddNew) {
-                AddressEditView()
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Saved Addresses")
+                    .font(AppTypography.navTitle)
+                    .foregroundColor(AppColors.textPrimaryDark)
             }
-            .sheet(item: $editAddress) { addr in
-                AddressEditView(address: addr)
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: { showAddNew = true }) {
+                    Image(systemName: "plus")
+                        .foregroundColor(AppColors.accent)
+                }
             }
-            .task {
-                guard !appState.isGuest,
-                      let clientId = appState.currentUserProfile?.id ?? appState.currentClientProfile?.id
-                else { return }
-                await AddressSyncService.shared.hydrateLocalAddressesIfNeeded(
-                    customerEmail: appState.currentUserEmail,
-                    clientId: clientId,
-                    modelContext: modelContext
-                )
+        }
+        .safeAreaInset(edge: .bottom) {
+            Button { dismiss() } label: {
+                Text("Done")
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .buttonBorderShape(.roundedRectangle)
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.top, AppSpacing.xs)
+            .padding(.bottom, AppSpacing.xs)
+            .background(.bar)
+        }
+        .sheet(isPresented: $showAddNew) {
+            AddressEditView()
+        }
+        .sheet(item: $editAddress) { addr in
+            AddressEditView(address: addr)
+        }
+        .task {
+            guard !appState.isGuest,
+                  let clientId = appState.currentUserProfile?.id ?? appState.currentClientProfile?.id
+            else { return }
+            await AddressSyncService.shared.hydrateLocalAddressesIfNeeded(
+                customerEmail: appState.currentUserEmail,
+                clientId: clientId,
+                modelContext: modelContext
+            )
         }
     }
 
