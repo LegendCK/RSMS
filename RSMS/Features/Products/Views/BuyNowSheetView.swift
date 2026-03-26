@@ -139,9 +139,11 @@ struct BuyNowSheetView: View {
                 // Removed cancel/cross button as per design update
             }
             .sheet(isPresented: $showAddressManager) {
-                AddressManagerView(onSelect: { addr in
-                    selectedAddress = addr
-                })
+                NavigationStack {
+                    AddressManagerView(onSelect: { addr in
+                        selectedAddress = addr
+                    })
+                }
             }
             .sheet(isPresented: $showAddNewAddress) {
                 AddressEditView()
@@ -856,7 +858,8 @@ struct BuyNowSheetView: View {
             "qty": 1, "price": effectiveUnitPrice,
             "color": selectedColor,
             "size": selectedSize ?? "",
-            "image": product.imageName
+            "image": product.imageName,
+            "productId": product.id.uuidString
         ]]
         let itemsJSON: String = {
             guard let data = try? JSONSerialization.data(withJSONObject: itemArr),

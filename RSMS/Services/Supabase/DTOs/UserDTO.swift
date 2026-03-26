@@ -19,21 +19,27 @@ struct UserDTO: Codable, Identifiable {
     let phone: String?
     let avatarUrl: String?
     let isActive: Bool
+    let mustResetPassword: Bool
+    let corporateEmail: String?
+    let personalEmail: String?
     let createdAt: Date
     let updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
         case id
         case role
-        case storeId       = "store_id"
-        case firstName     = "first_name"
-        case lastName      = "last_name"
+        case storeId            = "store_id"
+        case firstName          = "first_name"
+        case lastName           = "last_name"
         case email
         case phone
-        case avatarUrl     = "avatar_url"
-        case isActive      = "is_active"
-        case createdAt     = "created_at"
-        case updatedAt     = "updated_at"
+        case avatarUrl          = "avatar_url"
+        case isActive           = "is_active"
+        case mustResetPassword  = "must_reset_password"
+        case corporateEmail     = "corporate_email"
+        case personalEmail      = "personal_email"
+        case createdAt          = "created_at"
+        case updatedAt          = "updated_at"
     }
 
     // MARK: - Convenience
@@ -64,6 +70,9 @@ struct UserDTO: Codable, Identifiable {
         self.phone = clientProfile.phone
         self.avatarUrl = nil
         self.isActive = clientProfile.isActive
+        self.mustResetPassword = clientProfile.mustResetPassword
+        self.corporateEmail = nil
+        self.personalEmail = nil
         self.createdAt = clientProfile.createdAt
         self.updatedAt = clientProfile.updatedAt
     }
@@ -81,16 +90,22 @@ struct UserInsertDTO: Codable {
     let email: String
     let phone: String?
     let isActive: Bool
+    let mustResetPassword: Bool
+    let corporateEmail: String?
+    let personalEmail: String?
 
     enum CodingKeys: String, CodingKey {
         case id
         case role
-        case storeId   = "store_id"
-        case firstName = "first_name"
-        case lastName  = "last_name"
+        case storeId            = "store_id"
+        case firstName          = "first_name"
+        case lastName           = "last_name"
         case email
         case phone
-        case isActive  = "is_active"
+        case isActive           = "is_active"
+        case mustResetPassword  = "must_reset_password"
+        case corporateEmail     = "corporate_email"
+        case personalEmail      = "personal_email"
     }
 }
 

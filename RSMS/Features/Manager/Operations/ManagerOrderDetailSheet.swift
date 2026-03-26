@@ -63,6 +63,10 @@ struct ManagerOrderDetailSheet: View {
                         // ── Customer ─────────────────────────────────────────
                         detailCard {
                             row(label: "Customer", value: order.customerName)
+                            Divider()
+                            row(label: "Customer Type", value: isGuestCustomer ? "Guest Checkout" : "Registered Customer")
+                            Divider()
+                            row(label: "Verification", value: customerVerificationLabel)
                             if let email = order.customerEmail {
                                 Divider()
                                 row(label: "Email", value: email)
@@ -179,6 +183,16 @@ struct ManagerOrderDetailSheet: View {
         fmt.numberStyle = .currency
         fmt.currencyCode = order.currency
         return fmt.string(from: NSNumber(value: value)) ?? "\(order.currency) \(value)"
+    }
+
+    private var isGuestCustomer: Bool {
+        order.clientId == nil || order.customerName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "guest customer"
+    }
+
+    private var customerVerificationLabel: String {
+        let hasEmail = !(order.customerEmail?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        if hasEmail { return "Contact Verified" }
+        return isGuestCustomer ? "Guest Unverified" : "Verification Pending"
     }
 
     @ViewBuilder

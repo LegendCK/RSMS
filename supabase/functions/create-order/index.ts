@@ -18,6 +18,13 @@ interface CartItemPayload {
   unitPrice: number;
 }
 
+interface PaymentSplitPayload {
+  method: string;
+  amount: number;
+  paymentReference?: string | null;
+  status?: string;
+}
+
 interface CreateOrderPayload {
   clientId?: string;      // explicit client UUID for POS/in-store sales (SA selects client)
   orderNumber: string;
@@ -34,6 +41,7 @@ interface CreateOrderPayload {
   notes?: string;         // free-form checkout notes from POS
   deliveryCity?: string;  // delivery-address city hint from app checkout
   deliveryState?: string; // delivery-address state hint from app checkout
+  paymentSplits?: PaymentSplitPayload[]; // optional split-payment rows for POS
 }
 
 interface StoreRow {
@@ -52,6 +60,17 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+async function rollbackCreatedOrder(admin: ReturnType<typeof createClient>, orderId: string): Promise<void> {
+  await admin.from("order_events").delete().eq("order_id", orderId);
+  await admin.from("payments").delete().eq("order_id", orderId);
+  await admin.from("order_items").delete().eq("order_id", orderId);
+  await admin.from("orders").delete().eq("id", orderId);
+}
 
 // ── Smart Store Resolution ──────────────────────────────────────────────────
 // Tries city match → state/region match → fallback (first active store).
@@ -161,6 +180,8 @@ serve(async (req: Request) => {
     // For online sales the JWT owner IS the client — resolve by auth.uid or email.
     const payload: CreateOrderPayload = await req.json();
     const isPOS = payload.channel === "in_store";
+    // SA can place orders for delivery (ship_from_store) when item is not in stock
+    const isSADeliveryOrder = payload.channel === "ship_from_store";
 
     let clientId: string | null = null;
 
@@ -212,6 +233,29 @@ serve(async (req: Request) => {
       ? `TAX-FREE: ${payload.taxFreeReason.trim()}`
       : "";
     const combinedNotes = [baseNotes, taxNote].filter((x) => x.length > 0).join(" | ") || null;
+    const normalizedPaymentSplits: PaymentSplitPayload[] = (payload.paymentSplits ?? [])
+      .map((split) => ({
+        method: split.method?.trim().toLowerCase() ?? "",
+        amount: roundMoney(Number(split.amount ?? 0)),
+        paymentReference: split.paymentReference?.trim() || null,
+        status: split.status?.trim().toLowerCase() || "completed",
+      }))
+      .filter((split) => split.method.length > 0);
+
+    if (normalizedPaymentSplits.length > 0) {
+      const hasInvalidSplit = normalizedPaymentSplits.some((split) => split.amount <= 0);
+      if (hasInvalidSplit) {
+        return json({ error: "All split payments must have amount greater than 0." }, 400);
+      }
+
+      const paidTotal = roundMoney(normalizedPaymentSplits.reduce((sum, split) => sum + split.amount, 0));
+      const orderTotal = roundMoney(payload.grandTotal);
+      if (paidTotal !== orderTotal) {
+        return json({
+          error: `Split payments total (${paidTotal.toFixed(2)}) must equal order grand total (${orderTotal.toFixed(2)}).`,
+        }, 400);
+      }
+    }
 
     // ── 5. Resolve store ───────────────────────────────────────────────────────
     // Priority:
@@ -261,7 +305,7 @@ serve(async (req: Request) => {
         order_number: payload.orderNumber,
         client_id: clientId,
         store_id: store.id,
-        associate_id: isPOS ? user.id : null,
+        associate_id: (isPOS || isSADeliveryOrder) ? user.id : null,
         channel: payload.channel,
         status: isPOS ? "completed" : "pending",
         subtotal: payload.subtotal,
@@ -283,15 +327,19 @@ serve(async (req: Request) => {
     console.log(`[create-order] Order created: ${order.order_number} (${order.id}) → store: ${store.name} [pending]`);
 
     // ── 7. Write initial audit event ──────────────────────────────────────────
+    const auditNote = isPOS
+      ? `In-store POS sale completed${payload.isTaxFree ? " (tax-free)" : ""}`
+      : isSADeliveryOrder
+        ? `Order placed by sales associate for delivery${payload.isTaxFree ? " (tax-free)" : ""}`
+        : `Order placed via ${payload.channel}`;
+
     await admin.from("order_events").insert({
       order_id:    order.id,
       from_status: null,
       to_status:   isPOS ? "completed" : "pending",
       actor_id:    user.id,
-      actor_role:  isPOS ? "sales_associate" : "customer",
-      notes:       isPOS
-        ? `In-store POS sale completed${payload.isTaxFree ? " (tax-free)" : ""}`
-        : `Order placed via ${payload.channel}`,
+      actor_role:  (isPOS || isSADeliveryOrder) ? "sales_associate" : "customer",
+      notes:       auditNote,
     });
 
     // ── 8. Insert order_items (best-effort) ────────────────────────────────────
@@ -319,10 +367,7 @@ serve(async (req: Request) => {
 
       if (itemsError) {
         // Keep order header + items atomic for downstream sync reliability.
-        await admin
-          .from("orders")
-          .delete()
-          .eq("id", order.id);
+        await rollbackCreatedOrder(admin, order.id);
         console.error("[create-order] order_items insert failed, rolled back order:", itemsError.message);
         return json({ error: "Failed to create order items: " + itemsError.message }, 500);
       } else {
@@ -331,7 +376,34 @@ serve(async (req: Request) => {
       }
     }
 
-    // ── 9. Return success ──────────────────────────────────────────────────────
+    // ── 9. Insert payments (when supplied by POS split-payment flow) ──────────
+    let paymentsInserted = 0;
+    if (normalizedPaymentSplits.length > 0) {
+      const paymentRows = normalizedPaymentSplits.map((split) => ({
+        order_id: order.id,
+        method: split.method,
+        amount: split.amount,
+        currency,
+        status: split.status ?? "completed",
+        payment_reference: split.paymentReference ?? null,
+        processed_by: isPOS ? user.id : null,
+      }));
+
+      const { error: paymentError } = await admin
+        .from("payments")
+        .insert(paymentRows);
+
+      if (paymentError) {
+        await rollbackCreatedOrder(admin, order.id);
+        console.error("[create-order] payments insert failed, rolled back order:", paymentError.message);
+        return json({ error: "Failed to log payment methods: " + paymentError.message }, 500);
+      }
+
+      paymentsInserted = paymentRows.length;
+      console.log(`[create-order] ${paymentsInserted} payment row(s) inserted`);
+    }
+
+    // ── 10. Return success ─────────────────────────────────────────────────────
     return json({
       success: true,
       orderId: order.id,
@@ -339,6 +411,7 @@ serve(async (req: Request) => {
       storeId: store.id,
       storeName: store.name,
       itemsInserted,
+      paymentsInserted,
     });
 
   } catch (err) {

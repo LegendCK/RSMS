@@ -118,14 +118,14 @@ final class DiscrepancyService {
 
         // 2. Upsert inventory quantity
         let inventoryPayload = InventoryApprovalUpsertDTO(
-            storeId:   discrepancy.storeId,
-            productId: discrepancy.productId,
-            quantity:  discrepancy.reportedQuantity
+            locationId: discrepancy.storeId,
+            productId:  discrepancy.productId,
+            quantity:   discrepancy.reportedQuantity
         )
 
         try await client
             .from("inventory")
-            .upsert(inventoryPayload, onConflict: "store_id,product_id")
+            .upsert(inventoryPayload, onConflict: "location_id,product_id")
             .execute()
 
         // 3. Update local SwiftData (best-effort)
@@ -229,13 +229,13 @@ final class DiscrepancyService {
 // MARK: - Inventory Approval Upsert DTO
 
 private struct InventoryApprovalUpsertDTO: Codable {
-    let storeId:   UUID
-    let productId: UUID
-    let quantity:  Int
+    let locationId: UUID
+    let productId:  UUID
+    let quantity:   Int
 
     enum CodingKeys: String, CodingKey {
-        case storeId   = "store_id"
-        case productId = "product_id"
+        case locationId = "location_id"
+        case productId  = "product_id"
         case quantity
     }
 }

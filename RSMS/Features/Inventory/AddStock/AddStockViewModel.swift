@@ -103,12 +103,12 @@ final class AddStockViewModel {
             let currentQty = rows.first?.quantity ?? 0
             let newQty     = currentQty + addedQty
 
-            let payload: [String: AnyJSON] = [
-                "location_id": .string(storeId.uuidString.lowercased()),
-                "product_id": .string(productId.uuidString.lowercased()),
-                "quantity": .integer(newQty)
-            ]
-
+            let payload = InventoryUpsertDTO(
+                locationId:   storeId,
+                productId:    productId,
+                quantity:     newQty,
+                reorderPoint: nil
+            )
             try await client
                 .from("inventory")
                 .upsert(payload, onConflict: "location_id,product_id")

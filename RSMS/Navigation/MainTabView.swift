@@ -21,9 +21,12 @@ struct MainTabView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(AppColors.backgroundPrimary.ignoresSafeArea())
             } else {
-                TabView {
+                TabView(selection: Binding(
+                    get: { appState.customerSelectedTab },
+                    set: { appState.customerSelectedTab = $0 }
+                )) {
                     // Home Tab — path bound to AppState so any screen can pop to root
-                    Tab("Home", systemImage: "house.fill") {
+                    Tab("Home", systemImage: "house.fill", value: 0) {
                         @Bindable var state = appState
                         NavigationStack(path: $state.homeNavigationPath) {
                             HomeView()
@@ -31,31 +34,38 @@ struct MainTabView: View {
                     }
 
                     // Categories Tab
-                    Tab("Categories", systemImage: "square.grid.2x2") {
+                    Tab("Categories", systemImage: "square.grid.2x2", value: 1) {
                         NavigationStack {
                             CategoriesView(showsTabBar: true)
                         }
                     }
 
                     // Appointments Tab
-                    Tab("Appointments", systemImage: "calendar.badge.clock") {
+                    Tab("Appointments", systemImage: "calendar.badge.clock", value: 2) {
                         NavigationStack {
                             CustomerAppointmentsView()
                         }
                     }
 
                     // Profile Tab
-                    Tab("Profile", systemImage: "person.fill") {
+                    Tab("Profile", systemImage: "person.fill", value: 3) {
                         NavigationStack {
                             ProfileView()
                         }
                     }
 
                     // Search Tab (system renders this as a separate search control)
-                    Tab(role: .search) {
+                    Tab(value: 4, role: .search) {
                         NavigationStack {
                             SearchView()
                         }
+                    }
+                }
+                .tabViewStyle(.automatic)
+                .onAppear {
+                    // Keep tab state deterministic when entering customer flow.
+                    if appState.customerSelectedTab < 0 || appState.customerSelectedTab > 4 {
+                        appState.customerSelectedTab = 0
                     }
                 }
                 .background(AppColors.backgroundPrimary.ignoresSafeArea())

@@ -11,7 +11,6 @@ import SwiftUI
 
 struct ManagerProfileView: View {
     @Environment(AppState.self) var appState
-    @Environment(\.dismiss) private var dismiss
     @State private var showLogoutConfirmation = false
 
     // Live store data
@@ -78,10 +77,8 @@ struct ManagerProfileView: View {
             AppColors.backgroundPrimary.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppSpacing.xl) {
+                    VStack(spacing: AppSpacing.lg) {
                         profileHeader
-
-                        GoldDivider().padding(.horizontal, AppSpacing.screenHorizontal)
 
                         // Store Info
                         sectionHeader("MY BOUTIQUE")
@@ -170,8 +167,6 @@ struct ManagerProfileView: View {
                         .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
 
-                        GoldDivider().padding(.horizontal, AppSpacing.screenHorizontal)
-
                         // Account
                         sectionHeader("ACCOUNT")
                         VStack(spacing: 0) {
@@ -182,8 +177,6 @@ struct ManagerProfileView: View {
                         .padding(.horizontal, AppSpacing.sm)
                         .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
-
-                        GoldDivider().padding(.horizontal, AppSpacing.screenHorizontal)
 
                         // Preferences
                         sectionHeader("PREFERENCES")
@@ -196,8 +189,6 @@ struct ManagerProfileView: View {
                         .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
 
-                        GoldDivider().padding(.horizontal, AppSpacing.screenHorizontal)
-
                         // Sign Out
                         Button(action: { showLogoutConfirmation = true }) {
                             HStack(spacing: AppSpacing.sm) {
@@ -206,6 +197,10 @@ struct ManagerProfileView: View {
                             }
                             .foregroundColor(AppColors.error)
                             .frame(maxWidth: .infinity).frame(height: AppSpacing.touchTarget)
+                            .background(
+                                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous)
+                                    .fill(AppColors.error.opacity(0.08))
+                            )
                         }
                         .padding(.horizontal, AppSpacing.screenHorizontal)
 
@@ -213,15 +208,11 @@ struct ManagerProfileView: View {
                             .font(AppTypography.caption).foregroundColor(AppColors.neutral600)
                             .padding(.bottom, AppSpacing.xxxl)
                     }
+                    .padding(.bottom, AppSpacing.xxxl)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark").font(AppTypography.closeButton).foregroundColor(AppColors.textPrimaryDark)
-                    }
-                }
                 ToolbarItem(placement: .principal) {
                     Text("Profile").font(AppTypography.navTitle).foregroundColor(AppColors.textPrimaryDark)
                 }
@@ -297,7 +288,16 @@ struct ManagerProfileView: View {
                 .foregroundColor(AppColors.secondary).padding(.top, AppSpacing.xxs)
             }
         }
-        .padding(.top, AppSpacing.xxl)
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.vertical, AppSpacing.xl)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusXL, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusXL, style: .continuous)
+                .stroke(AppColors.border.opacity(0.2), lineWidth: 0.8)
+        )
+        .padding(.top, AppSpacing.sm)
+        .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 
     private var initials: String {

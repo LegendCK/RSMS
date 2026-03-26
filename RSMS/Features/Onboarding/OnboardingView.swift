@@ -34,7 +34,7 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "0D0D0D").ignoresSafeArea()
+            AppColors.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Skip button
@@ -43,11 +43,16 @@ struct OnboardingView: View {
                     if currentPage < pages.count - 1 {
                         Button(action: { appState.completeOnboarding() }) {
                             Text("Skip")
-                                .font(.system(size: 13, weight: .light))
-                                .foregroundColor(.white.opacity(0.4))
-                                .padding(.trailing, 24)
-                                .padding(.top, 20)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.primary.opacity(0.5))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(Color.primary.opacity(0.15), lineWidth: 0.5))
                         }
+                        .padding(.trailing, 20)
+                        .padding(.top, 16)
                     }
                 }
                 .frame(height: 60)
@@ -68,7 +73,7 @@ struct OnboardingView: View {
                     HStack(spacing: 6) {
                         ForEach(0..<pages.count, id: \.self) { index in
                             Capsule()
-                                .fill(index == currentPage ? AppColors.accent : Color.white.opacity(0.2))
+                                .fill(index == currentPage ? AppColors.accent : Color.primary.opacity(0.2))
                                 .frame(width: index == currentPage ? 24 : 6, height: 6)
                                 .animation(.easeInOut(duration: 0.3), value: currentPage)
                         }
@@ -84,7 +89,8 @@ struct OnboardingView: View {
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
                                 .background(AppColors.accent)
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .clipShape(Capsule())
+                                .shadow(color: AppColors.accent.opacity(0.4), radius: 12, x: 0, y: 6)
                         }
                         .padding(.horizontal, 28)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -96,9 +102,11 @@ struct OnboardingView: View {
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Capsule())
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .strokeBorder(Color.white.opacity(0.35), lineWidth: 1.5)
+                                    Capsule()
+                                        .strokeBorder(Color.primary.opacity(0.2), lineWidth: 1.5)
                                 )
                         }
                         .padding(.horizontal, 28)
@@ -115,32 +123,8 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            // Icon with glow rings
+            // Icon without glow rings
             ZStack {
-                // Outer glow
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [AppColors.accent.opacity(0.18), Color.clear],
-                            center: .center,
-                            startRadius: 30,
-                            endRadius: 130
-                        )
-                    )
-                    .frame(width: 260, height: 260)
-
-                // Decorative rings
-                Circle()
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                    .frame(width: 200, height: 200)
-
-                Circle()
-                    .stroke(AppColors.accent.opacity(0.25), lineWidth: 1)
-                    .frame(width: 150, height: 150)
-
-                Circle()
-                    .stroke(AppColors.accent.opacity(0.5), lineWidth: 1)
-                    .frame(width: 110, height: 110)
 
                 // Icon
                 Image(systemName: data.icon)
@@ -165,12 +149,12 @@ struct OnboardingView: View {
 
                 Text(data.title)
                     .font(.system(size: 32, weight: .black))
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                     .lineSpacing(3)
 
                 Text(data.subtitle)
                     .font(.system(size: 15, weight: .light))
-                    .foregroundColor(.white.opacity(0.55))
+                    .foregroundColor(.secondary)
                     .lineSpacing(5)
                     .padding(.top, 4)
             }

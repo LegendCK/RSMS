@@ -32,43 +32,42 @@ struct SACatalogView: View {
                         .tracking(2)
                         .foregroundColor(AppColors.accent)
                 }
+                // Cart button with item-count badge
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: AppSpacing.md) {
-
-                        // Cart button with item-count badge
-                        Button { cart.showCart = true } label: {
-                            ZStack(alignment: .topTrailing) {
-                                Image(systemName: "cart")
-                                    .font(AppTypography.toolbarIcon)
-                                    .foregroundColor(AppColors.accent)
-                                if cart.itemCount > 0 {
-                                    Text("\(cart.itemCount)")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .frame(minWidth: 14, minHeight: 14)
-                                        .padding(.horizontal, 2)
-                                        .background(AppColors.accent)
-                                        .clipShape(Capsule())
-                                        .offset(x: 8, y: -6)
-                                }
+                    Button { cart.showCart = true } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "cart")
+                                .font(AppTypography.toolbarIcon)
+                                .foregroundColor(AppColors.accent)
+                            if cart.itemCount > 0 {
+                                Text("\(cart.itemCount)")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(minWidth: 14, minHeight: 14)
+                                    .padding(.horizontal, 2)
+                                    .background(AppColors.accent)
+                                    .clipShape(Capsule())
+                                    .offset(x: 8, y: -6)
                             }
                         }
+                    }
+                }
 
-                        // Filter button with active-count badge
-                        Button { vm.showFilters = true } label: {
-                            ZStack(alignment: .topTrailing) {
-                                Image(systemName: "slider.horizontal.3")
-                                    .font(AppTypography.toolbarIcon)
-                                    .foregroundColor(AppColors.accent)
-                                if vm.activeFilterCount > 0 {
-                                    Text("\(vm.activeFilterCount)")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .frame(width: 14, height: 14)
-                                        .background(AppColors.accent)
-                                        .clipShape(Circle())
-                                        .offset(x: 6, y: -6)
-                                }
+                // Filter button with active-count badge
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { vm.showFilters = true } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(AppTypography.toolbarIcon)
+                                .foregroundColor(AppColors.accent)
+                            if vm.activeFilterCount > 0 {
+                                Text("\(vm.activeFilterCount)")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 14, height: 14)
+                                    .background(AppColors.accent)
+                                    .clipShape(Circle())
+                                    .offset(x: 6, y: -6)
                             }
                         }
                     }
@@ -117,7 +116,7 @@ struct SACatalogView: View {
                 }
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
-            .padding(.vertical, AppSpacing.sm)
+            .padding(.vertical, 6)
         }
     }
 
@@ -178,7 +177,7 @@ struct SACatalogView: View {
             }
         }
         .padding(.horizontal, AppSpacing.screenHorizontal)
-        .padding(.vertical, AppSpacing.sm)
+        .padding(.vertical, 6)
         .background(AppColors.backgroundSecondary.opacity(0.55))
     }
 

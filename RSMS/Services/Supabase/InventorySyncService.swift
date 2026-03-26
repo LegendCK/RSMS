@@ -2,7 +2,7 @@
 //  InventorySyncService.swift
 //  infosys2
 //
-//  Syncs InventoryByLocation between local SwiftData and Supabase ⁠ inventory ⁠.
+//  Syncs InventoryByLocation between local SwiftData and Supabase ⁠ inventory ⁠.
 //
 
 import Foundation
@@ -22,16 +22,11 @@ final class InventorySyncService {
     }
 
     func upsertInventory(_ row: InventoryByLocation) async throws -> InventoryDTO {
-        struct InventoryUpsertPayload: Encodable {
-            let location_id: UUID
-            let product_id: UUID
-            let quantity: Int
-        }
-        
-        let payload = InventoryUpsertPayload(
-            location_id: row.locationId,
-            product_id: row.productId,
-            quantity: row.quantity
+        let payload = InventoryUpsertDTO(
+            locationId: row.locationId,
+            productId: row.productId,
+            quantity: row.quantity,
+            reorderPoint: row.reorderPoint
         )
 
         let dto: InventoryDTO = try await client
@@ -71,6 +66,8 @@ final class InventorySyncService {
             let key = compositeKey(locationId: row.locationId, productId: row.productId)
             if let local = byComposite[key] {
                 local.quantity = row.quantity
+                local.reorderPoint = row.reorderPoint ?? 5
+                local.updatedAt = row.updatedAt ?? Date()
             } else {
                 let product = productById[row.productId]
                 let created = InventoryByLocation(
@@ -80,8 +77,9 @@ final class InventorySyncService {
                     productName: product?.name ?? "Unknown Product",
                     categoryName: product?.categoryName ?? "Unknown",
                     quantity: row.quantity,
-                    reorderPoint: 0
+                    reorderPoint: row.reorderPoint ?? 5
                 )
+                created.updatedAt = row.updatedAt ?? Date()
                 modelContext.insert(created)
                 byComposite[key] = created
             }

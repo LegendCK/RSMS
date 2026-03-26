@@ -99,14 +99,14 @@ enum AdminReportExportService {
 
         if scope == .inventory || scope == .all {
             lines.append("[Inventory Data]")
-            lines.append("location_id,product_id,quantity,reserved_quantity,available_qty")
+            lines.append("location_id,product_id,quantity,reorder_point,updated_at")
             for row in snapshot.inventory {
                 lines.append(csv([
                     row.locationId.uuidString,
                     row.productId.uuidString,
                     "\(row.quantity)",
-                    "\(row.reservedQuantity)",
-                    "\(row.availableQty ?? 0)"
+                    "\(row.reorderPoint ?? 5)",
+                    iso(row.updatedAt ?? Date())
                 ]))
             }
             lines.append("")
@@ -209,7 +209,7 @@ enum AdminReportExportService {
                 y += 17
                 row("Inventory Rows", "\(snapshot.inventory.count)")
                 row("Total Units", "\(snapshot.inventory.reduce(0) { $0 + $1.quantity })")
-                row("Low Stock Rows", "\(snapshot.inventory.filter { $0.quantity <= 5 }.count)")
+                row("Low Stock Rows", "\(snapshot.inventory.filter { $0.quantity <= ($0.reorderPoint ?? 5) }.count)")
                 y += 8
             }
 

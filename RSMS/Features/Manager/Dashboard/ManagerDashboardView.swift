@@ -21,6 +21,7 @@ struct ManagerDashboardView: View {
     @State private var statusMessage: String?
     @State private var upcomingAppointments: [AppointmentDTO] = []
     @State private var appointmentClientsById: [UUID: ClientDTO] = [:]
+    @State private var aiInsights: [AIInsightsEngine.DashboardInsight] = []
 
     private let service = ManagerDashboardService.shared
 
@@ -45,28 +46,13 @@ struct ManagerDashboardView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarRole(.editor)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("MAISON LUXE")
                     .font(.system(size: 12, weight: .black))
                     .tracking(4)
                     .foregroundColor(AppColors.textPrimaryDark)
-            }
-
-            if appState.currentUserRole == .boutiqueManager {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showProfile = true }) {
-                        ZStack {
-                            Circle()
-                                .fill(AppColors.accent.opacity(0.12))
-                                .frame(width: 30, height: 30)
-
-                            Text(managerInitials)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(AppColors.accent)
-                        }
-                    }
-                }
             }
         }
         .sheet(isPresented: $showProfile) {
@@ -88,26 +74,45 @@ struct ManagerDashboardView: View {
 
     private var dashboardContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: AppSpacing.lg) {
+            VStack(spacing: AppSpacing.xl) {
                 dashboardHeader
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
 
                 if let statusMessage {
                     statusBanner(message: statusMessage, isWarning: isShowingCachedData)
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
                 }
 
                 if let snapshot {
-                    heroMetrics(snapshot)
-                    supportingMetrics(snapshot)
+                    VStack(spacing: AppSpacing.sm) {
+                        heroMetrics(snapshot)
+                        supportingMetrics(snapshot)
+                    }
+
+                    // AI Insights Section
+                    AIInsightsCard(insights: aiInsights)
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                        .padding(.top, AppSpacing.sm)
+                        .onChange(of: snapshot.syncedAt) { _, _ in
+                            aiInsights = AIInsightsEngine.shared.generateManagerInsights(snapshot: snapshot)
+                        }
+                        .onAppear {
+                            aiInsights = AIInsightsEngine.shared.generateManagerInsights(snapshot: snapshot)
+                        }
+
                     operationalSignals(snapshot)
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
                     staffPerformanceSection(snapshot)
                     appointmentSection(snapshot)
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
                     upcomingAppointmentsSection
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
                 } else {
                     loadingState
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.md)
             .padding(.bottom, AppSpacing.xxxl)
         }
@@ -182,44 +187,38 @@ struct ManagerDashboardView: View {
     }
 
     private func heroMetrics(_ snapshot: ManagerDashboardSnapshot) -> some View {
-        LazyVGrid(columns: heroMetricColumns, spacing: AppSpacing.md) {
-            Button(action: { showSalesAnalytics = true }) {
-                dashboardCard(
-                    content: {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            sectionTitle("KEY METRICS")
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: AppSpacing.sm) {
+                    // Sales vs Target card
+                    Button(action: { showSalesAnalytics = true }) {
                         VStack(alignment: .leading, spacing: AppSpacing.sm) {
                             HStack {
-                                sectionTitle("SALES VS TARGET")
+                                Text("SALES VS TARGET")
+                                    .font(AppTypography.overline)
+                                    .tracking(1.6)
+                                    .foregroundColor(AppColors.accent)
                                 Spacer()
                                 performanceBadge(progress: snapshot.sales.targetProgress)
                             }
 
-                            HStack(alignment: .lastTextBaseline) {
-                                Text(currency(snapshot.sales.actualRevenue))
-                                    .font(AppTypography.displaySmall)
-                                    .foregroundColor(AppColors.textPrimaryDark)
-
-                                Spacer()
-
-                                VStack(alignment: .trailing, spacing: 4) {
-                                    Text("Target")
-                                        .font(AppTypography.caption)
-                                        .foregroundColor(AppColors.textSecondaryDark)
-                                    Text(currency(snapshot.sales.targetRevenue))
-                                        .font(AppTypography.label)
-                                        .foregroundColor(AppColors.textPrimaryDark)
-                                }
-                            }
+                            Text(currency(snapshot.sales.actualRevenue))
+                                .font(AppTypography.displaySmall)
+                                .foregroundColor(AppColors.textPrimaryDark)
 
                             ProgressView(value: min(max(snapshot.sales.targetProgress, 0), 1.25))
                                 .tint(progressColor(progress: snapshot.sales.targetProgress))
 
                             HStack {
-                                Text("Gap")
+                                Text("Target: \(currency(snapshot.sales.targetRevenue))")
                                     .font(AppTypography.caption)
                                     .foregroundColor(AppColors.textSecondaryDark)
                                 Spacer()
-                                Text(snapshot.sales.revenueGap > 0 ? currency(snapshot.sales.revenueGap) : "Ahead by \(currency(abs(snapshot.sales.revenueGap)))")
-                                    .font(AppTypography.label)
+                                Text(snapshot.sales.revenueGap > 0 ? "Gap: \(currency(snapshot.sales.revenueGap))" : "Ahead \(currency(abs(snapshot.sales.revenueGap)))")
+                                    .font(AppTypography.caption)
                                     .foregroundColor(progressColor(progress: snapshot.sales.targetProgress))
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
@@ -228,87 +227,116 @@ struct ManagerDashboardView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "chart.bar.xaxis")
                                     .font(.system(size: 9, weight: .medium))
-                                Text("Tap for detailed analytics")
+                                Text("Tap for analytics")
                                     .font(.system(size: 9, weight: .medium))
                             }
-                            .foregroundColor(AppColors.accent.opacity(0.6))
-                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .foregroundColor(AppColors.accent.opacity(0.5))
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .frame(minHeight: 164, alignment: .topLeading)
-                    },
-                    glassConfig: .thin,
-                    padding: AppSpacing.md
-                )
-            }
-            .buttonStyle(.plain)
+                        .frame(maxHeight: .infinity, alignment: .topLeading)
+                        .padding(AppSpacing.md)
+                        .frame(width: 280)
+                        .frame(height: 196)
+                        .keyMetricCardSurface(cornerRadius: AppSpacing.radiusMedium)
+                    }
+                    .buttonStyle(.plain)
 
-            dashboardCard(
-                content: {
+                    // Conversion rate card
                     VStack(alignment: .leading, spacing: AppSpacing.sm) {
                         HStack {
-                            sectionTitle("CONVERSION RATE")
+                            Text("CONVERSION")
+                                .font(AppTypography.overline)
+                                .tracking(1.6)
+                                .foregroundColor(AppColors.accent)
                             Spacer()
                             Image(systemName: "chart.line.uptrend.xyaxis")
                                 .foregroundColor(AppColors.secondary)
+                                .font(.system(size: 14))
                         }
 
                         Text(percent(snapshot.sales.conversionRate))
-                            .font(AppTypography.displaySmall)
+                            .font(.system(size: 38, weight: .bold, design: .rounded))
                             .foregroundColor(AppColors.textPrimaryDark)
 
-                        Text("Transactions closed from attended appointments this month")
-                            .font(AppTypography.bodySmall)
+                        Text("Closed from appointments")
+                            .font(AppTypography.caption)
                             .foregroundColor(AppColors.textSecondaryDark)
 
-                        HStack(spacing: AppSpacing.md) {
+                        HStack(spacing: AppSpacing.lg) {
                             compactMetric(label: "Transactions", value: "\(snapshot.sales.transactions)")
                             compactMetric(label: "Clients", value: "\(snapshot.sales.uniqueClients)")
                         }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .frame(minHeight: 164, alignment: .topLeading)
-                },
-                glassConfig: .thin,
-                padding: AppSpacing.md
-            )
+                    .frame(maxHeight: .infinity, alignment: .topLeading)
+                    .padding(AppSpacing.md)
+                    .frame(width: 260)
+                    .frame(height: 196)
+                    .keyMetricCardSurface(cornerRadius: AppSpacing.radiusMedium)
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.vertical, AppSpacing.xs)
+            }
         }
     }
 
     private func supportingMetrics(_ snapshot: ManagerDashboardSnapshot) -> some View {
-        LazyVGrid(columns: metricColumns, spacing: AppSpacing.md) {
-            dashboardMetricCard(
-                label: "Transactions",
-                value: "\(snapshot.sales.transactions)",
-                detail: snapshot.sales.transactions == 0 ? "No sales recorded yet" : "Month-to-date closed",
-                icon: "creditcard.fill",
-                tint: AppColors.accent
-            )
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: AppSpacing.sm) {
+                supportingMetricPill(
+                    label: "Transactions",
+                    value: "\(snapshot.sales.transactions)",
+                    icon: "creditcard.fill",
+                    tint: AppColors.accent
+                )
 
-            dashboardMetricCard(
-                label: "Average Ticket",
-                value: currency(snapshot.sales.averageTicket),
-                detail: "Per completed order",
-                icon: "dollarsign.gauge.chart.leftthird.topthird.rightthird",
-                tint: AppColors.secondary
-            )
+                supportingMetricPill(
+                    label: "Avg Ticket",
+                    value: currency(snapshot.sales.averageTicket),
+                    icon: "dollarsign.circle",
+                    tint: AppColors.secondary
+                )
 
-            dashboardMetricCard(
-                label: "Upcoming Today",
-                value: "\(snapshot.appointments.upcomingToday)",
-                detail: snapshot.appointments.upcomingThisWeek == 0 ? "No further appointments this week" : "\(snapshot.appointments.upcomingThisWeek) this week",
-                icon: "calendar.badge.clock",
-                tint: AppColors.info
-            )
+                supportingMetricPill(
+                    label: "Today",
+                    value: "\(snapshot.appointments.upcomingToday)",
+                    icon: "calendar.badge.clock",
+                    tint: AppColors.info
+                )
 
-            dashboardMetricCard(
-                label: "Appointment Completion",
-                value: percent(snapshot.appointments.completionRate),
-                detail: "\(snapshot.appointments.completed) completed",
-                icon: "checkmark.circle.fill",
-                tint: snapshot.appointments.completionRate >= 0.7 ? AppColors.success : AppColors.warning
-            )
+                supportingMetricPill(
+                    label: "Completion",
+                    value: percent(snapshot.appointments.completionRate),
+                    icon: "checkmark.circle.fill",
+                    tint: snapshot.appointments.completionRate >= 0.7 ? AppColors.success : AppColors.warning
+                )
+            }
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.vertical, AppSpacing.xs)
         }
+    }
+
+    private func supportingMetricPill(label: String, value: String, icon: String, tint: Color) -> some View {
+        HStack(spacing: AppSpacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(tint)
+                .frame(width: 36, height: 36)
+                .background(tint.opacity(0.1))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(AppColors.textPrimaryDark)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(label)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+        }
+        .padding(.horizontal, AppSpacing.md)
+        .padding(.vertical, AppSpacing.sm)
+        .keyMetricCardSurface(cornerRadius: AppSpacing.radiusMedium)
     }
 
     private func operationalSignals(_ snapshot: ManagerDashboardSnapshot) -> some View {
@@ -349,7 +377,7 @@ struct ManagerDashboardView: View {
     }
 
     private func staffPerformanceSection(_ snapshot: ManagerDashboardSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack {
                 sectionTitle("STAFF PERFORMANCE")
                 Spacer()
@@ -357,6 +385,7 @@ struct ManagerDashboardView: View {
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
             }
+            .padding(.horizontal, AppSpacing.screenHorizontal)
 
             if snapshot.staffRanking.isEmpty {
                 dashboardCard(
@@ -369,64 +398,65 @@ struct ManagerDashboardView: View {
                     glassConfig: .regular,
                     padding: AppSpacing.md
                 )
+                .padding(.horizontal, AppSpacing.screenHorizontal)
             } else {
                 let topRevenue = max(snapshot.staffRanking.first?.revenue ?? 0, 1)
 
-                ForEach(Array(snapshot.staffRanking.prefix(5).enumerated()), id: \.element.id) { index, performer in
-                    dashboardCard(
-                        content: {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppSpacing.sm) {
+                        ForEach(Array(snapshot.staffRanking.prefix(5).enumerated()), id: \.element.id) { index, performer in
                             VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                                HStack(alignment: .center, spacing: AppSpacing.md) {
+                                // Rank badge + name
+                                HStack(spacing: AppSpacing.sm) {
                                     Text("#\(index + 1)")
-                                        .font(AppTypography.overline)
-                                        .foregroundColor(AppColors.accent)
-                                        .frame(width: 34, height: 34)
-                                        .background(AppColors.accent.opacity(0.1))
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .frame(width: 28, height: 28)
+                                        .background(index == 0 ? AppColors.accent : AppColors.accent.opacity(0.6))
                                         .clipShape(Circle())
 
-                                    VStack(alignment: .leading, spacing: 2) {
+                                    VStack(alignment: .leading, spacing: 1) {
                                         Text(performer.name)
                                             .font(AppTypography.label)
                                             .foregroundColor(AppColors.textPrimaryDark)
                                             .lineLimit(1)
-                                            .minimumScaleFactor(0.9)
                                         Text(performer.role)
                                             .font(AppTypography.caption)
                                             .foregroundColor(AppColors.textSecondaryDark)
                                             .lineLimit(1)
                                     }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                                    VStack(alignment: .trailing, spacing: 2) {
-                                        Text(currency(performer.revenue))
-                                            .font(AppTypography.label)
-                                            .foregroundColor(AppColors.textPrimaryDark)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.85)
-                                        Text("\(performer.transactions) sales · \(percent(performer.conversionRate)) conv.")
-                                            .font(AppTypography.caption)
-                                            .foregroundColor(AppColors.textSecondaryDark)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.8)
-                                    }
-                                    .frame(alignment: .trailing)
                                 }
 
-                                ProgressView(value: performer.revenue / topRevenue)
-                                    .tint(AppColors.secondary)
+                                // Revenue
+                                Text(currency(performer.revenue))
+                                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                                    .foregroundColor(AppColors.textPrimaryDark)
 
-                                Text("\(performer.appointmentsHandled) appointments handled")
+                                // Progress bar
+                                ProgressView(value: performer.revenue / topRevenue)
+                                    .tint(index == 0 ? AppColors.accent : AppColors.secondary)
+
+                                // Stats
+                                HStack(spacing: AppSpacing.md) {
+                                    Label("\(performer.transactions)", systemImage: "bag")
+                                    Label(percent(performer.conversionRate), systemImage: "arrow.up.right")
+                                }
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.textSecondaryDark)
+
+                                Text("\(performer.appointmentsHandled) appts")
                                     .font(AppTypography.caption)
                                     .foregroundColor(AppColors.textSecondaryDark)
                             }
-                        },
-                        glassConfig: .regular,
-                        padding: AppSpacing.md
-                    )
+                            .padding(AppSpacing.md)
+                            .frame(width: 200)
+                            .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
+                        }
+                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func appointmentSection(_ snapshot: ManagerDashboardSnapshot) -> some View {
@@ -876,6 +906,19 @@ struct ManagerDashboardView: View {
             upcomingAppointments = []
             appointmentClientsById = [:]
         }
+    }
+}
+
+private extension View {
+    func keyMetricCardSurface(cornerRadius: CGFloat) -> some View {
+        self
+            .background(AppColors.backgroundSecondary.opacity(0.9))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(AppColors.border.opacity(0.22), lineWidth: 0.85)
+            }
+            .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
     }
 }
 

@@ -92,13 +92,15 @@ final class StaffSyncService {
         phone: String,
         password: String,
         role: UserRole,
-        storeId: UUID? = nil
+        storeId: UUID? = nil,
+        corporateEmail: String? = nil,
+        personalEmail: String? = nil
     ) async throws -> UserDTO {
 
         // Capture admin session — ok if nil (CA using local auth)
         let adminSession = try? await client.auth.session
 
-        // Sign up new user in Supabase Auth
+        // Sign up new user in Supabase Auth (using corporate email as login identity)
         let authResponse = try await client.auth.signUp(email: email, password: password)
         let authUser = authResponse.user
 
@@ -112,7 +114,10 @@ final class StaffSyncService {
                 lastName: lastName,
                 email: email.lowercased(),
                 phone: phone.isEmpty ? nil : phone,
-                isActive: true
+                isActive: true,
+                mustResetPassword: true,
+                corporateEmail: corporateEmail?.lowercased(),
+                personalEmail: personalEmail?.lowercased()
             )
 
             let dto: UserDTO = try await client
@@ -122,6 +127,20 @@ final class StaffSyncService {
                 .single()
                 .execute()
                 .value
+
+            // Send welcome email to personal email (fire-and-forget)
+            if let targetEmail = personalEmail ?? (corporateEmail != nil ? nil : Optional(email)) {
+                Task {
+                    try? await self.sendWelcomeEmail(
+                        personalEmail: targetEmail,
+                        corporateEmail: corporateEmail ?? email,
+                        recipientName: "\(firstName) \(lastName)",
+                        temporaryPassword: password,
+                        accountType: "staff",
+                        roleName: role.rawValue
+                    )
+                }
+            }
 
             // Restore admin session
             if let adminSession {
@@ -296,5 +315,38 @@ final class StaffSyncService {
         guard !parts.isEmpty else { return ("Staff", "User") }
         if parts.count == 1 { return (parts[0], "—") }
         return (parts[0], parts.dropFirst().joined(separator: " "))
+    }
+
+    // MARK: - Welcome Email
+
+    private struct WelcomeEmailPayload: Encodable {
+        let personalEmail: String
+        let corporateEmail: String
+        let recipientName: String
+        let temporaryPassword: String
+        let accountType: String
+        let roleName: String?
+    }
+
+    func sendWelcomeEmail(
+        personalEmail: String,
+        corporateEmail: String,
+        recipientName: String,
+        temporaryPassword: String,
+        accountType: String,
+        roleName: String? = nil
+    ) async throws {
+        let payload = WelcomeEmailPayload(
+            personalEmail: personalEmail,
+            corporateEmail: corporateEmail,
+            recipientName: recipientName,
+            temporaryPassword: temporaryPassword,
+            accountType: accountType,
+            roleName: roleName
+        )
+        let _: Data = try await client.functions.invoke(
+            "send-welcome-email",
+            options: FunctionInvokeOptions(body: payload)
+        )
     }
 }

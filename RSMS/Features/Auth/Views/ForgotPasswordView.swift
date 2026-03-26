@@ -14,20 +14,18 @@ struct ForgotPasswordView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.white.ignoresSafeArea()
+                AppColors.backgroundPrimary.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
 
                         // ── Brand Mark ──────────────────────────────
                         VStack(spacing: 10) {
-                            Image(systemName: "diamond.fill")
-                                .font(.system(size: 38, weight: .regular))
-                                .foregroundColor(AppColors.accent)
+                            MaisonLuxeLogo(size: 60)
                             Text("MAISON LUXE")
                                 .font(.system(size: 15, weight: .semibold))
                                 .tracking(6)
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                         }
                         .padding(.top, 72)
                         .padding(.bottom, 36)
@@ -47,7 +45,7 @@ struct ForgotPasswordView: View {
                         VStack(spacing: 8) {
                             Text("Forgot Password?")
                                 .font(.system(size: 28, weight: .bold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             Text("Enter your email and we'll send\na secure reset link.")
                                 .font(.system(size: 15, weight: .regular))
                                 .foregroundColor(.secondary)
@@ -84,7 +82,7 @@ struct ForgotPasswordView: View {
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 56)
                                 .background(AppColors.accent)
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .clipShape(Capsule())
                             }
                             .disabled(viewModel.isLoading)
 
@@ -96,6 +94,9 @@ struct ForgotPasswordView: View {
                         .padding(.horizontal, 32)
                         .padding(.bottom, 60)
                     }
+                }
+                .onTapGesture {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
