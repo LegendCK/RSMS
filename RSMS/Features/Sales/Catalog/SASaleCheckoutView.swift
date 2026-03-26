@@ -153,6 +153,9 @@ struct SASaleCheckoutView: View {
 
     private var paymentStep: some View {
         VStack(spacing: AppSpacing.xl) {
+            // Fulfillment mode selector
+            fulfillmentModeSection
+
             // Payment method list
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 sectionLabel("PAYMENT METHOD")
@@ -214,6 +217,87 @@ struct SASaleCheckoutView: View {
 
             // Tax-free toggle
             taxFreeSection
+        }
+    }
+
+    // MARK: - Fulfillment Mode Section
+
+    @ViewBuilder
+    private var fulfillmentModeSection: some View {
+        @Bindable var cartBinding = cart
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            sectionLabel("FULFILLMENT")
+            VStack(spacing: 0) {
+                // Hand Over Now (in stock)
+                Button { cart.isHandoverNow = true } label: {
+                    HStack(spacing: AppSpacing.md) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(cart.isHandoverNow
+                                      ? AppColors.success.opacity(0.12)
+                                      : AppColors.backgroundTertiary)
+                                .frame(width: 40, height: 40)
+                            Image(systemName: "bag.fill.badge.checkmark")
+                                .font(.system(size: 16, weight: .light))
+                                .foregroundColor(cart.isHandoverNow ? AppColors.success : AppColors.neutral500)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Hand Over Now")
+                                .font(AppTypography.label)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                            Text("Item is in stock — give to customer directly")
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                        }
+                        Spacer()
+                        Image(systemName: cart.isHandoverNow ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 20))
+                            .foregroundColor(cart.isHandoverNow ? AppColors.success : AppColors.neutral500)
+                    }
+                    .padding(.horizontal, AppSpacing.md)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+
+                Divider().padding(.leading, 60)
+
+                // Order for Delivery (not in stock)
+                Button { cart.isHandoverNow = false } label: {
+                    HStack(spacing: AppSpacing.md) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(!cart.isHandoverNow
+                                      ? AppColors.accent.opacity(0.12)
+                                      : AppColors.backgroundTertiary)
+                                .frame(width: 40, height: 40)
+                            Image(systemName: "shippingbox.fill")
+                                .font(.system(size: 16, weight: .light))
+                                .foregroundColor(!cart.isHandoverNow ? AppColors.accent : AppColors.neutral500)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Order for Delivery")
+                                .font(AppTypography.label)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                            Text("Not in stock — ship to customer's address")
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                        }
+                        Spacer()
+                        Image(systemName: !cart.isHandoverNow ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 20))
+                            .foregroundColor(!cart.isHandoverNow ? AppColors.accent : AppColors.neutral500)
+                    }
+                    .padding(.horizontal, AppSpacing.md)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+            }
+            .background(AppColors.backgroundSecondary)
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
+                    .stroke(cart.isHandoverNow ? AppColors.success.opacity(0.3) : AppColors.accent.opacity(0.3), lineWidth: 1)
+            )
         }
     }
 
@@ -561,6 +645,37 @@ struct SASaleCheckoutView: View {
                             .stroke(AppColors.success.opacity(0.3), lineWidth: 1)
                     )
                 }
+            }
+
+            // Fulfillment mode
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                sectionLabel("FULFILLMENT")
+                HStack(spacing: AppSpacing.md) {
+                    Image(systemName: cart.isHandoverNow ? "bag.fill.badge.checkmark" : "shippingbox.fill")
+                        .font(.system(size: 18, weight: .light))
+                        .foregroundColor(cart.isHandoverNow ? AppColors.success : AppColors.accent)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(cart.isHandoverNow ? "Hand Over Now" : "Order for Delivery")
+                            .font(AppTypography.label)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        Text(cart.isHandoverNow
+                             ? "Item given to customer in store"
+                             : "Will be shipped to customer's address")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    Spacer()
+                }
+                .padding(AppSpacing.md)
+                .background(cart.isHandoverNow
+                            ? AppColors.success.opacity(0.06)
+                            : AppColors.backgroundSecondary)
+                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
+                        .stroke(cart.isHandoverNow ? AppColors.success.opacity(0.3) : Color.clear, lineWidth: 1)
+                )
             }
 
             // Payment method

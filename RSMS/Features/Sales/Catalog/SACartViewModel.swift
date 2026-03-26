@@ -34,6 +34,11 @@ final class SACartViewModel {
     var taxFreeReason: String = ""   // e.g. document reference number
     var selectedExemptionReason: TaxExemptionReason = .diplomaticMission
 
+    // MARK: - Fulfillment mode (in-stock hand-over vs order for delivery)
+    /// When true the item is in stock and handed to the customer on the spot.
+    /// When false the SA creates an order that will be shipped to the customer.
+    var isHandoverNow: Bool = true
+
     // MARK: - Checkout flow state
     var showCart        = false
     var showCheckout    = false
@@ -42,6 +47,7 @@ final class SACartViewModel {
     var errorMessage: String? = nil
     var completedOrderNumber: String? = nil
     var completedPaymentMethod: String = ""
+    var completedIsHandover: Bool = true
 
     // MARK: - Computed: counts & subtotal
 
@@ -145,8 +151,10 @@ final class SACartViewModel {
         isTaxFree              = false
         taxFreeReason          = ""
         selectedExemptionReason = .diplomaticMission
+        isHandoverNow          = true
         completedOrderNumber   = nil
         completedPaymentMethod = ""
+        completedIsHandover    = true
         showCart               = false
         showCheckout           = false
         showConfirmation       = false
@@ -179,17 +187,22 @@ final class SACartViewModel {
             return parts.joined(separator: " | ")
         }()
 
+        // Determine fulfillment mode: hand-over (in-store, completed) vs order for delivery (ship, pending)
+        let orderStatus: OrderStatus = isHandoverNow ? .completed : .pending
+        let fulfillment: FulfillmentType = isHandoverNow ? .inStore : .shipFromStore
+        let channel = isHandoverNow ? "in_store" : "ship_from_store"
+
         // 1 ── Local SwiftData save (always succeeds)
         let order = Order(
             orderNumber:         orderNumber,
             customerEmail:       selectedClient?.email ?? "walk-in@maisonluxe.com",
-            status:              .completed,
+            status:              orderStatus,
             orderItems:          buildItemsJSON(),
             subtotal:            subtotal,
             tax:                 tax,
             discount:            discountAmount,
             total:               total,
-            fulfillmentType:     .inStore,
+            fulfillmentType:     fulfillment,
             paymentMethod:       paymentMethod,
             notes:               notes,
             salesAssociateEmail: associateProfile?.email ?? "",
@@ -220,6 +233,7 @@ final class SACartViewModel {
                         discountTotal: self.discountAmount,
                         taxTotal: self.tax,
                         grandTotal: self.total,
+                        channel: channel,
                         storeId: associateProfile?.storeId,
                         isTaxFree: self.isTaxFree,
                         taxFreeReason: formattedTaxFreeReason,
@@ -239,13 +253,14 @@ final class SACartViewModel {
             return
         }
 
-        // 3 ── Inventory decrement (non-fatal)
-        if let storeId = associateProfile?.storeId {
+        // 3 ── Inventory decrement (non-fatal, only for hand-over sales where stock leaves now)
+        if isHandoverNow, let storeId = associateProfile?.storeId {
             await decrementInventory(storeId: storeId)
         }
 
         completedOrderNumber   = orderNumber
         completedPaymentMethod = paymentMethod
+        completedIsHandover    = isHandoverNow
         showCheckout           = false
         showConfirmation       = true
     }
@@ -294,6 +309,7 @@ final class SACartViewModel {
         discountTotal: Double,
         taxTotal: Double,
         grandTotal: Double,
+        channel: String,
         storeId: UUID?,
         isTaxFree: Bool,
         taxFreeReason: String,
@@ -312,7 +328,7 @@ final class SACartViewModel {
                     discountTotal: discountTotal,
                     taxTotal:      taxTotal,
                     grandTotal:    grandTotal,
-                    channel:       "in_store",
+                    channel:       channel,
                     storeId:       storeId,
                     isTaxFree:     isTaxFree,
                     taxFreeReason: taxFreeReason,

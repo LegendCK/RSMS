@@ -161,6 +161,8 @@ serve(async (req: Request) => {
     // For online sales the JWT owner IS the client — resolve by auth.uid or email.
     const payload: CreateOrderPayload = await req.json();
     const isPOS = payload.channel === "in_store";
+    // SA can place orders for delivery (ship_from_store) when item is not in stock
+    const isSADeliveryOrder = payload.channel === "ship_from_store";
 
     let clientId: string | null = null;
 
@@ -261,7 +263,7 @@ serve(async (req: Request) => {
         order_number: payload.orderNumber,
         client_id: clientId,
         store_id: store.id,
-        associate_id: isPOS ? user.id : null,
+        associate_id: (isPOS || isSADeliveryOrder) ? user.id : null,
         channel: payload.channel,
         status: isPOS ? "completed" : "pending",
         subtotal: payload.subtotal,
@@ -283,15 +285,19 @@ serve(async (req: Request) => {
     console.log(`[create-order] Order created: ${order.order_number} (${order.id}) → store: ${store.name} [pending]`);
 
     // ── 7. Write initial audit event ──────────────────────────────────────────
+    const auditNote = isPOS
+      ? `In-store POS sale completed${payload.isTaxFree ? " (tax-free)" : ""}`
+      : isSADeliveryOrder
+        ? `Order placed by sales associate for delivery${payload.isTaxFree ? " (tax-free)" : ""}`
+        : `Order placed via ${payload.channel}`;
+
     await admin.from("order_events").insert({
       order_id:    order.id,
       from_status: null,
       to_status:   isPOS ? "completed" : "pending",
       actor_id:    user.id,
-      actor_role:  isPOS ? "sales_associate" : "customer",
-      notes:       isPOS
-        ? `In-store POS sale completed${payload.isTaxFree ? " (tax-free)" : ""}`
-        : `Order placed via ${payload.channel}`,
+      actor_role:  (isPOS || isSADeliveryOrder) ? "sales_associate" : "customer",
+      notes:       auditNote,
     });
 
     // ── 8. Insert order_items (best-effort) ────────────────────────────────────

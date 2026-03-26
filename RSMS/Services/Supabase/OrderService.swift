@@ -126,8 +126,11 @@ final class OrderService {
         // Sometimes the Supabase Swift client suppresses the Authorization header for edge functions,
         // so we manually inject the session's token and apikey to guarantee Kong validation pass.
         var customHeaders = ["apikey": SupabaseConfig.anonKey]
-        if let session = try? await client.auth.session {
+        do {
+            let session = try await client.auth.session
             customHeaders["Authorization"] = "Bearer \(session.accessToken)"
+        } catch {
+            throw OrderServiceError.edgeFunctionError("No active session — please sign in again.")
         }
 
         let response: EdgeResponse = try await client.functions.invoke(

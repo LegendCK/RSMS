@@ -55,7 +55,7 @@ struct SASaleConfirmationView: View {
 
                     // Title
                     VStack(spacing: 6) {
-                        Text("Sale Complete")
+                        Text(cart.completedIsHandover ? "Sale Complete" : "Order Placed")
                             .font(.system(size: 28, weight: .black))
                             .foregroundColor(AppColors.textPrimaryDark)
 
@@ -65,6 +65,20 @@ struct SASaleConfirmationView: View {
                                 .tracking(1)
                                 .foregroundColor(AppColors.accent)
                         }
+
+                        // Fulfillment mode badge
+                        Label(
+                            cart.completedIsHandover ? "Handed Over in Store" : "Ordered for Delivery",
+                            systemImage: cart.completedIsHandover ? "bag.fill.badge.checkmark" : "shippingbox.fill"
+                        )
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(cart.completedIsHandover ? AppColors.success : AppColors.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(
+                            (cart.completedIsHandover ? AppColors.success : AppColors.accent).opacity(0.12)
+                        )
+                        .clipShape(Capsule())
 
                         if cart.isTaxFree {
                             Label("Tax-Free Sale", systemImage: "checkmark.seal.fill")
@@ -332,8 +346,8 @@ struct SASaleConfirmationView: View {
             customerEmail:  cart.selectedClient?.email   ?? "—",
             storeName:      "Maison Luxe",
             storeAddress:   "In-Store Purchase",
-            shippingAddress: "—",
-            fulfillmentLabel: "In-Store",
+            shippingAddress: cart.completedIsHandover ? "Handed over in store" : "Will be shipped",
+            fulfillmentLabel: cart.completedIsHandover ? "In-Store Handover" : "Ship from Store",
             paymentMethod:  cart.completedPaymentMethod,
             currencyCode:   "INR",
             items:          lineItems,

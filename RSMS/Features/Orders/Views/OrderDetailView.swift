@@ -36,12 +36,32 @@ struct OrderDetailView: View {
         .pending, .confirmed, .processing, .readyForPickup, .completed
     ]
 
+    /// In-store hand-over: item was given directly — only one step.
+    private let inStoreFlow: [OrderStatus] = [
+        .completed
+    ]
+
+    /// Ship-from-store (SA ordered for delivery): standard shipping flow.
+    private let shipFromStoreFlow: [OrderStatus] = [
+        .pending, .confirmed, .processing, .shipped, .delivered
+    ]
+
     private var activeFlow: [OrderStatus] {
-        order.fulfillmentType == .bopis ? bopisStatusFlow : statusFlow
+        switch order.fulfillmentType {
+        case .inStore:       return inStoreFlow
+        case .bopis:         return bopisStatusFlow
+        case .shipFromStore: return shipFromStoreFlow
+        default:             return statusFlow
+        }
     }
 
     private var currentStepIndex: Int {
         activeFlow.firstIndex(of: order.status) ?? 0
+    }
+
+    /// Whether this was an in-store hand-over (completed immediately).
+    private var isInStoreHandover: Bool {
+        order.fulfillmentType == .inStore && order.status == .completed
     }
 
     private var policy: PricingPolicySettings {
@@ -60,8 +80,13 @@ struct OrderDetailView: View {
 
             // ── Status timeline ────────────────────────────────────────
             Section {
-                statusTimeline
-                    .padding(.vertical, AppSpacing.sm)
+                if isInStoreHandover {
+                    inStoreCompletedBanner
+                        .padding(.vertical, AppSpacing.sm)
+                } else {
+                    statusTimeline
+                        .padding(.vertical, AppSpacing.sm)
+                }
             } header: {
                 Label("Order Status", systemImage: "shippingbox")
                     .font(.footnote.weight(.semibold))
@@ -82,11 +107,34 @@ struct OrderDetailView: View {
             // ── Financial summary ──────────────────────────────────────
             Section {
                 summaryRow(label: "Subtotal", value: formatCurrency(order.subtotal))
-                summaryRow(label: "Tax", value: formatCurrency(order.tax))
+                if order.isTaxFree {
+                    HStack {
+                        Text("Tax")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Text("EXEMPT")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(AppColors.success)
+                            .clipShape(Capsule())
+                        Spacer()
+                        Text(formatCurrency(order.tax))
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.success)
+                    }
+                } else {
+                    summaryRow(label: "Tax", value: formatCurrency(order.tax))
+                }
                 if order.discount > 0 {
                     summaryRow(label: "Discount", value: "-\(formatCurrency(order.discount))")
                 }
-                summaryRow(label: "Shipping", value: "Free")
+                if order.fulfillmentType == .inStore {
+                    summaryRow(label: "Shipping", value: "N/A")
+                } else {
+                    summaryRow(label: "Shipping", value: "Free")
+                }
                 HStack {
                     Text("Total")
                         .font(.headline)
@@ -99,6 +147,17 @@ struct OrderDetailView: View {
                 Label("Summary", systemImage: "indianrupeesign.circle")
                     .font(.footnote.weight(.semibold))
                     .textCase(nil)
+            }
+
+            // ── Tax Exemption (if applicable) ────────────────────────
+            if order.isTaxFree {
+                Section {
+                    taxExemptionRow
+                } header: {
+                    Label("Tax Exemption", systemImage: "checkmark.seal")
+                        .font(.footnote.weight(.semibold))
+                        .textCase(nil)
+                }
             }
 
             // ── Delivery ───────────────────────────────────────────────
@@ -224,6 +283,29 @@ struct OrderDetailView: View {
                 .padding(.vertical, 7)
                 .background(statusColor(order.status).opacity(0.12))
                 .clipShape(Capsule())
+
+                // In-store & Tax-free badges
+                HStack(spacing: 8) {
+                    if order.fulfillmentType == .inStore {
+                        Label("In-Store Purchase", systemImage: "bag.fill.badge.checkmark")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(AppColors.success)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(AppColors.success.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+
+                    if order.isTaxFree {
+                        Label("Tax Exempt", systemImage: "checkmark.seal.fill")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(AppColors.warning)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(AppColors.warning.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, AppSpacing.lg)
@@ -360,11 +442,85 @@ struct OrderDetailView: View {
         .padding(.vertical, 2)
     }
 
+    // MARK: - In-Store Completed Banner
+
+    private var inStoreCompletedBanner: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(AppColors.success)
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Collected in Store")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.primary)
+                    Text("This item was purchased and handed over at the boutique.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+
+            if !order.salesAssociateEmail.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.badge.shield.checkmark")
+                        .font(.caption)
+                        .foregroundColor(AppColors.accent)
+                    Text("Assisted by store associate")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Tax Exemption Row
+
+    private var taxExemptionRow: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(spacing: AppSpacing.md) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.title3)
+                    .foregroundColor(AppColors.warning)
+                    .frame(width: 32)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("GST Exempt")
+                        .font(.subheadline.weight(.semibold))
+
+                    if !order.taxFreeReason.isEmpty {
+                        Text(order.taxFreeReason)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: "indianrupeesign.circle.fill")
+                    .font(.caption)
+                    .foregroundColor(AppColors.success)
+                Text("Tax waived on this transaction")
+                    .font(.caption)
+                    .foregroundColor(AppColors.success)
+            }
+        }
+    }
+
     // MARK: - Fulfillment Row
 
     private var fulfillmentRow: some View {
         HStack(spacing: AppSpacing.md) {
-            Image(systemName: order.fulfillmentType == .bopis ? "building.2.fill" : "shippingbox.fill")
+            Image(systemName: fulfillmentIcon)
                 .font(.title3)
                 .foregroundColor(AppColors.accent)
                 .frame(width: 32)
@@ -373,7 +529,8 @@ struct OrderDetailView: View {
                 Text(order.fulfillmentType.rawValue)
                     .font(.subheadline.weight(.semibold))
 
-                if order.fulfillmentType == .bopis {
+                switch order.fulfillmentType {
+                case .inStore:
                     Text(matchedStore?.name ?? "Boutique Store")
                         .font(.footnote)
                         .foregroundColor(.secondary)
@@ -382,7 +539,16 @@ struct OrderDetailView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                } else {
+                case .bopis:
+                    Text(matchedStore?.name ?? "Boutique Store")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                    if let store = matchedStore {
+                        Text("\(store.addressLine1), \(store.city), \(store.country)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                default:
                     Text(parsedAddress)
                         .font(.footnote)
                         .foregroundColor(.secondary)
@@ -390,6 +556,15 @@ struct OrderDetailView: View {
             }
 
             Spacer()
+        }
+    }
+
+    private var fulfillmentIcon: String {
+        switch order.fulfillmentType {
+        case .inStore:       return "bag.fill"
+        case .bopis:         return "building.2.fill"
+        case .shipFromStore: return "shippingbox.fill"
+        case .standard:      return "shippingbox.fill"
         }
     }
 
@@ -631,6 +806,9 @@ struct OrderDetailView: View {
     }
 
     private func statusDescription(_ status: OrderStatus) -> String {
+        if isInStoreHandover && status == .completed {
+            return "Purchased and collected in store"
+        }
         switch status {
         case .pending: return "Awaiting confirmation"
         case .confirmed: return "Your order has been confirmed"
