@@ -143,7 +143,7 @@ struct HomeView: View {
                 .environment(appState)
         }
         .sheet(item: $selectedProduct) { product in
-            ProductDetailView(product: product)
+            ProductDetailView(product: product, isSheet: true)
                 .environment(appState)
         }
         .task {

@@ -18,6 +18,8 @@ enum ProductDetailMode {
 struct ProductDetailView: View {
     @Bindable var product: Product
     let mode: ProductDetailMode
+    let isSheet: Bool
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Query private var allCartItems: [CartItem]
@@ -134,6 +136,10 @@ struct ProductDetailView: View {
             do {
                 try await WishlistService.shared.setWishlisted(productId: product.id, isWishlisted: targetState)
             } catch {
+                if case WishlistService.SyncCapabilityError.missingWishlistTable = error {
+                    print("[ProductDetailView] Wishlist table not available yet; kept local wishlist state for \(product.id)")
+                    return
+                }
                 product.isWishlisted = !targetState
                 try? modelContext.save()
                 print("[ProductDetailView] Wishlist sync failed for \(product.id): \(error)")
@@ -159,15 +165,16 @@ struct ProductDetailView: View {
         mode == .adminCatalog || appState.currentUserRole == .corporateAdmin
     }
 
-    init(product: Product, mode: ProductDetailMode = .storefront) {
+    init(product: Product, mode: ProductDetailMode = .storefront, isSheet: Bool = false) {
         self.product = product
         self.mode = mode
+        self.isSheet = isSheet
     }
 
     // MARK: - Body
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             LinearGradient(
                 colors: [AppColors.backgroundWarmWhite, AppColors.backgroundPrimary],
                 startPoint: .top,
@@ -227,6 +234,19 @@ struct ProductDetailView: View {
                     .padding(.horizontal, 12)
                 }
             }
+
+            // Floating close button — only when presented as a sheet
+            if isSheet {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(.black.opacity(0.40), in: Circle())
+                }
+                .padding(.top, 16)
+                .padding(.leading, 16)
+            }
         }
         .task {
             guard canViewInventory else { return }
@@ -245,21 +265,7 @@ struct ProductDetailView: View {
                         .foregroundColor(AppColors.accent)
                     }
                 } else {
-                    HStack(spacing: 16) {
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3)) {
-                                toggleWishlist()
-                            }
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }) {
-                            Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
-                                .font(.system(size: 16, weight: .light))
-                                .foregroundColor(product.isWishlisted ? AppColors.accent : AppColors.textPrimaryDark)
-                                .frame(width: 34, height: 34)
-                                .background(.ultraThinMaterial, in: Circle())
-                        }
-                        CartShortcutButton()
-                    }
+                    CartShortcutButton()
                 }
             }
         }
@@ -436,6 +442,30 @@ struct ProductDetailView: View {
                 .padding(.top, 14)
                 .padding(.horizontal, AppSpacing.screenHorizontal)
                 Spacer()
+            }
+
+            // Wishlist action inside product view so it remains visible in sheet/fullscreen presentation.
+            if !isAdminMode {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3)) {
+                                toggleWishlist()
+                            }
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }) {
+                            Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
+                                .font(.system(size: 16, weight: .light))
+                                .foregroundColor(product.isWishlisted ? AppColors.accent : .white)
+                                .frame(width: 36, height: 36)
+                                .background(.ultraThinMaterial, in: Circle())
+                        }
+                    }
+                    .padding(.top, 56)
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    Spacer()
+                }
             }
 
             // Expand icon (tap gesture area hint)
