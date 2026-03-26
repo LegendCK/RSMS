@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import StripePaymentSheet
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication,
@@ -84,6 +85,9 @@ struct RSMSApp: App {
                     Task { await ScanManager.shared.cleanUpStaleSessions() }
                     // Pre-fetch tax rates from Supabase so carts use live rates
                     Task { await TaxService.shared.fetchRates() }
+                }
+                .onOpenURL { url in
+                    _ = StripeAPI.handleURLCallback(with: url)
                 }
         }
         .modelContainer(sharedModelContainer)

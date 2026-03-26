@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import StripePaymentSheet
 
 struct CheckoutView: View {
     @Environment(AppState.self) private var appState
@@ -43,9 +44,14 @@ struct CheckoutView: View {
     @State private var cardNumber  = ""
     @State private var cardExpiry  = ""
     @State private var cardCVV     = ""
-
-    // Tax-free verification (staff-only)
     @State private var taxFreeVerification = TaxExemptionVerification()
+
+    // Stripe card details
+    @State private var stripeError: String? = nil
+    @State private var showStripeError  = false
+    @State private var stripePaymentSheet: PaymentSheet?
+    @State private var isPresentingStripePaymentSheet = false
+    @State private var pendingStripeCheckout: PendingStripeCheckoutContext? = nil
 
     // BOPIS store selection
     @State private var selectedPickupStore: StoreDTO? = nil
@@ -57,6 +63,13 @@ struct CheckoutView: View {
     @State private var isPlacing          = false
 
     private let steps = ["Delivery", "Payment", "Review"]
+
+    private struct PendingStripeCheckoutContext {
+        let order: Order
+        let paymentIntentId: String
+        let amount: Double
+        let processedBy: UUID?
+    }
 
     private var cartItems: [CartItem] {
         allCartItems.filter { $0.customerEmail == appState.currentUserEmail }
@@ -124,7 +137,7 @@ struct CheckoutView: View {
     }
 
     var body: some View {
-        ZStack {
+        let baseView = ZStack {
             AppColors.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -211,6 +224,17 @@ struct CheckoutView: View {
             showConfirmation = false
         }
         .task { await refreshPromotions() }
+
+        if let sheet = stripePaymentSheet {
+            baseView.paymentSheet(
+                isPresented: $isPresentingStripePaymentSheet,
+                paymentSheet: sheet
+            ) { result in
+                handleStripePaymentResult(result)
+            }
+        } else {
+            baseView
+        }
     }
 
     // MARK: - Placing Order Overlay
@@ -503,6 +527,10 @@ struct CheckoutView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
+            if selectedPayment == .stripe {
+                stripeCardFormSection
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
             // Tax-free option — visible only to staff roles
             if isStaffUser {
                 GoldDivider()
@@ -862,6 +890,9 @@ struct CheckoutView: View {
             if selectedPayment == .creditCard {
                 guard !cardNumber.isEmpty && !cardExpiry.isEmpty && !cardCVV.isEmpty else { return false }
             }
+            if selectedPayment == .stripe {
+                return true
+            }
             // If tax-free is toggled on, the document reference must be filled
             if taxFreeVerification.isEnabled && !taxFreeVerification.isComplete { return false }
             return true
@@ -1112,10 +1143,89 @@ struct CheckoutView: View {
             print("[CheckoutView] currentClientProfile: \(String(describing: appState.currentClientProfile))")
         }
 
-        // 3. Navigate to confirmation
+        // 3. If Stripe selected, process payment before navigating to confirmation
+        if selectedPayment == .stripe {
+            let amountInPaise = Int(snapshotTotal * 100)
+            let result = await StripePaymentService.shared.preparePaymentSheet(
+                amountInPaise: amountInPaise,
+                currency: "inr",
+                orderId: order.id
+            )
+
+            switch result {
+            case .success(let session):
+                pendingStripeCheckout = PendingStripeCheckoutContext(
+                    order: order,
+                    paymentIntentId: session.paymentIntentId,
+                    amount: snapshotTotal,
+                    processedBy: appState.currentUserProfile?.id
+                )
+                stripePaymentSheet = session.paymentSheet
+                isPlacing = false
+                DispatchQueue.main.async {
+                    isPresentingStripePaymentSheet = true
+                }
+                return
+            case .failure(let error):
+                print("[CheckoutView] ❌ Stripe PaymentSheet preparation failed: \(error.localizedDescription)")
+                stripeError = error.localizedDescription
+                showStripeError = true
+                isPlacing = false
+                return
+            }
+        }
+
+        completeCheckout(order: order)
+    }
+
+    @MainActor
+    private func handleStripePaymentResult(_ result: PaymentSheetResult) {
+        Task { @MainActor in
+            guard let pending = pendingStripeCheckout else {
+                isPlacing = false
+                return
+            }
+
+            switch result {
+            case .completed:
+                do {
+                    try await PaymentRecordService.shared.recordPayment(
+                        orderId: pending.order.id,
+                        method: "stripe",
+                        amount: pending.amount,
+                        currency: "INR",
+                        status: "completed",
+                        paymentReference: pending.paymentIntentId,
+                        stripePaymentIntentId: pending.paymentIntentId,
+                        processedBy: pending.processedBy
+                    )
+                    print("[CheckoutView] ✅ Payment recorded in Supabase")
+                } catch {
+                    print("[CheckoutView] Payment record save failed (non-fatal): \(error)")
+                }
+                completeCheckout(order: pending.order)
+
+            case .canceled:
+                stripeError = "Payment was cancelled."
+                showStripeError = true
+                isPlacing = false
+
+            case .failed(let error):
+                stripeError = error.localizedDescription
+                showStripeError = true
+                isPlacing = false
+            }
+
+            pendingStripeCheckout = nil
+            stripePaymentSheet = nil
+        }
+    }
+
+    @MainActor
+    private func completeCheckout(order: Order) {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        createdOrder     = order
-        isPlacing        = false
+        createdOrder = order
+        isPlacing = false
         showConfirmation = true
     }
 }
@@ -1226,6 +1336,7 @@ struct BOPISStorePickerSheet: View {
 enum CheckoutPayment: String, CaseIterable {
     case applePay   = "Apple Pay"
     case creditCard = "Credit / Debit Card"
+    case stripe     = "Pay with Stripe"
     case googlePay  = "Google Pay"
     case payInStore = "Pay In Store"
 
@@ -1235,6 +1346,7 @@ enum CheckoutPayment: String, CaseIterable {
         switch self {
         case .applePay:   return "Touch ID or Face ID"
         case .creditCard: return "Visa, Mastercard, Amex"
+        case .stripe:     return "Secure card payment via Stripe"
         case .googlePay:  return "Google Wallet"
         case .payInStore: return "Pay at the boutique"
         }
@@ -1244,8 +1356,39 @@ enum CheckoutPayment: String, CaseIterable {
         switch self {
         case .applePay:   return "apple.logo"
         case .creditCard: return "creditcard.fill"
+        case .stripe:     return "creditcard.and.123"
         case .googlePay:  return "g.circle.fill"
         case .payInStore: return "banknote.fill"
+        }
+    }
+}
+
+// MARK: - Stripe Card Form Section
+
+private extension CheckoutView {
+
+    var stripeCardFormSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            sectionHeader("STRIPE PAYMENT")
+
+            HStack(spacing: AppSpacing.xs) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppColors.success)
+                Text("Secured by Stripe")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.success)
+            }
+
+            Text("Card entry and authentication are handled in Stripe's secure payment sheet after you tap Place Order.")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .alert("Payment Error", isPresented: $showStripeError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(stripeError ?? "An unknown error occurred.")
         }
     }
 }
