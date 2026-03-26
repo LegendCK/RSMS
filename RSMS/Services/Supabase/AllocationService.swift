@@ -45,7 +45,7 @@ protocol AllocationServiceProtocol: Sendable {
 
 
 final class AllocationService: AllocationServiceProtocol, @unchecked Sendable {
-    static let shared = AllocationService()
+    nonisolated(unsafe) static let shared = AllocationService()
 
     private let client = SupabaseManager.shared.client
 
@@ -146,7 +146,7 @@ final class AllocationService: AllocationServiceProtocol, @unchecked Sendable {
     func fetchLocations() async throws -> [StoreDTO] {
         try await client
             .from("stores")
-            .select("id, name")
+            .select("id, name, code, address, city, country, is_active")
             .order("name")
             .execute()
             .value

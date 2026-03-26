@@ -8,7 +8,6 @@
 import Foundation
 import Supabase
 
-@MainActor
 final class SupabaseManager {
     static let shared = SupabaseManager()
 

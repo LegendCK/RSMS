@@ -1816,7 +1816,7 @@ private struct DashboardInventoryInsightsSheet: View {
     private var filteredInventoryUnits: Int {
         guard let snapshot else { return 0 }
         return snapshot.inventory
-            .filter { selectedStoreId == nil || $0.storeId == selectedStoreId }
+            .filter { selectedStoreId == nil || $0.locationId == selectedStoreId }
             .reduce(0) { $0 + $1.quantity }
     }
 
@@ -2753,7 +2753,7 @@ struct CreateStoreSheet: View {
             // 2 — Assign the selected manager to this store
             if let manager = selectedManager {
                 struct StoreAssignPatch: Encodable { let store_id: UUID }
-                try? await SupabaseManager.shared.client
+                _ = try? await SupabaseManager.shared.client
                     .from("users")
                     .update(StoreAssignPatch(store_id: newId))
                     .eq("id", value: manager.id.uuidString.lowercased())
@@ -3324,7 +3324,7 @@ private struct AdminClientActivityMonitorView: View {
             return AdminStoreFulfillmentRow(
                 storeId: storeId,
                 storeName: store?.name ?? "Unknown Store",
-                location: [store?.city, store?.region].compactMap { value in
+                location: [store?.city, store?.country].compactMap { value in
                     guard let value, !value.isEmpty else { return nil }
                     return value
                 }.joined(separator: ", "),

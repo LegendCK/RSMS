@@ -37,7 +37,7 @@ final class StoreSyncService {
         let dto: StoreDTO = try await client
             .from("stores")
             .upsert(payload, onConflict: "id")
-            .select("id, name")
+            .select("id, name, code, address, city, country, is_active")
             .single()
             .execute()
             .value
@@ -57,7 +57,7 @@ final class StoreSyncService {
     func fetchActiveBoutiques() async throws -> [StoreDTO] {
         return try await client
             .from("stores")
-            .select("id, name")
+            .select("id, name, code, address, city, country, is_active")
             .eq("is_active", value: true)
             .eq("type", value: "boutique")
             .order("name", ascending: true)
@@ -72,7 +72,7 @@ final class StoreSyncService {
 
         return try await client
             .from("stores")
-            .select("id, name")
+            .select("id, name, code, address, city, country, is_active")
             .in("id", values: uniqueIds.map { $0.uuidString.lowercased() })
             .execute()
             .value
@@ -88,7 +88,7 @@ final class StoreSyncService {
     private func pullRemoteStores(modelContext: ModelContext) async throws {
         let remote: [StoreDTO] = try await client
             .from("stores")
-            .select("id, name")
+            .select("id, name, code, address, city, country, is_active")
             .execute()
             .value
 
@@ -156,23 +156,28 @@ final class StoreSyncService {
 
     private func apply(_ dto: StoreDTO, to location: StoreLocation) {
         location.name = dto.name
+        if let code = dto.code, !code.isEmpty { location.code = code }
+        if let address = dto.address { location.addressLine1 = address }
+        if let city = dto.city, !city.isEmpty { location.city = city }
+        if !dto.country.isEmpty { location.country = dto.country }
+        location.isOperational = dto.isActive
     }
 
     private func makeLocation(from dto: StoreDTO) -> StoreLocation {
         let location = StoreLocation(
-            code: "BTQ-\(dto.id.uuidString.prefix(8))".uppercased(),
+            code: dto.code ?? "BTQ-\(dto.id.uuidString.prefix(8))".uppercased(),
             name: dto.name,
             type: .boutique,
-            addressLine1: "",
-            city: "",
+            addressLine1: dto.address ?? "",
+            city: dto.city ?? "",
             stateProvince: "",
             postalCode: "",
-            country: "",
-            region: "Unassigned",
+            country: dto.country,
+            region: dto.city ?? "Unassigned",
             managerName: "—",
             capacityUnits: 0,
             monthlySalesTarget: 300_000,
-            isOperational: true
+            isOperational: dto.isActive
         )
         location.id = dto.id
         return location

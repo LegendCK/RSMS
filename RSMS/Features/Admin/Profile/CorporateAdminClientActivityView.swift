@@ -157,7 +157,7 @@ struct CorporateAdminClientActivityView: View {
             return AdminFulfillmentRow(
                 id: storeId,
                 storeName: store?.name ?? "Unknown Store",
-                location: [store?.city, store?.region].compactMap { $0 }.joined(separator: ", "),
+                location: [store?.city, store?.country].compactMap { $0 }.joined(separator: ", "),
                 totalOrders: orders.count,
                 pending: statuses["Pending"] ?? 0,
                 processing: statuses["Processing"] ?? 0,
