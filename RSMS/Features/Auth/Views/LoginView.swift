@@ -18,21 +18,19 @@ struct LoginView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.white.ignoresSafeArea()
+                AppColors.backgroundPrimary.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
 
                         // ── Brand Mark ──────────────────────────────
                         VStack(spacing: 10) {
-                            Image(systemName: "diamond.fill")
-                                .font(.system(size: 38, weight: .regular))
-                                .foregroundColor(AppColors.accent)
+                            MaisonLuxeLogo(size: 60)
 
                             Text("MAISON LUXE")
                                 .font(.system(size: 15, weight: .semibold))
                                 .tracking(6)
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                         }
                         .padding(.top, 72)
                         .padding(.bottom, 36)
@@ -41,7 +39,7 @@ struct LoginView: View {
                         VStack(spacing: 6) {
                             Text("Welcome Back")
                                 .font(.system(size: 30, weight: .bold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             Text("Sign in to your account")
                                 .font(.system(size: 15, weight: .regular))
                                 .foregroundColor(.secondary)
@@ -96,7 +94,7 @@ struct LoginView: View {
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 56)
                                 .background(AppColors.accent)
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .clipShape(Capsule())
                             }
                             .disabled(viewModel.isLoading)
 
@@ -115,10 +113,10 @@ struct LoginView: View {
                                         .foregroundColor(AppColors.accent)
                                         .frame(maxWidth: .infinity)
                                         .frame(height: 56)
-                                        .background(Color(.systemGray6))
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        .background(AppColors.backgroundSecondary)
+                                        .clipShape(Capsule())
                                         .overlay(
-                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            Capsule()
                                                 .strokeBorder(AppColors.accent, lineWidth: 1.5)
                                         )
                                 }
@@ -147,6 +145,9 @@ struct LoginView: View {
                     }
                 }
                 .opacity(contentOpacity)
+                .onTapGesture {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
             }
             .onAppear {
                 withAnimation(.easeIn(duration: 0.4)) { contentOpacity = 1 }

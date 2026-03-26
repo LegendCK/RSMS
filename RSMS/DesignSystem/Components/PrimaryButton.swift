@@ -28,7 +28,7 @@ struct PrimaryButton: View {
             .frame(height: AppSpacing.touchTarget + 8)
             .foregroundColor(.white)
             .background(AppColors.accent)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(Capsule())
         }
         .disabled(isLoading)
         .opacity(isLoading ? 0.7 : 1.0)
