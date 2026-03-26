@@ -44,6 +44,7 @@ struct CheckoutView: View {
     @State private var cardNumber  = ""
     @State private var cardExpiry  = ""
     @State private var cardCVV     = ""
+    @State private var taxFreeVerification = TaxExemptionVerification()
 
     // Stripe card details
     @State private var stripeError: String? = nil
@@ -529,6 +530,7 @@ struct CheckoutView: View {
             if selectedPayment == .stripe {
                 stripeCardFormSection
                     .transition(.opacity.combined(with: .move(edge: .top)))
+            }
             // Tax-free option — visible only to staff roles
             if isStaffUser {
                 GoldDivider()
