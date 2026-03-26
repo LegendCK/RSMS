@@ -46,28 +46,13 @@ struct ManagerDashboardView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarRole(.editor)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("MAISON LUXE")
                     .font(.system(size: 12, weight: .black))
                     .tracking(4)
                     .foregroundColor(AppColors.textPrimaryDark)
-            }
-
-            if appState.currentUserRole == .boutiqueManager {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showProfile = true }) {
-                        ZStack {
-                            Circle()
-                                .fill(AppColors.accent.opacity(0.12))
-                                .frame(width: 30, height: 30)
-
-                            Text(managerInitials)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(AppColors.accent)
-                        }
-                    }
-                }
             }
         }
         .sheet(isPresented: $showProfile) {

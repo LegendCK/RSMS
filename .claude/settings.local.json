@@ -61,7 +61,8 @@
       "Bash(xcodebuild -scheme RSMS -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build)",
       "Bash(xcodebuild -scheme RSMS -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build)",
       "Bash(git merge:*)",
-      "Bash(xcodebuild -scheme RSMS -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' clean)"
+      "Bash(xcodebuild -scheme RSMS -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' clean)",
+      "mcp__supabase__list_tables"
     ]
   },
   "enableAllProjectMcpServers": true,

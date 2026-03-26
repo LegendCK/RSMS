@@ -23,7 +23,7 @@ final class InventorySyncService {
 
     func upsertInventory(_ row: InventoryByLocation) async throws -> InventoryDTO {
         let payload = InventoryUpsertDTO(
-            storeId: row.locationId,
+            locationId: row.locationId,
             productId: row.productId,
             quantity: row.quantity,
             reorderPoint: row.reorderPoint
@@ -31,7 +31,7 @@ final class InventorySyncService {
 
         let dto: InventoryDTO = try await client
             .from("inventory")
-            .upsert(payload, onConflict: "store_id,product_id")
+            .upsert(payload, onConflict: "location_id,product_id")
             .select()
             .single()
             .execute()
@@ -63,23 +63,24 @@ final class InventorySyncService {
         )
 
         for row in remote {
-            let key = compositeKey(locationId: row.storeId, productId: row.productId)
+            let locId = row.locationId ?? UUID()
+            let key = compositeKey(locationId: locId, productId: row.productId)
             if let local = byComposite[key] {
                 local.quantity = row.quantity
-                local.reorderPoint = row.reorderPoint
-                local.updatedAt = row.updatedAt
+                local.reorderPoint = row.reorderPoint ?? 5
+                local.updatedAt = row.updatedAt ?? Date()
             } else {
                 let product = productById[row.productId]
                 let created = InventoryByLocation(
-                    locationId: row.storeId,
+                    locationId: locId,
                     productId: row.productId,
                     sku: product?.sku ?? row.productId.uuidString,
                     productName: product?.name ?? "Unknown Product",
                     categoryName: product?.categoryName ?? "Unknown",
                     quantity: row.quantity,
-                    reorderPoint: row.reorderPoint
+                    reorderPoint: row.reorderPoint ?? 5
                 )
-                created.updatedAt = row.updatedAt
+                created.updatedAt = row.updatedAt ?? Date()
                 modelContext.insert(created)
                 byComposite[key] = created
             }

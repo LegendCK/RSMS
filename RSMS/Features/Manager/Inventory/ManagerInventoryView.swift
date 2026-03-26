@@ -678,7 +678,7 @@ struct InvTransfersSubview: View {
         var rows: [InventoryRow] = try await SupabaseManager.shared.client
             .from("inventory")
             .select("id, quantity, product_id")
-            .eq("store_id", value: sourceStoreId.uuidString.lowercased())
+            .eq("location_id", value: sourceStoreId.uuidString.lowercased())
             .eq("product_id", value: transfer.productId.uuidString.lowercased())
             .limit(1)
             .execute()
@@ -688,7 +688,7 @@ struct InvTransfersSubview: View {
             let fallbackRows: [InventoryRow] = try await SupabaseManager.shared.client
                 .from("inventory")
                 .select("id, quantity, product_id, products(name)")
-                .eq("store_id", value: sourceStoreId.uuidString.lowercased())
+                .eq("location_id", value: sourceStoreId.uuidString.lowercased())
                 .limit(200)
                 .execute()
                 .value
@@ -1782,7 +1782,7 @@ private struct TransferRequestSheet: View {
         let rows: [InventoryQtyRow] = try await SupabaseManager.shared.client
             .from("inventory")
             .select("quantity")
-            .eq("store_id", value: storeId.uuidString.lowercased())
+            .eq("location_id", value: storeId.uuidString.lowercased())
             .eq("product_id", value: productId.uuidString.lowercased())
             .limit(1)
             .execute()
@@ -2534,14 +2534,14 @@ struct StartCountSheet: View {
             for item in inventory {
                 guard let counted = counts[item.productId] else { continue }
                 let payload = InventoryUpsertDTO(
-                    storeId:      storeId,
+                    locationId:   storeId,
                     productId:    item.productId,
                     quantity:     counted,
                     reorderPoint: item.reorderPoint
                 )
                 try await client
                     .from("inventory")
-                    .upsert(payload, onConflict: "store_id,product_id")
+                    .upsert(payload, onConflict: "location_id,product_id")
                     .execute()
                 item.quantity = counted
             }

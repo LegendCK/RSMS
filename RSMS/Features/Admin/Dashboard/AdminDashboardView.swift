@@ -221,6 +221,7 @@ struct AdminDashboardView: View {
         .animation(.easeInOut(duration: 0.25), value: lowStockAlerts.count)
         .animation(.easeInOut(duration: 0.25), value: activeSheet?.id)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarRole(.editor)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("MAISON LUXE")
@@ -229,16 +230,10 @@ struct AdminDashboardView: View {
                     .foregroundColor(.primary)
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 14) {
-                    Button(action: { activeSheet = .clientActivity }) {
-                        Image(systemName: "bell.badge")
-                            .font(.system(size: 16, weight: .light))
-                            .foregroundColor(.primary)
-                            .frame(width: 32, height: 32)
-                        Text(adminInitials)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(AppColors.accent)
-                    }
+                Button(action: { activeSheet = .clientActivity }) {
+                    Image(systemName: "bell.badge")
+                        .font(.system(size: 16, weight: .light))
+                        .foregroundColor(.primary)
                 }
             }
         }
@@ -1938,7 +1933,7 @@ private struct DashboardInventoryInsightsSheet: View {
     private var filteredInventoryUnits: Int {
         guard let snapshot else { return 0 }
         return snapshot.inventory
-            .filter { selectedStoreId == nil || $0.storeId == selectedStoreId }
+            .filter { selectedStoreId == nil || $0.locationId == selectedStoreId }
             .reduce(0) { $0 + $1.quantity }
     }
 

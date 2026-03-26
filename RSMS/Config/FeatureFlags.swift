@@ -17,5 +17,5 @@ enum FeatureFlags {
     ///
     /// **Set to `false` to disable OTP entirely** (e.g. during development
     /// or to avoid hitting Resend rate limits).
-    static let isCustomerOTPEnabled: Bool = true
+    static let isCustomerOTPEnabled: Bool = false
 }

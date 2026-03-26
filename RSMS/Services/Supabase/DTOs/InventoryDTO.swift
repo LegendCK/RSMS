@@ -10,15 +10,15 @@ import Foundation
 
 struct InventoryDTO: Codable, Identifiable {
     let id: UUID
-    let storeId: UUID
+    let locationId: UUID?
     let productId: UUID
     let quantity: Int
-    let reorderPoint: Int
-    let updatedAt: Date
+    let reorderPoint: Int?
+    let updatedAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id
-        case storeId       = "store_id"
+        case locationId    = "location_id"
         case productId     = "product_id"
         case quantity
         case reorderPoint  = "reorder_point"
@@ -27,7 +27,7 @@ struct InventoryDTO: Codable, Identifiable {
 
     // MARK: - Convenience
 
-    var isLowStock: Bool { quantity <= reorderPoint && quantity > 0 }
+    var isLowStock: Bool { quantity <= (reorderPoint ?? 5) && quantity > 0 }
     var isOutOfStock: Bool { quantity == 0 }
 
     var stockStatus: StockStatus {
@@ -44,13 +44,13 @@ struct InventoryDTO: Codable, Identifiable {
 // MARK: - Insert / Update Payload
 
 struct InventoryUpsertDTO: Codable {
-    let storeId: UUID
+    let locationId: UUID?
     let productId: UUID
     let quantity: Int
-    let reorderPoint: Int
+    let reorderPoint: Int?
 
     enum CodingKeys: String, CodingKey {
-        case storeId      = "store_id"
+        case locationId   = "location_id"
         case productId    = "product_id"
         case quantity
         case reorderPoint = "reorder_point"
