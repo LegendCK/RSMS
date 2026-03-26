@@ -55,6 +55,8 @@ struct RepairIntakeView: View {
                 }
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: vm.submittedTicket != nil)
+            // FIX: Prevent swipe-to-dismiss while a submit is in progress
+            .interactiveDismissDisabled(vm.isSubmitting)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -64,8 +66,10 @@ struct RepairIntakeView: View {
                 }
                 ToolbarItem(placement: .navigationBarLeading) {
                     if vm.submittedTicket == nil {
+                        // Disable Cancel while submitting to prevent state corruption
                         Button("Cancel") { dismiss() }
                             .foregroundColor(AppColors.accent)
+                            .disabled(vm.isSubmitting)
                     }
                 }
             }
@@ -276,10 +280,10 @@ struct RepairIntakeView: View {
     private var estimatedCostSection: some View {
         sectionCard(label: "ESTIMATED COST") {
             HStack(spacing: AppSpacing.sm) {
-                Text("USD")
-                    .font(AppTypography.label)
-                    .foregroundColor(AppColors.textSecondaryDark)
-                    .frame(width: 38)
+                Text("₹")
+                    .font(AppTypography.heading3)
+                    .foregroundColor(AppColors.accent)
+                    .frame(width: 24)
 
                 TextField("0.00  (optional)", text: $vm.estimatedCostText)
                     .keyboardType(.decimalPad)

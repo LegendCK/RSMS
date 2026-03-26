@@ -1,32 +1,35 @@
 //
 //  ScanService.swift
-//  RSMS — Hardened v2
+//  RSMS — Hardened v3 (Production Audit)
 //
-//  All database operations via Supabase Swift SDK (no Edge Functions).
-//
-//  Key improvements:
-//  - `processScan()`: safe sequential pipeline — lookup → log → mutate.
-//    Each step is independently error-handled so no inconsistent state is left.
-//  - IN scan behavior: barcode found → set IN_STOCK; not found → throw .barcodeNotFound
-//  - Retry logic on status update (up to 2 retries)
-//  - `closeStaleSessions()`: calls close_stale_scan_sessions() RPC on app launch
+//  AUDIT FIXES:
+//  1. rpcScanType: was hardcoding 'IN' for RETURN scans — now correctly passes 'RETURN'.
+//     The DB RPC process_scan_event() now accepts text params and handles RETURN internally.
+//  2. createSession: now accepts storeId + createdBy for audit trail and store filtering.
+//  3. ScanSessionInsertDTO uses the expanded DTO with store_id + created_by.
+//  4. Error mapping improved: maps 'already sold' and trigger-thrown messages.
 //
 
 import Foundation
 import Supabase
 
+// MARK: - Session Context
+
+/// Passed to createSession so the session row can record who created it and at which store.
+struct ScanSessionContext: Sendable {
+    let storeId: UUID?
+    let userId: UUID?
+}
+
 // MARK: - Protocol
 
 protocol ScanServiceProtocol: Sendable {
-    // Primary — called by RealTimeScanProcessor
     func processScan(barcode: String, sessionId: UUID, type: ScanType) async throws -> ScanResultDTO
 
-    // Session lifecycle
-    func createSession(type: ScanType) async throws -> UUID
+    func createSession(type: ScanType, context: ScanSessionContext) async throws -> UUID
     func endSession(_ sessionId: UUID) async throws
     func closeStaleSessions() async throws
 
-    // Low-level (kept for future batch processor use)
     func lookupBarcode(_ barcode: String) async throws -> ScanResultDTO
     func updateItemStatus(barcode: String, status: ProductItemStatus) async throws
 }
@@ -42,67 +45,63 @@ final class ScanService: ScanServiceProtocol, @unchecked Sendable {
 
     // MARK: - Safe Scan Pipeline
 
-    /// One atomic (in Swift) scan operation:
-    ///   1. Lookup barcode + joined product  ← throws barcodeNotFound if missing
-    ///   2. Insert scan_log row              ← always attempted if lookup succeeds
-    ///   3. Mutate item status               ← retried up to 2×; failure is non-fatal
-    ///      (data can be reconciled later; log row is the source of truth)
-    ///
-    /// - IN  scan: set status = IN_STOCK  (or error if barcode unknown)
-    /// - OUT scan: set status = SOLD
-    /// - AUDIT:    no status change
     func processScan(barcode: String, sessionId: UUID, type: ScanType) async throws -> ScanResultDTO {
-        // Step 1: Pre-fetch for the UI (throws barcodeNotFound if missing)
+        // Step 1: Pre-fetch — throws barcodeNotFound if missing
         let result = try await lookupBarcode(barcode)
-        
-        // Step 2: Formulate dynamic status
+
+        // Step 2: Determine target status
+        // AUDIT passes current status as target → the RPC skips the UPDATE for AUDIT scans,
+        // making this truly idempotent (no unintended status changes).
         let targetStatus: ProductItemStatus
         switch type {
-        case .out:   targetStatus = .sold
-        case .in:    targetStatus = .inStock
-        case .audit: targetStatus = .inStock // Value is safely ignored by SQL patch
+        case .out:    targetStatus = .sold
+        case .in:     targetStatus = .inStock
+        case .audit:  targetStatus = result.itemStatusEnum   // no-op: RPC skips UPDATE for AUDIT
         case .return: targetStatus = .returned
         }
-        
-        // Strict Client-Side validation for Returns
+
+        // Step 3: Client-side validation for Returns (fast-fail before network round-trip)
         if type == .return {
-            if result.itemStatusEnum == .inStock {
-                throw ScanError.operationFailed("Cannot return item currently in stock")
-            }
-            if result.itemStatusEnum == .returned {
-                throw ScanError.operationFailed("Item already returned")
-            }
-            if result.itemStatusEnum != .sold && result.itemStatusEnum != .damaged {
-                throw ScanError.operationFailed("Only sold or damaged items can be returned")
+            guard result.itemStatusEnum == .sold || result.itemStatusEnum == .damaged else {
+                if result.itemStatusEnum == .returned {
+                    throw ScanError.operationFailed("Item already returned")
+                } else if result.itemStatusEnum == .inStock {
+                    throw ScanError.operationFailed("Cannot return item currently in stock")
+                } else {
+                    throw ScanError.operationFailed("Only sold or damaged items can be returned")
+                }
             }
         }
-        
-        let rpcScanType = (type == .return) ? "IN" : type.rawValue.uppercased()
 
-        // Step 3: Invoke the transaction-safe backend RPC
+        // AUDIT FIXED: Pass 'RETURN' correctly now — the RPC accepts text params.
+        // Previous code was mapping RETURN → 'IN' which was wrong for logging.
+        let rpcScanType: String = type.rawValue.uppercased()  // IN | OUT | AUDIT | RETURN
+
+        // Step 4: Invoke the DB RPC (atomic: log + status update in one transaction)
         let params: [String: String] = [
-            "p_barcode": barcode,
-            "p_session_id": sessionId.uuidString,
-            "p_target_status": targetStatus.rawValue,
-            "p_scan_type": rpcScanType
+            "p_barcode":        barcode,
+            "p_session_id":     sessionId.uuidString,
+            "p_target_status":  targetStatus.rawValue,
+            "p_scan_type":      rpcScanType
         ]
-        
+
         do {
             try await client.rpc("process_scan_event", params: params).execute()
         } catch {
-            print("[ScanService] RPC ERROR: \(error)")
-            
-            // Step 4: Map core Postgres Exceptions to Human UX
             let errorDesc = (error as? PostgrestError)?.message ?? error.localizedDescription
-            
-            if errorDesc.contains("already sold") {
-                throw ScanError.operationFailed("Item already sold")
-            } else if errorDesc.contains("not ACTIVE") {
-                throw ScanError.operationFailed("Session expired")
-            } else if errorDesc.contains("Unauthorized") {
-                throw ScanError.operationFailed("Permission denied")
-            } else if errorDesc.contains("not found") {
-                throw ScanError.operationFailed("Invalid barcode")
+            // Map DB trigger + RPC exceptions to user-friendly messages
+            if errorDesc.localizedCaseInsensitiveContains("already sold") {
+                throw ScanError.operationFailed("Item is already sold")
+            } else if errorDesc.localizedCaseInsensitiveContains("not ACTIVE") || errorDesc.localizedCaseInsensitiveContains("Session is not") {
+                throw ScanError.operationFailed("Session expired — please start a new session")
+            } else if errorDesc.localizedCaseInsensitiveContains("Unauthorized") {
+                throw ScanError.operationFailed("Permission denied — Inventory Controllers only")
+            } else if errorDesc.localizedCaseInsensitiveContains("not found") {
+                throw ScanError.operationFailed("Invalid barcode — item not in inventory")
+            } else if errorDesc.localizedCaseInsensitiveContains("Cannot return") {
+                throw ScanError.operationFailed("Cannot return an in-stock item")
+            } else if errorDesc.localizedCaseInsensitiveContains("RETURNED state") {
+                throw ScanError.operationFailed("Item is RETURNED — stock it IN before selling")
             }
             throw ScanError.operationFailed("Scan failed: \(errorDesc)")
         }
@@ -113,8 +112,6 @@ final class ScanService: ScanServiceProtocol, @unchecked Sendable {
     // MARK: - Barcode Lookup
 
     func lookupBarcode(_ barcode: String) async throws -> ScanResultDTO {
-        struct NotFound: Error {}
-
         do {
             let item: ProductItemDTO = try await client
                 .from("product_items")
@@ -126,7 +123,7 @@ final class ScanService: ScanServiceProtocol, @unchecked Sendable {
 
             return ScanResultDTO(from: item)
         } catch {
-            // Fallback: Check if the barcode belongs to a legacy product definition with no physical stock
+            // Fallback: check if barcode is a catalog product with no physical stock
             do {
                 struct ProductID: Decodable { let id: UUID }
                 let _: ProductID = try await client
@@ -136,29 +133,16 @@ final class ScanService: ScanServiceProtocol, @unchecked Sendable {
                     .single()
                     .execute()
                     .value
-                
-                // Found in products, but not in product_items
-                throw ScanError.operationFailed("No stock available for this product")
+                throw ScanError.operationFailed("No physical stock registered for this product")
             } catch let fallbackError as ScanError {
                 throw fallbackError
             } catch {
-                // Not found in products either, or network error
                 throw ScanError.barcodeNotFound(barcode)
             }
         }
     }
 
-    // MARK: - Scan Log
-
-    private func logScan(barcode: String, sessionId: UUID, type: ScanType) async throws {
-        let payload = ScanLogInsertDTO(barcode: barcode, sessionId: sessionId, type: type)
-        try await client
-            .from("scan_logs")
-            .insert(payload)
-            .execute()
-    }
-
-    // MARK: - Status Update (with retry)
+    // MARK: - Status Update (direct, with retry)
 
     func updateItemStatus(barcode: String, status: ProductItemStatus) async throws {
         try await client
@@ -168,33 +152,16 @@ final class ScanService: ScanServiceProtocol, @unchecked Sendable {
             .execute()
     }
 
-    /// Retries `updateItemStatus` up to `retries` times with a 500 ms back-off.
-    /// Final failure is printed but NOT thrown — the scan_log is the source of truth
-    /// and a reconciliation job can fix stale statuses.
-    private func updateItemStatusWithRetry(
-        barcode: String,
-        status: ProductItemStatus,
-        retries: Int
-    ) async {
-        for attempt in 0...retries {
-            do {
-                try await updateItemStatus(barcode: barcode, status: status)
-                return  // success
-            } catch {
-                if attempt < retries {
-                    // Back-off: 500 ms per attempt
-                    try? await Task.sleep(for: .milliseconds(500))
-                } else {
-                    print("[ScanService] Status update failed after \(retries + 1) attempts for \(barcode): \(error)")
-                }
-            }
-        }
-    }
-
     // MARK: - Session Management
 
-    func createSession(type: ScanType) async throws -> UUID {
-        let payload = ScanSessionInsertDTO(type: type.rawValue)
+    /// Creates a scan session and returns its UUID.
+    /// - Parameter context: carries storeId and userId for the session audit trail.
+    func createSession(type: ScanType, context: ScanSessionContext) async throws -> UUID {
+        let payload = ScanSessionInsertDTO(
+            type:      type.rawValue,
+            storeId:   context.storeId,
+            createdBy: context.userId
+        )
 
         struct SessionID: Decodable { let id: UUID }
         let row: SessionID = try await client
@@ -219,9 +186,6 @@ final class ScanService: ScanServiceProtocol, @unchecked Sendable {
 
     // MARK: - Stale Session Recovery
 
-    /// Calls the `close_stale_scan_sessions()` PostgreSQL function via RPC.
-    /// This marks any ACTIVE sessions older than 24 h as EXPIRED.
-    /// Called once on app launch (from ScanManager.cleanUpStaleSessions).
     func closeStaleSessions() async throws {
         try await client
             .rpc("close_stale_scan_sessions")

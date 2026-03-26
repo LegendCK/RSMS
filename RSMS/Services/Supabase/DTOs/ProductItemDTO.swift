@@ -118,10 +118,14 @@ extension ScanLogInsertDTO {
 // MARK: - Scan Session Insert / Update Payloads
 
 struct ScanSessionInsertDTO: Codable {
-    let type: String   // ScanType.rawValue
+    let type:      String   // ScanType.rawValue
+    let storeId:   UUID?    // IC's assigned store — enables per-store session history
+    let createdBy: UUID?    // IC's user ID — audit trail
 
     enum CodingKeys: String, CodingKey {
         case type
+        case storeId   = "store_id"
+        case createdBy = "created_by"
     }
 }
 

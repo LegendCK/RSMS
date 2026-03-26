@@ -2735,28 +2735,17 @@ struct CreateStoreSheet: View {
         let code  = String(trimmedName.prefix(3)).uppercased() + String(format: "%03d", Int.random(in: 1...999))
 
         // 1 — Insert into Supabase `stores` table
-        let payload = StoreInsertDTO(
-            id: newId,
-            code: code,
-            name: trimmedName,
-            type: storeType.supabaseType,
-            country: trimmedCountry,
-            city: trimmedCity,
-            address: "",
-            currency: "INR",
-            timezone: "Asia/Kolkata",
-            region: trimmedCity,
-            managerName: managerName,
-            capacityUnits: 0,
-            monthlySalesTarget: nil,
-            isActive: true
-        )
+        struct InsertPayload: Encodable {
+            let id: UUID
+            let name: String
+        }
+        let payload = InsertPayload(id: newId, name: trimmedName)
 
         do {
             let _: StoreDTO = try await SupabaseManager.shared.client
                 .from("stores")
                 .insert(payload)
-                .select()
+                .select("id, name")
                 .single()
                 .execute()
                 .value

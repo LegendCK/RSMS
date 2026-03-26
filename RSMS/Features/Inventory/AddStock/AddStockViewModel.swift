@@ -23,6 +23,10 @@ enum AddStockState {
 
 // MARK: - AddStockViewModel
 
+private struct AddStockInventoryRow: Decodable, Sendable {
+    let quantity: Int
+}
+
 @Observable
 @MainActor
 final class AddStockViewModel {
@@ -88,33 +92,26 @@ final class AddStockViewModel {
     private func incrementInventoryTable(productId: UUID, storeId: UUID, addedQty: Int) async {
         let client = SupabaseManager.shared.client
         do {
-            // Fetch current quantity for this store+product
-            struct InvRow: Decodable {
-                let quantity: Int
-                let reorder_point: Int?
-            }
-            let rows: [InvRow] = try await client
+            let rows: [AddStockInventoryRow] = try await client
                 .from("inventory")
-                .select("quantity, reorder_point")
-                .eq("store_id",   value: storeId.uuidString.lowercased())
+                .select("quantity")
+                .eq("location_id", value: storeId.uuidString.lowercased())
                 .eq("product_id", value: productId.uuidString.lowercased())
                 .execute()
                 .value
 
-            let currentQty   = rows.first?.quantity      ?? 0
-            let reorderPoint = rows.first?.reorder_point ?? 5
-            let newQty       = currentQty + addedQty
+            let currentQty = rows.first?.quantity ?? 0
+            let newQty     = currentQty + addedQty
 
-            // Upsert using the existing Codable DTO — same pattern as InventorySyncService
-            let payload = InventoryUpsertDTO(
-                storeId:      storeId,
-                productId:    productId,
-                quantity:     newQty,
-                reorderPoint: reorderPoint
-            )
+            let payload: [String: AnyJSON] = [
+                "location_id": .string(storeId.uuidString.lowercased()),
+                "product_id": .string(productId.uuidString.lowercased()),
+                "quantity": .integer(newQty)
+            ]
+
             try await client
                 .from("inventory")
-                .upsert(payload, onConflict: "store_id,product_id")
+                .upsert(payload, onConflict: "location_id,product_id")
                 .execute()
 
             print("[AddStockVM] inventory updated: \(productId) qty \(currentQty) → \(newQty)")

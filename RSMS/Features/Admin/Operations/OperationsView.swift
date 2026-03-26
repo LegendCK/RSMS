@@ -48,6 +48,7 @@ private struct ReplenishmentRequest: Identifiable, Decodable {
 struct OperationsView: View {
     @Query(sort: \Product.stockCount, order: .forward) private var allProducts: [Product]
     @State private var selectedSection = 0
+    @State private var navigateToDistribution = false
 
     // Live replenishment requests from Supabase
     @State private var replenishmentRequests: [ReplenishmentRequest] = []
@@ -95,7 +96,7 @@ struct OperationsView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button(action: {}) { Label("New Transfer", systemImage: "arrow.left.arrow.right") }
-                    Button(action: {}) { Label("Reorder Stock", systemImage: "cart.badge.plus") }
+                    Button { navigateToDistribution = true } label: { Label("Allocate Stock", systemImage: "cart.badge.plus") }
                     Button(action: {}) { Label("Export Inventory", systemImage: "square.and.arrow.up") }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -103,6 +104,9 @@ struct OperationsView: View {
                         .foregroundColor(AppColors.accent)
                 }
             }
+        }
+        .navigationDestination(isPresented: $navigateToDistribution) {
+            DistributionView()
         }
     }
 
@@ -187,8 +191,10 @@ struct OperationsView: View {
                 .background((product.stockCount == 0 ? AppColors.error : AppColors.warning).opacity(0.12))
                 .cornerRadius(4)
 
-            Button(action: {}) {
-                Text("Reorder")
+            Button {
+                navigateToDistribution = true
+            } label: {
+                Text("Allocate")
                     .font(AppTypography.actionLink)
                     .foregroundColor(AppColors.accent)
             }

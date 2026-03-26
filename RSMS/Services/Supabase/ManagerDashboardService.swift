@@ -317,8 +317,7 @@ final class ManagerDashboardService {
     }
 
     private func resolvedMonthlyTarget(for store: StoreDTO) -> Double {
-        let target = store.monthlySalesTarget ?? 0
-        return target > 0 ? target : 300_000
+        return 300_000
     }
 
     private func futureAppointments(from appointments: [AppointmentDTO], now: Date, withinDays days: Int) -> Int {

@@ -1,10 +1,13 @@
 //
 //  ScannerViewModel.swift
-//  RSMS — Hardened v2
+//  RSMS — Hardened v4 (Production Audit)
 //
-//  @Observable MVVM ViewModel for the scanner screen.
-//  Consumes ScanManager guard results (debounce / duplicate / proceed)
-//  and maps them to UI-facing ScanState transitions.
+//  AUDIT FIXES v4:
+//  1. startSession() reads store_id + userId from AppState and passes them as
+//     ScanSessionContext — sessions now record who created them.
+//  2. Handles new .busy guard result (another scan in flight, silently dropped).
+//  3. Haptic feedback reuses a single pre-prepared generator (not created per scan).
+//  4. operationFailed errors show without the stutter-redundant "Scan failed:" prefix.
 //
 
 import SwiftUI
@@ -14,8 +17,8 @@ import SwiftUI
 enum ScanState: Equatable {
     case idle
     case found(ScanResult)
-    case duplicate(String)   // Human-readable "Already scanned: <barcode>"
-    case error(String)       // Human-readable error from ScanError.errorDescription
+    case warning(String)     // Business logic rejections: sold item, duplicate, etc.
+    case error(String)       // Technical failures: network, session expired, etc.
 }
 
 // MARK: - ScannerViewModel
@@ -37,9 +40,25 @@ final class ScannerViewModel {
     // MARK: - Dependencies
 
     private let manager: ScanManager
+    /// Injected by ScannerView so the session can be tied to the correct store + user.
+    var sessionContext: ScanSessionContext = ScanSessionContext(storeId: nil, userId: nil)
+
+    // MARK: - Race Condition Guards
+
+    /// Stored Task reference — cancelled when repair sheet opens to prevent card vanishing.
+    private var clearTask: Task<Void, Never>?
+
+    // MARK: - Haptic Generator (reused — not recreated per scan)
+
+    // AUDIT FIX: Creating a new UINotificationFeedbackGenerator on every scan is wasteful
+    // and can cause a subtle delay. Reuse one and call prepare() on session start.
+    private let feedbackGenerator: UINotificationFeedbackGenerator
+
+    // MARK: - Init
 
     init(manager: ScanManager) {
         self.manager = manager
+        self.feedbackGenerator = UINotificationFeedbackGenerator()
     }
 
     convenience init() {
@@ -53,19 +72,23 @@ final class ScannerViewModel {
         isStartingSession = true
         defer { isStartingSession = false }
 
+        // Prepare haptic generator for instant feedback when first scan fires
+        feedbackGenerator.prepare()
+
         do {
-            try await manager.startSession(type: currentScanType)
-            sessionActive = true
-            scanState     = .idle
-            recentScans   = []
+            try await manager.startSession(type: currentScanType, context: sessionContext)
+            sessionActive     = true
+            scanState         = .idle
+            recentScans       = []
             totalSessionScans = 0
         } catch {
-            scanState = .error("Failed to start session: \(error.localizedDescription)")
+            scanState = .error(friendlySessionError(error))
         }
     }
 
     func endSession() async {
         guard sessionActive else { return }
+        cancelAutoDismiss()
         do {
             try await manager.endSession()
         } catch {
@@ -77,30 +100,26 @@ final class ScannerViewModel {
 
     // MARK: - Barcode Detection
 
-    /// Entry point called by BarcodeScannerView on every detected barcode.
     func onBarcodeDetected(_ barcode: String) {
-        guard sessionActive else {
-            // Don't interrupt with an error if user hasn't started yet —
-            // just silently ignore; the Start Session button is visible.
-            return
-        }
+        guard sessionActive else { return }
 
         let guardResult = manager.evaluate(barcode: barcode)
 
         switch guardResult {
         case .debounced:
-            // Silent — AVFoundation stream noise, no UI change needed
+            return
+
+        case .busy:
+            // A scan is already processing — silently drop AVFoundation noise.
+            // Do not show any UI so the in-flight result is not overwritten.
             return
 
         case .duplicate:
-            // Just highlight the duplicate scan briefly
-            triggerFeedback(.warning)
-            
+            feedbackGenerator.notificationOccurred(.warning)
             if let existing = recentScans.first(where: { $0.barcode == barcode }) {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                     highlightedScanId = existing.id
                 }
-                
                 Task {
                     try? await Task.sleep(for: .seconds(1.5))
                     withAnimation(.easeOut(duration: 0.3)) {
@@ -110,10 +129,16 @@ final class ScannerViewModel {
                     }
                 }
             }
+            // Keep showing found card if one is on screen
+            if case .found = scanState { return }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                scanState = .warning("Already scanned in this session")
+            }
+            scheduleWarningClear(after: 2.5)
             return
 
         case .noActiveSession:
-            // Race condition guard — shouldn't reach here but handle gracefully
+            // Shouldn't reach here if sessionActive checked above — defensive
             scanState = .error("No active session.")
             return
 
@@ -121,37 +146,45 @@ final class ScannerViewModel {
             break
         }
 
-        // Dispatch async scan — keeps UI responsive
         Task {
             do {
                 let result = try await manager.process(barcode: barcode)
-                triggerFeedback(.success)
+                feedbackGenerator.notificationOccurred(.success)
+                feedbackGenerator.prepare() // Pre-warm for the next scan
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                     scanState = .found(result)
                     recentScans.insert(result, at: 0)
                     totalSessionScans += 1
-                    
                     if recentScans.count > 50 {
                         recentScans = Array(recentScans.prefix(50))
                     }
                 }
-                // Auto-dismiss the result card after 5 seconds
-                scheduleClearState(after: 5, clearFound: true)
+                scheduleClearState(after: 5)
             } catch let scanErr as ScanError {
-                triggerFeedback(.error)
+                feedbackGenerator.notificationOccurred(.error)
+                feedbackGenerator.prepare()
+                // ScanError.operationFailed messages are already human-readable
+                // (formatted by ScanService error mapping — no "Scan failed:" prefix)
+                let isBusinessLogicError: Bool
+                if case .operationFailed = scanErr { isBusinessLogicError = true }
+                else { isBusinessLogicError = false }
+
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                    // ScanError.barcodeNotFound already contains "Unknown barcode: <value>"
-                    scanState = .error(scanErr.errorDescription ?? "Unknown error.")
+                    if isBusinessLogicError {
+                        scanState = .warning(scanErr.errorDescription ?? "Operation not allowed.")
+                    } else {
+                        scanState = .error(scanErr.errorDescription ?? "Unknown error.")
+                    }
                 }
                 scheduleClearState(after: 4)
             } catch _ as URLError {
-                triggerFeedback(.error)
+                feedbackGenerator.notificationOccurred(.error)
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                     scanState = .error("Network unavailable. Please check your connection.")
                 }
                 scheduleClearState(after: 4)
             } catch {
-                triggerFeedback(.error)
+                feedbackGenerator.notificationOccurred(.error)
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                     scanState = .error(error.localizedDescription)
                 }
@@ -160,21 +193,47 @@ final class ScannerViewModel {
         }
     }
 
-    // MARK: - Helpers
+    // MARK: - Auto-Dismiss Control
 
-    private func scheduleClearState(after seconds: Double, clearFound: Bool = false) {
+    func cancelAutoDismiss() {
+        clearTask?.cancel()
+        clearTask = nil
+    }
+
+    // MARK: - Private Helpers
+
+    private func scheduleClearState(after seconds: Double) {
+        clearTask?.cancel()
+        clearTask = Task {
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.3)) {
+                scanState = .idle
+            }
+            clearTask = nil
+        }
+    }
+
+    private func scheduleWarningClear(after seconds: Double) {
         Task {
             try? await Task.sleep(for: .seconds(seconds))
             withAnimation(.easeOut(duration: 0.3)) {
-                if case .found = scanState, !clearFound { return }
-                scanState = .idle
+                if case .warning = self.scanState {
+                    self.scanState = .idle
+                }
             }
         }
     }
 
-    private func triggerFeedback(_ type: UINotificationFeedbackGenerator.FeedbackType) {
-        let gen = UINotificationFeedbackGenerator()
-        gen.prepare()
-        gen.notificationOccurred(type)
+    private func friendlySessionError(_ error: Error) -> String {
+        let raw = error.localizedDescription
+        if raw.localizedCaseInsensitiveContains("constraint") {
+            return "Session setup failed — check your scan type selection."
+        } else if raw.localizedCaseInsensitiveContains("network") || raw.localizedCaseInsensitiveContains("offline") {
+            return "No network connection. Please check your connection and try again."
+        } else if raw.localizedCaseInsensitiveContains("unauthorized") || raw.localizedCaseInsensitiveContains("permission") {
+            return "Permission denied. Only Inventory Controllers can start scan sessions."
+        }
+        return "Failed to start session: \(raw)"
     }
 }

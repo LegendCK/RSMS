@@ -1,22 +1,20 @@
 //
 //  ScanManager.swift
-//  RSMS
+//  RSMS — Hardened v3 (Production Audit)
 //
-//  Hardened v2:
-//  - Duplicate detection: [String: Date] dictionary, 2-second window
-//    (same barcode after >2s is allowed again — works for A→B→A flows)
-//  - Debounce: 500 ms AVFoundation stream guard combined with timestamp check
-//  - ScanProcessor abstraction preserved for future batch/offline swap
-//  - Session lifecycle: start / end / cleanUpStale
+//  AUDIT FIXES:
+//  1. startSession() now accepts ScanSessionContext (storeId + userId) and passes
+//     it to ScanService.createSession() so sessions record who created them.
+//  2. isProcessingScan flag prevents concurrent async Tasks for the same barcode.
+//     Without this, rapid scanning could fire 2–3 simultaneous network calls,
+//     leading to duplicate DB writes and race-condition state overwrites.
+//  3. ScanProcessor.process() protocol updated to match ScanService.
 //
 
 import Foundation
 
 // MARK: - ScanProcessor Protocol
 
-/// Abstraction for scan execution strategy.
-/// Phase 1: RealTimeScanProcessor (Supabase direct)
-/// Phase 2: BatchScanProcessor (CoreData + sync) — swap without touching callers
 protocol ScanProcessor: Sendable {
     func process(barcode: String, sessionId: UUID, type: ScanType) async throws -> ScanResultDTO
 }
@@ -31,7 +29,6 @@ final class RealTimeScanProcessor: ScanProcessor {
     }
 
     func process(barcode: String, sessionId: UUID, type: ScanType) async throws -> ScanResultDTO {
-        // Execute the safe sequence defined in ScanService (lookup → log → mutate)
         return try await service.processScan(barcode: barcode, sessionId: sessionId, type: type)
     }
 }
@@ -79,24 +76,21 @@ struct ScanResult: Identifiable, Equatable {
 
 /// @MainActor session manager.
 ///
-/// Duplicate detection uses [String: Date]:
-///   - Same barcode within `duplicateWindowSeconds` → treated as duplicate
-///   - Same barcode after the window → processed normally (A→B→A is valid)
-///
-/// Debounce (500 ms) guards against the AVFoundation stream firing dozens
-/// of callbacks for a single physical scan event.
+/// Guard layers (evaluated in order):
+///   1. isProcessingScan mutex — blocks concurrent network calls for different barcodes
+///      scanned in rapid succession before the first call returns.
+///   2. AVFoundation debounce (500 ms) — suppresses stream duplicates of the SAME barcode.
+///   3. Duplicate window (2 s) — prevents re-processing the same barcode too quickly.
 @MainActor
 final class ScanManager {
     static let shared = ScanManager(
         processor: RealTimeScanProcessor(service: ScanService.shared),
         service: ScanService.shared
     )
+
     // MARK: - Configuration
 
-    /// Rapid-fire guard: ignore re-detection within this interval (AVFoundation stream).
     let debounceInterval: TimeInterval = 0.5
-
-    /// Same barcode within this window → duplicate warning. After the window → allowed.
     let duplicateWindowSeconds: TimeInterval = 2.0
 
     // MARK: - Dependencies
@@ -109,49 +103,49 @@ final class ScanManager {
     private(set) var currentSessionId: UUID?
     private(set) var currentScanType: ScanType = .audit
 
+    // MARK: - Scan Lock (concurrent scan guard)
+
+    /// Prevents two async Task blocks from running a network scan simultaneously.
+    /// Without this lock, scanning A then B before A resolves fires two concurrent
+    /// Supabase calls — both could write to the DB and overwrite each other's state.
+    private(set) var isProcessingScan: Bool = false
+
     // MARK: - Duplicate / Debounce Tracking
 
-    /// Maps barcode → last time it was *successfully processed* (not just seen).
-    /// Cleared on endSession(); individual entries expire after `duplicateWindowSeconds`.
     private var lastScanTimes: [String: Date] = [:]
-
-    /// Tracks the very last barcode *seen* by the camera + the time it was seen.
-    /// Used purely for the AVFoundation stream debounce.
     private var lastSeenBarcode: String?
     private var lastSeenTime: Date?
 
     // MARK: - Init
 
-    private init(
-        processor: ScanProcessor,
-        service: ScanServiceProtocol
-    ) {
+    private init(processor: ScanProcessor, service: ScanServiceProtocol) {
         self.processor = processor
         self.service   = service
     }
 
     // MARK: - Session Lifecycle
 
-    func startSession(type: ScanType) async throws {
-        let sessionId = try await service.createSession(type: type)
+    /// Start a session with the IC's store and user ID for audit trail.
+    func startSession(type: ScanType, context: ScanSessionContext) async throws {
+        let sessionId = try await service.createSession(type: type, context: context)
         currentSessionId  = sessionId
         currentScanType   = type
         lastScanTimes     = [:]
         lastSeenBarcode   = nil
         lastSeenTime      = nil
+        isProcessingScan  = false
     }
 
     func endSession() async throws {
         guard let sessionId = currentSessionId else { return }
         try await service.endSession(sessionId)
-        currentSessionId = nil
-        lastScanTimes    = [:]
+        currentSessionId  = nil
+        lastScanTimes     = [:]
+        isProcessingScan  = false
     }
 
     // MARK: - Stale Session Recovery
 
-    /// Call on app launch to close any sessions that never received an `ended_at`.
-    /// Prevents orphaned ACTIVE sessions in the database.
     func cleanUpStaleSessions() async {
         do {
             try await service.closeStaleSessions()
@@ -164,30 +158,31 @@ final class ScanManager {
 
     enum ScanGuardResult {
         case proceed
-        case debounced          // AVFoundation stream noise — silently ignore
-        case duplicate(Date)    // Same barcode within duplicate window — show warning
+        case debounced
+        case duplicate(Date)
         case noActiveSession
+        case busy               // Another scan is in flight — try again shortly
     }
 
-    /// Evaluates whether a detected barcode should be processed.
-    /// Call this BEFORE `process(barcode:)`.
     func evaluate(barcode: String) -> ScanGuardResult {
         guard currentSessionId != nil else { return .noActiveSession }
 
+        // Lock guard: prevent concurrent scans
+        guard !isProcessingScan else { return .busy }
+
         let now = Date()
 
-        // 1. AVFoundation debounce — same barcode seen again within 500 ms
+        // AVFoundation debounce
         if barcode == lastSeenBarcode,
            let lastSeen = lastSeenTime,
            now.timeIntervalSince(lastSeen) < debounceInterval {
             return .debounced
         }
 
-        // Update "last seen" regardless of outcome
         lastSeenBarcode = barcode
         lastSeenTime    = now
 
-        // 2. Duplicate window check — same barcode processed recently
+        // Duplicate window
         if let lastProcessed = lastScanTimes[barcode],
            now.timeIntervalSince(lastProcessed) < duplicateWindowSeconds {
             return .duplicate(lastProcessed)
@@ -198,14 +193,16 @@ final class ScanManager {
 
     // MARK: - Scan Processing
 
-    /// Full scan pipeline. Only call after `guard` returns `.proceed`.
     func process(barcode: String) async throws -> ScanResult {
         guard let sessionId = currentSessionId else {
             throw ScanError.noActiveSession
         }
 
-        // Record the processed time BEFORE the network call to handle concurrent scans
+        // Set lock BEFORE the network call
+        isProcessingScan = true
         lastScanTimes[barcode] = Date()
+
+        defer { isProcessingScan = false }   // Always clear lock — even on throw
 
         do {
             let dto = try await processor.process(
@@ -215,7 +212,7 @@ final class ScanManager {
             )
             return ScanResult(from: dto, barcode: barcode, scanType: currentScanType)
         } catch {
-            // On failure, remove the timestamp so the user can retry
+            // Remove timestamp so the user can retry the same barcode
             lastScanTimes.removeValue(forKey: barcode)
             throw error
         }
@@ -245,7 +242,7 @@ enum ScanError: LocalizedError {
         case .networkUnavailable:
             return "Network unavailable. Check your connection."
         case .operationFailed(let detail):
-            return "Scan failed: \(detail)"
+            return detail   // Already human-readable from ScanService error mapping
         }
     }
 }

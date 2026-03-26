@@ -2468,15 +2468,14 @@ struct StartCountSheet: View {
             for item in inventory {
                 let counted = counts[item.productId] ?? item.quantity
                 guard counted != item.quantity else { continue }   // skip unchanged
-                let payload = InventoryUpsertDTO(
-                    storeId:      storeId,
-                    productId:    item.productId,
-                    quantity:     counted,
-                    reorderPoint: item.reorderPoint
-                )
+                let payload: [String: AnyJSON] = [
+                    "location_id": .string(storeId.uuidString.lowercased()),
+                    "product_id": .string(item.productId.uuidString.lowercased()),
+                    "quantity": .integer(counted)
+                ]
                 try await client
                     .from("inventory")
-                    .upsert(payload, onConflict: "store_id,product_id")
+                    .upsert(payload, onConflict: "location_id,product_id")
                     .execute()
                 item.quantity = counted
             }

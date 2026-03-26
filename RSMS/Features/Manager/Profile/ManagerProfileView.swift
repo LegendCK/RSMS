@@ -25,8 +25,7 @@ struct ManagerProfileView: View {
 
     private var storeName: String { storeDTO?.name ?? "—" }
     private var storeLocation: String {
-        let parts = [storeDTO?.city, storeDTO?.country].compactMap { $0 }.filter { !$0.isEmpty }
-        return parts.isEmpty ? "—" : parts.joined(separator: ", ")
+        return "—"
     }
     private var staffCountTitle: String {
         let count = staffList.count

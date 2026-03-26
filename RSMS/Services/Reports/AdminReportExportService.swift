@@ -99,14 +99,14 @@ enum AdminReportExportService {
 
         if scope == .inventory || scope == .all {
             lines.append("[Inventory Data]")
-            lines.append("store_id,product_id,quantity,reorder_point,updated_at")
+            lines.append("location_id,product_id,quantity,reserved_quantity,available_qty")
             for row in snapshot.inventory {
                 lines.append(csv([
-                    row.storeId.uuidString,
+                    row.locationId.uuidString,
                     row.productId.uuidString,
                     "\(row.quantity)",
-                    "\(row.reorderPoint)",
-                    iso(row.updatedAt)
+                    "\(row.reservedQuantity)",
+                    "\(row.availableQty ?? 0)"
                 ]))
             }
             lines.append("")
@@ -209,7 +209,7 @@ enum AdminReportExportService {
                 y += 17
                 row("Inventory Rows", "\(snapshot.inventory.count)")
                 row("Total Units", "\(snapshot.inventory.reduce(0) { $0 + $1.quantity })")
-                row("Low Stock Rows", "\(snapshot.inventory.filter { $0.quantity <= $0.reorderPoint }.count)")
+                row("Low Stock Rows", "\(snapshot.inventory.filter { $0.quantity <= 5 }.count)")
                 y += 8
             }
 
@@ -268,8 +268,7 @@ enum AdminReportExportService {
     }
 
     private static func inferredBoutiqueName(from snapshot: AdminInsightsSnapshot) -> String {
-        let activeStores = snapshot.stores.filter(\.isActive)
-        if activeStores.count == 1, let store = activeStores.first {
+        if snapshot.stores.count == 1, let store = snapshot.stores.first {
             return store.name
         }
         return "All Boutiques"

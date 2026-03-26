@@ -1,6 +1,6 @@
 //
 //  StoreSyncService.swift
-//  infosys2
+//  RSMS
 //
 //  Syncs StoreLocation between local SwiftData and Supabase `stores`.
 //
@@ -22,37 +22,22 @@ final class StoreSyncService {
     }
 
     func upsertStore(_ location: StoreLocation) async throws -> StoreDTO {
-        // Resolve code conflict first: if a remote row already has this code,
-        // reuse its id so we update that row instead of violating unique(code).
+        // Resolve code conflict first
         if let existingId = try await findStoreId(byCode: location.code), existingId != location.id {
             location.id = existingId
         }
 
-        // Supabase `stores.country` is character(2) — always send a 2-letter ISO code.
-        let countryCode = isoCountryCode(for: location.country)
-        location.country = countryCode  // keep local value in sync
+        struct InsertPayload: Encodable {
+            let id: UUID
+            let name: String
+        }
 
-        let payload = StoreInsertDTO(
-            id: location.id,
-            code: location.code,
-            name: location.name,
-            type: location.type == .boutique ? "boutique" : "distribution_center",
-            country: countryCode,
-            city: location.city,
-            address: location.addressLine1,
-            currency: inferredCurrency(for: countryCode),
-            timezone: inferredTimeZone(for: countryCode),
-            region: location.region,
-            managerName: location.managerName,
-            capacityUnits: location.capacityUnits,
-            monthlySalesTarget: location.monthlySalesTarget,
-            isActive: location.isOperational
-        )
+        let payload = InsertPayload(id: location.id, name: location.name)
 
         let dto: StoreDTO = try await client
             .from("stores")
             .upsert(payload, onConflict: "id")
-            .select()
+            .select("id, name")
             .single()
             .execute()
             .value
@@ -72,7 +57,7 @@ final class StoreSyncService {
     func fetchActiveBoutiques() async throws -> [StoreDTO] {
         return try await client
             .from("stores")
-            .select()
+            .select("id, name")
             .eq("is_active", value: true)
             .eq("type", value: "boutique")
             .order("name", ascending: true)
@@ -87,7 +72,7 @@ final class StoreSyncService {
 
         return try await client
             .from("stores")
-            .select()
+            .select("id, name")
             .in("id", values: uniqueIds.map { $0.uuidString.lowercased() })
             .execute()
             .value
@@ -103,7 +88,7 @@ final class StoreSyncService {
     private func pullRemoteStores(modelContext: ModelContext) async throws {
         let remote: [StoreDTO] = try await client
             .from("stores")
-            .select()
+            .select("id, name")
             .execute()
             .value
 
@@ -126,8 +111,6 @@ final class StoreSyncService {
         try? modelContext.save()
     }
 
-    /// SwiftData can accumulate duplicate rows (same id or same code) in edge cases.
-    /// This normalizes local data so sync never crashes on duplicate dictionary keys.
     private func deduplicatedLocals(modelContext: ModelContext) throws -> [StoreLocation] {
         let locals = (try? modelContext.fetch(FetchDescriptor<StoreLocation>())) ?? []
         guard !locals.isEmpty else { return [] }
@@ -158,9 +141,12 @@ final class StoreSyncService {
     }
 
     private func findStoreId(byCode code: String) async throws -> UUID? {
-        let rows: [StoreDTO] = try await client
+        // Because StoreDTO only has id and name, we use a custom struct to decode
+        struct PartialStore: Decodable { let id: UUID }
+        
+        let rows: [PartialStore] = try await client
             .from("stores")
-            .select()
+            .select("id")
             .eq("code", value: code)
             .limit(1)
             .execute()
@@ -169,110 +155,26 @@ final class StoreSyncService {
     }
 
     private func apply(_ dto: StoreDTO, to location: StoreLocation) {
-        location.code = dto.code ?? location.code
         location.name = dto.name
-        location.type = dto.type == "distribution_center" ? .distributionCenter : .boutique
-        location.country = dto.country
-        location.city = dto.city ?? location.city
-        location.addressLine1 = dto.address ?? location.addressLine1
-        location.region = dto.region ?? location.region
-        location.managerName = dto.managerName ?? location.managerName
-        location.capacityUnits = dto.capacityUnits ?? location.capacityUnits
-        location.monthlySalesTarget = dto.monthlySalesTarget ?? location.monthlySalesTarget
-        location.isOperational = dto.isActive
-        location.updatedAt = dto.updatedAt
     }
 
     private func makeLocation(from dto: StoreDTO) -> StoreLocation {
-        let type: LocationType = dto.type == "distribution_center" ? .distributionCenter : .boutique
         let location = StoreLocation(
-            code: dto.code ?? fallbackCode(for: dto),
+            code: "BTQ-\(dto.id.uuidString.prefix(8))".uppercased(),
             name: dto.name,
-            type: type,
-            addressLine1: dto.address ?? "",
-            city: dto.city ?? "",
+            type: .boutique,
+            addressLine1: "",
+            city: "",
             stateProvince: "",
             postalCode: "",
-            country: dto.country,
-            region: dto.region ?? "Unassigned",
-            managerName: dto.managerName ?? "—",
-            capacityUnits: dto.capacityUnits ?? 0,
-            monthlySalesTarget: dto.monthlySalesTarget ?? 300_000,
-            isOperational: dto.isActive
+            country: "",
+            region: "Unassigned",
+            managerName: "—",
+            capacityUnits: 0,
+            monthlySalesTarget: 300_000,
+            isOperational: true
         )
         location.id = dto.id
-        location.createdAt = dto.createdAt
-        location.updatedAt = dto.updatedAt
         return location
-    }
-
-    private func fallbackCode(for dto: StoreDTO) -> String {
-        let prefix = dto.type == "distribution_center" ? "DC" : "BTQ"
-        return "\(prefix)-\(dto.id.uuidString.prefix(8))".uppercased()
-    }
-
-    /// Converts any country string to a 2-letter ISO 3166-1 alpha-2 code
-    /// required by the Supabase `stores.country` character(2) column.
-    private func isoCountryCode(for country: String) -> String {
-        let upper = country.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        if upper.count == 2 { return upper }
-        switch upper {
-        case "INDIA", "BHARAT":                            return "IN"
-        case "UNITED STATES", "USA", "UNITED STATES OF AMERICA": return "US"
-        case "FRANCE":                                     return "FR"
-        case "ITALY":                                      return "IT"
-        case "JAPAN":                                      return "JP"
-        case "UNITED KINGDOM", "UK", "GREAT BRITAIN":     return "GB"
-        case "GERMANY", "DEUTSCHLAND":                     return "DE"
-        case "CHINA":                                      return "CN"
-        case "AUSTRALIA":                                  return "AU"
-        case "CANADA":                                     return "CA"
-        case "BRAZIL", "BRASIL":                           return "BR"
-        case "SPAIN", "ESPAÑA":                            return "ES"
-        case "NETHERLANDS", "HOLLAND":                     return "NL"
-        case "SWITZERLAND":                                return "CH"
-        case "SINGAPORE":                                  return "SG"
-        case "UAE", "UNITED ARAB EMIRATES":                return "AE"
-        default:
-            // Unknown full name — take first 2 uppercase chars as best-effort fallback
-            let prefix = String(upper.prefix(2))
-            return prefix.count == 2 ? prefix : "XX"
-        }
-    }
-
-    private func inferredCurrency(for isoCode: String) -> String {
-        switch isoCode {
-        case "US": return "USD"
-        case "IN": return "INR"
-        case "GB": return "GBP"
-        case "JP": return "JPY"
-        case "AU": return "AUD"
-        case "CA": return "CAD"
-        case "CH": return "CHF"
-        case "CN": return "CNY"
-        case "BR": return "BRL"
-        case "SG": return "SGD"
-        case "AE": return "AED"
-        case "FR", "IT", "DE", "ES", "NL": return "EUR"
-        default: return "USD"
-        }
-    }
-
-    private func inferredTimeZone(for isoCode: String) -> String {
-        switch isoCode {
-        case "US": return "America/New_York"
-        case "IN": return "Asia/Kolkata"
-        case "GB": return "Europe/London"
-        case "JP": return "Asia/Tokyo"
-        case "AU": return "Australia/Sydney"
-        case "CA": return "America/Toronto"
-        case "CH": return "Europe/Zurich"
-        case "CN": return "Asia/Shanghai"
-        case "BR": return "America/Sao_Paulo"
-        case "SG": return "Asia/Singapore"
-        case "AE": return "Asia/Dubai"
-        case "FR", "IT", "DE", "ES", "NL": return "Europe/Paris"
-        default: return "UTC"
-        }
     }
 }

@@ -106,7 +106,7 @@ final class RepairIntakeViewModel {
                 conditionNotes: conditionNotes.trimmingCharacters(in: .whitespaces),
                 intakePhotos:  nil,
                 estimatedCost: parsedCost,
-                currency:      "USD",
+                currency:      "INR",  // FIX: was "USD" — app currency is INR
                 slaDueDate:    slaString,
                 notes:         additionalNotes.trimmingCharacters(in: .whitespaces).isEmpty
                                    ? nil

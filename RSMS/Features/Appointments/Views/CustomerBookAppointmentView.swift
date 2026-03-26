@@ -195,15 +195,11 @@ struct CustomerBookAppointmentView: View {
     }
 
     private func storeLabel(_ store: StoreDTO) -> String {
-        let city = store.city ?? ""
-        return city.isEmpty ? store.name : "\(store.name) · \(city)"
+        return store.name
     }
 
     private func storeAddress(_ store: StoreDTO) -> String {
-        [store.address, store.city, store.country]
-            .compactMap { $0 }
-            .filter { !$0.isEmpty }
-            .joined(separator: ", ")
+        return "Maison Luxe Location"
     }
 }
 

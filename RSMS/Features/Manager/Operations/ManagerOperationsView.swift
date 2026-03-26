@@ -54,6 +54,8 @@ struct ManagerOperationsView: View {
                         segmentButton("Discrepancies", tag: 2)
                         segmentButton("VIP Events", tag: 3)
                         segmentButton("Activity", tag: 4)
+                        segmentButton("Distribution", tag: 6)
+                        segmentButton("Transfers", tag: 7)
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
                 }
@@ -66,6 +68,8 @@ struct ManagerOperationsView: View {
                 case 3: vipEventsSection
                 case 4: activitySection
                 case 5: fulfillmentSection
+                case 6: distributionSection
+                case 7: transfersSection
                 default: salesSection
                 }
             }
@@ -344,6 +348,20 @@ struct ManagerOperationsView: View {
 
     private var fulfillmentSection: some View {
         OrderFulfillmentView()
+    }
+
+    // MARK: - Distribution (Centralized Allocation)
+
+    private var distributionSection: some View {
+        DistributionView()
+            .environment(appState)
+    }
+
+    // MARK: - Transfers (Allocation Tracking)
+
+    private var transfersSection: some View {
+        AllocationTransfersView()
+            .environment(appState)
     }
 
     // MARK: - BOPIS & Ship-from-Store Monitor
