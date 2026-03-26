@@ -49,6 +49,14 @@ struct BuyNowSheetView: View {
     @State private var cardExpiry  = ""
     @State private var cardCVV     = ""
 
+    // Stripe card details
+    @State private var stripeCardNumber = ""
+    @State private var stripeExpMonth   = ""
+    @State private var stripeExpYear    = ""
+    @State private var stripeCVC        = ""
+    @State private var stripeError: String? = nil
+    @State private var showStripeError  = false
+
     // Order result
     @State private var placedOrder: Order? = nil
     @State private var showConfirmation    = false
@@ -172,6 +180,11 @@ struct BuyNowSheetView: View {
             }, message: {
                 Text(orderError ?? "Something went wrong. Please try again.")
             })
+            .alert("Payment Error", isPresented: $showStripeError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(stripeError ?? "An unknown payment error occurred.")
+            }
             .onAppear {
                 Task { @MainActor in
                     if savedAddresses.isEmpty,
@@ -506,6 +519,11 @@ struct BuyNowSheetView: View {
             if selectedPayment == .creditCard {
                 cardFieldsSection
             }
+
+            if selectedPayment == .stripe {
+                stripeCardFormSection
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
 
@@ -640,6 +658,7 @@ struct BuyNowSheetView: View {
         switch selectedPayment {
         case .applePay:    return "apple.logo"
         case .creditCard:  return "creditcard.fill"
+        case .stripe:      return "creditcard.and.123"
         case .payInStore:  return "banknote.fill"
         case .googlePay:   return "g.circle.fill"
         }
@@ -740,6 +759,9 @@ struct BuyNowSheetView: View {
         case 1:
             if selectedPayment == .creditCard {
                 return !cardNumber.isEmpty && !cardExpiry.isEmpty && !cardCVV.isEmpty
+            }
+            if selectedPayment == .stripe {
+                return isStripeCardComplete
             }
             return true
         default: return true
@@ -931,7 +953,61 @@ struct BuyNowSheetView: View {
             print("[BuyNowSheetView] No client UUID in AppState — skipping Supabase sync")
         }
 
-        // 3. Navigate to confirmation
+        // 3. If Stripe selected, process payment before navigating to confirmation
+        if selectedPayment == .stripe {
+            print("[BuyNowSheetView] 🔵 Stripe payment flow starting...")
+            print("[BuyNowSheetView] Total: \(total), AmountInPaise: \(Int(total * 100))")
+            print("[BuyNowSheetView] Card number length: \(stripeCardNumber.replacingOccurrences(of: " ", with: "").count)")
+            print("[BuyNowSheetView] ExpMonth: '\(stripeExpMonth)', ExpYear: '\(stripeExpYear)', CVC length: \(stripeCVC.count)")
+
+            let amountInPaise = Int(total * 100)
+            let card = StripeCardDetails(
+                number: stripeCardNumber,
+                expMonth: Int(stripeExpMonth) ?? 1,
+                expYear: Int(stripeExpYear) ?? 2030,
+                cvc: stripeCVC
+            )
+
+            print("[BuyNowSheetView] Card isValid: \(card.isValid)")
+
+            let result = await StripePaymentService.shared.processPayment(
+                amountInPaise: amountInPaise,
+                currency: "inr",
+                orderId: order.id,
+                card: card
+            )
+
+            switch result {
+            case .success(let paymentIntentId):
+                print("[BuyNowSheetView] ✅ Stripe payment succeeded: \(paymentIntentId)")
+                do {
+                    try await PaymentRecordService.shared.recordPayment(
+                        orderId: order.id,
+                        method: "stripe",
+                        amount: total,
+                        currency: "INR",
+                        status: "completed",
+                        paymentReference: paymentIntentId,
+                        stripePaymentIntentId: paymentIntentId,
+                        processedBy: appState.currentUserProfile?.id
+                    )
+                } catch {
+                    print("[BuyNowSheetView] Payment record save failed (non-fatal): \(error)")
+                }
+            case .cancelled:
+                print("[BuyNowSheetView] Stripe payment cancelled")
+            case .failed(let error):
+                print("[BuyNowSheetView] ❌ Stripe payment failed: \(error.localizedDescription)")
+                stripeError = error.localizedDescription
+                showStripeError = true
+                // Don't navigate to confirmation on payment failure
+                return
+            }
+        } else {
+            print("[BuyNowSheetView] Payment method: \(selectedPayment.title) (not Stripe, skipping payment processing)")
+        }
+
+        // 4. Navigate to confirmation
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         placedOrder = order
         showConfirmation = true
@@ -947,6 +1023,7 @@ struct BuyNowSheetView: View {
 enum BuyNowPayment: String, CaseIterable {
     case applePay   = "Apple Pay"
     case creditCard = "Credit / Debit Card"
+    case stripe     = "Pay with Stripe"
     case googlePay  = "Google Pay"
     case payInStore = "Pay In Store"
 
@@ -956,6 +1033,7 @@ enum BuyNowPayment: String, CaseIterable {
         switch self {
         case .applePay:   return "Touch ID or Face ID"
         case .creditCard: return "Visa, Mastercard, Amex"
+        case .stripe:     return "Secure card payment via Stripe"
         case .googlePay:  return "Google Wallet"
         case .payInStore: return "Pay at the boutique"
         }
@@ -965,8 +1043,66 @@ enum BuyNowPayment: String, CaseIterable {
         switch self {
         case .applePay:   return "apple.logo"
         case .creditCard: return "creditcard.fill"
+        case .stripe:     return "creditcard.and.123"
         case .googlePay:  return "g.circle.fill"
         case .payInStore: return "banknote.fill"
+        }
+    }
+}
+
+// MARK: - Stripe Card Form (BuyNow)
+
+private extension BuyNowSheetView {
+
+    var isStripeCardComplete: Bool {
+        let cleanNumber = stripeCardNumber.replacingOccurrences(of: " ", with: "")
+        return cleanNumber.count >= 13
+            && !stripeExpMonth.isEmpty
+            && !stripeExpYear.isEmpty
+            && stripeCVC.count >= 3
+    }
+
+    var stripeCardFormSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("STRIPE CARD DETAILS")
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.accent)
+
+            HStack(spacing: AppSpacing.xs) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppColors.success)
+                Text("Secured by Stripe")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.success)
+            }
+
+            LuxuryTextField(placeholder: "Card Number (e.g. 4242 4242 4242 4242)", text: $stripeCardNumber)
+                .keyboardType(.numberPad)
+
+            HStack(spacing: AppSpacing.sm) {
+                LuxuryTextField(placeholder: "MM", text: $stripeExpMonth)
+                    .keyboardType(.numberPad)
+                    .frame(maxWidth: 70)
+                LuxuryTextField(placeholder: "YYYY", text: $stripeExpYear)
+                    .keyboardType(.numberPad)
+                    .frame(maxWidth: 90)
+                LuxuryTextField(placeholder: "CVC", text: $stripeCVC)
+                    .keyboardType(.numberPad)
+                    .frame(maxWidth: 80)
+            }
+
+            if StripeConfig.publishableKey == "pk_test_REPLACE_WITH_YOUR_KEY" {
+                HStack(spacing: AppSpacing.xs) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppColors.warning)
+                    Text("Stripe test mode — use card 4242 4242 4242 4242")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.warning)
+                }
+            }
         }
     }
 }

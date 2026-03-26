@@ -44,6 +44,14 @@ struct CheckoutView: View {
     @State private var cardExpiry  = ""
     @State private var cardCVV     = ""
 
+    // Stripe card details
+    @State private var stripeCardNumber = ""
+    @State private var stripeExpMonth   = ""
+    @State private var stripeExpYear    = ""
+    @State private var stripeCVC        = ""
+    @State private var stripeError: String? = nil
+    @State private var showStripeError  = false
+
     // BOPIS store selection
     @State private var selectedPickupStore: StoreDTO? = nil
     @State private var showStorePicker = false
@@ -483,6 +491,11 @@ struct CheckoutView: View {
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
+
+            if selectedPayment == .stripe {
+                stripeCardFormSection
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
 
@@ -739,6 +752,9 @@ struct CheckoutView: View {
             if selectedPayment == .creditCard {
                 return !cardNumber.isEmpty && !cardExpiry.isEmpty && !cardCVV.isEmpty
             }
+            if selectedPayment == .stripe {
+                return isStripeCardComplete
+            }
             return true
         default:
             return true
@@ -982,7 +998,56 @@ struct CheckoutView: View {
             print("[CheckoutView] currentClientProfile: \(String(describing: appState.currentClientProfile))")
         }
 
-        // 3. Navigate to confirmation
+        // 3. If Stripe selected, process payment before navigating to confirmation
+        if selectedPayment == .stripe {
+            let amountInPaise = Int(snapshotTotal * 100) // Convert INR to paise
+            let card = StripeCardDetails(
+                number: stripeCardNumber,
+                expMonth: Int(stripeExpMonth) ?? 1,
+                expYear: Int(stripeExpYear) ?? 2030,
+                cvc: stripeCVC
+            )
+
+            let result = await StripePaymentService.shared.processPayment(
+                amountInPaise: amountInPaise,
+                currency: "inr",
+                orderId: order.id,
+                card: card
+            )
+
+            switch result {
+            case .success(let paymentIntentId):
+                print("[CheckoutView] ✅ Stripe payment succeeded: \(paymentIntentId)")
+                // Record payment in Supabase payments table
+                do {
+                    try await PaymentRecordService.shared.recordPayment(
+                        orderId: order.id,
+                        method: "stripe",
+                        amount: snapshotTotal,
+                        currency: "INR",
+                        status: "completed",
+                        paymentReference: paymentIntentId,
+                        stripePaymentIntentId: paymentIntentId,
+                        processedBy: appState.currentUserProfile?.id
+                    )
+                    print("[CheckoutView] ✅ Payment recorded in Supabase")
+                } catch {
+                    print("[CheckoutView] Payment record save failed (non-fatal): \(error)")
+                }
+
+            case .cancelled:
+                // User cancelled — order already saved locally, just note it
+                print("[CheckoutView] Stripe payment cancelled by user")
+
+            case .failed(let error):
+                print("[CheckoutView] ❌ Stripe payment failed: \(error.localizedDescription)")
+                stripeError = error.localizedDescription
+                showStripeError = true
+                // Order is still saved locally; payment can be retried
+            }
+        }
+
+        // 4. Navigate to confirmation
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         createdOrder     = order
         isPlacing        = false
@@ -1096,6 +1161,7 @@ struct BOPISStorePickerSheet: View {
 enum CheckoutPayment: String, CaseIterable {
     case applePay   = "Apple Pay"
     case creditCard = "Credit / Debit Card"
+    case stripe     = "Pay with Stripe"
     case googlePay  = "Google Pay"
     case payInStore = "Pay In Store"
 
@@ -1105,6 +1171,7 @@ enum CheckoutPayment: String, CaseIterable {
         switch self {
         case .applePay:   return "Touch ID or Face ID"
         case .creditCard: return "Visa, Mastercard, Amex"
+        case .stripe:     return "Secure card payment via Stripe"
         case .googlePay:  return "Google Wallet"
         case .payInStore: return "Pay at the boutique"
         }
@@ -1114,8 +1181,68 @@ enum CheckoutPayment: String, CaseIterable {
         switch self {
         case .applePay:   return "apple.logo"
         case .creditCard: return "creditcard.fill"
+        case .stripe:     return "creditcard.and.123"
         case .googlePay:  return "g.circle.fill"
         case .payInStore: return "banknote.fill"
+        }
+    }
+}
+
+// MARK: - Stripe Card Form Section
+
+private extension CheckoutView {
+
+    var isStripeCardComplete: Bool {
+        let cleanNumber = stripeCardNumber.replacingOccurrences(of: " ", with: "")
+        return cleanNumber.count >= 13
+            && !stripeExpMonth.isEmpty
+            && !stripeExpYear.isEmpty
+            && stripeCVC.count >= 3
+    }
+
+    var stripeCardFormSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            sectionHeader("STRIPE CARD DETAILS")
+
+            HStack(spacing: AppSpacing.xs) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppColors.success)
+                Text("Secured by Stripe")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.success)
+            }
+
+            LuxuryTextField(placeholder: "Card Number (e.g. 4242 4242 4242 4242)", text: $stripeCardNumber)
+                .keyboardType(.numberPad)
+
+            HStack(spacing: AppSpacing.sm) {
+                LuxuryTextField(placeholder: "MM", text: $stripeExpMonth)
+                    .keyboardType(.numberPad)
+                    .frame(maxWidth: 70)
+                LuxuryTextField(placeholder: "YYYY", text: $stripeExpYear)
+                    .keyboardType(.numberPad)
+                    .frame(maxWidth: 90)
+                LuxuryTextField(placeholder: "CVC", text: $stripeCVC)
+                    .keyboardType(.numberPad)
+                    .frame(maxWidth: 80)
+            }
+
+            if StripeConfig.publishableKey == "pk_test_REPLACE_WITH_YOUR_KEY" {
+                HStack(spacing: AppSpacing.xs) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppColors.warning)
+                    Text("Stripe test mode — use card 4242 4242 4242 4242")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.warning)
+                }
+            }
+        }
+        .alert("Payment Error", isPresented: $showStripeError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(stripeError ?? "An unknown error occurred.")
         }
     }
 }
