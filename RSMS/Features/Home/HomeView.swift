@@ -367,7 +367,7 @@ struct HomeView: View {
                     }
                 }
 
-                Image(systemName: "bookmark")
+                Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white)
                     .padding(7)
@@ -474,7 +474,7 @@ struct HomeView: View {
                     }
                 }
 
-                Image(systemName: "bookmark")
+                Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white)
                     .padding(7)

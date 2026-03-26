@@ -38,7 +38,7 @@ final class OrderStatusSyncService {
         if let clientId {
             let response = try await client
                 .from("orders")
-                .select("id, order_number, status, subtotal, tax_total, grand_total, channel, notes, store_id, created_at, updated_at")
+                .select("id, order_number, status, subtotal, tax_total, grand_total, channel, notes, store_id, is_tax_free, created_at, updated_at")
                 .eq("client_id", value: clientId.uuidString.lowercased())
                 .order("created_at", ascending: false)
                 .execute()
@@ -49,7 +49,7 @@ final class OrderStatusSyncService {
             guard !orderNumbers.isEmpty else { return }
             let response = try await client
                 .from("orders")
-                .select("id, order_number, status, subtotal, tax_total, grand_total, channel, notes, store_id, created_at, updated_at")
+                .select("id, order_number, status, subtotal, tax_total, grand_total, channel, notes, store_id, is_tax_free, created_at, updated_at")
                 .in("order_number", values: orderNumbers)
                 .execute()
             remoteOrders = try JSONDecoder().decode([RemoteOrderLite].self, from: response.data)
@@ -68,6 +68,16 @@ final class OrderStatusSyncService {
             let itemsJSON = buildItemsJSON(from: itemsByOrderId[remote.id] ?? [])
             let fulfillment = mapChannel(remote.channel)
 
+            let isTaxFree = remote.isTaxFree ?? false
+            // Extract tax-free reason from notes (stored as "... | TAX-FREE: reason")
+            let taxFreeReason: String = {
+                guard let notes = remote.notes, notes.contains("TAX-FREE:") else { return "" }
+                if let range = notes.range(of: "TAX-FREE: ") {
+                    return String(notes[range.upperBound...])
+                }
+                return ""
+            }()
+
             if let local = localOrders.first(where: { $0.orderNumber == remote.orderNumber }) {
                 if local.status != status { local.status = status; changed += 1 }
                 if local.subtotal != remote.subtotal { local.subtotal = remote.subtotal; changed += 1 }
@@ -75,6 +85,8 @@ final class OrderStatusSyncService {
                 if local.total != remote.grandTotal { local.total = remote.grandTotal; changed += 1 }
                 if !itemsJSON.isEmpty, local.orderItems != itemsJSON { local.orderItems = itemsJSON; changed += 1 }
                 if local.fulfillmentType != fulfillment { local.fulfillmentType = fulfillment; changed += 1 }
+                if local.isTaxFree != isTaxFree { local.isTaxFree = isTaxFree; changed += 1 }
+                if !taxFreeReason.isEmpty, local.taxFreeReason != taxFreeReason { local.taxFreeReason = taxFreeReason; changed += 1 }
                 if local.createdAt != createdAt { local.createdAt = createdAt; changed += 1 }
                 local.updatedAt = updatedAt
             } else {
@@ -91,7 +103,9 @@ final class OrderStatusSyncService {
                     fulfillmentType: fulfillment,
                     paymentMethod: "Card",
                     notes: remote.notes ?? "",
-                    boutiqueId: remote.storeId?.uuidString ?? ""
+                    boutiqueId: remote.storeId?.uuidString ?? "",
+                    isTaxFree: isTaxFree,
+                    taxFreeReason: taxFreeReason
                 )
                 newOrder.createdAt = createdAt
                 newOrder.updatedAt = updatedAt
@@ -168,6 +182,7 @@ private struct RemoteOrderLite: Codable {
     let channel: String
     let notes: String?
     let storeId: UUID?
+    let isTaxFree: Bool?
     let createdAt: String
     let updatedAt: String?
 
@@ -177,6 +192,7 @@ private struct RemoteOrderLite: Codable {
         case taxTotal = "tax_total"
         case grandTotal = "grand_total"
         case storeId = "store_id"
+        case isTaxFree = "is_tax_free"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

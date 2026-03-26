@@ -38,7 +38,7 @@ final class InventoryAnalyticsService: Sendable {
         // Limiting to 1000 to protect client bandwidth as constraints dictate
         let items: [ProductItemDTO] = try await SupabaseManager.shared.client
             .from("product_items")
-            .select("id, product_id, barcode, serial_number, status, store_id, created_at, products(name, brand)")
+            .select("id, product_id, barcode, serial_number, status, store_id, created_at, products(id, name, brand)")
             .eq("status", value: "IN_STOCK")
             .limit(1000)
             .execute()

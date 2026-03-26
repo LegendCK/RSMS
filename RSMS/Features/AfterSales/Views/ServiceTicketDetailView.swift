@@ -343,6 +343,7 @@ struct ServiceTicketDetailView: View {
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.md)
+            .padding(.bottom, AppSpacing.xxxl)
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
@@ -433,102 +434,119 @@ struct ServiceTicketDetailView: View {
 private extension ServiceTicketDetailView {
 
     var headerCard: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
+            // Status accent strip
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(vm.ticket.ticketStatus.statusColor)
+                    .frame(width: 6, height: 6)
+                Text(vm.ticket.ticketStatus.displayName.uppercased())
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1)
+                    .foregroundStyle(vm.ticket.ticketStatus.statusColor)
+                Spacer()
+                if vm.ticket.isOverdue {
+                    HStack(spacing: 3) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                        Text("OVERDUE")
+                            .font(.system(size: 10, weight: .semibold))
+                            .tracking(0.5)
+                    }
+                    .foregroundStyle(AppColors.error)
+                }
+            }
+            .padding(.horizontal, AppSpacing.cardPadding)
+            .padding(.vertical, 10)
+            .background(vm.ticket.ticketStatus.statusColor.opacity(0.10))
+
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(vm.ticket.displayTicketNumber)
-                        .font(AppTypography.heading1)
-                        .foregroundColor(.primary)
+                        .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.primary)
                     Text("Created \(vm.ticket.createdAt.formatted(date: .abbreviated, time: .shortened))")
                         .font(AppTypography.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
-                Spacer()
-                statusBadge(vm.ticket.ticketStatus)
-            }
-
-            HStack(spacing: AppSpacing.sm) {
                 Label(vm.ticket.ticketType.displayName, systemImage: vm.ticket.ticketType.icon)
                     .font(AppTypography.bodySmall)
-                    .foregroundColor(.primary)
-                if vm.ticket.isOverdue {
-                    HStack(spacing: 2) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                        Text("OVERDUE")
-                    }
-                    .font(AppTypography.nano)
-                    .foregroundColor(AppColors.error)
-                }
+                    .foregroundStyle(.secondary)
             }
+            .padding(AppSpacing.cardPadding)
         }
-        .padding(AppSpacing.cardPadding)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        .ticketCardStyle()
     }
 
     var statusTimelineCard: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("STATUS TIMELINE")
-                .font(AppTypography.overline)
-                .tracking(1.8)
-                .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            Label("Status Timeline", systemImage: "list.bullet.clipboard")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(RepairStatus.allCases.enumerated()), id: \.element.id) { index, status in
                     let isCurrent = vm.ticket.ticketStatus == status
-                    let isPast = statusOrder(vm.ticket.ticketStatus) >= statusOrder(status)
+                    let isPast = statusOrder(vm.ticket.ticketStatus) > statusOrder(status)
 
-                    HStack(spacing: AppSpacing.sm) {
+                    HStack(spacing: 14) {
                         VStack(spacing: 0) {
-                            Circle()
-                                .fill(isPast ? status.statusColor : Color(.systemGray4))
-                                .frame(width: isCurrent ? (status == .completed ? 20 : 16) : 10,
-                                       height: isCurrent ? (status == .completed ? 20 : 16) : 10)
-                                .overlay {
-                                    if isCurrent {
-                                        Circle().stroke(status.statusColor.opacity(0.3), lineWidth: status == .completed ? 5 : 3)
-                                            .frame(width: status == .completed ? 28 : 22, height: status == .completed ? 28 : 22)
-                                    }
+                            if isPast {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(status.statusColor)
+                            } else if isCurrent {
+                                ZStack {
+                                    Circle()
+                                        .fill(status.statusColor.opacity(0.15))
+                                        .frame(width: 30, height: 30)
+                                    Circle()
+                                        .fill(status.statusColor)
+                                        .frame(width: 16, height: 16)
                                 }
+                            } else {
+                                Circle()
+                                    .stroke(Color(.systemGray4), lineWidth: 1.5)
+                                    .frame(width: 20, height: 20)
+                            }
 
                             if index < RepairStatus.allCases.count - 1 {
                                 Rectangle()
-                                    .fill(isPast ? status.statusColor.opacity(0.4) : Color(.systemGray5))
-                                    .frame(width: 2, height: 24)
+                                    .fill(isPast ? status.statusColor.opacity(0.35) : Color(.systemGray5))
+                                    .frame(width: 1.5, height: isCurrent ? 28 : 20)
                             }
                         }
-                        .frame(width: 24)
+                        .frame(width: 30)
 
-                        Text(status.displayName)
-                            .font(isCurrent ? AppTypography.label : AppTypography.bodySmall)
-                            .foregroundColor(isPast ? .primary : .secondary)
-                            .fontWeight(isCurrent ? .semibold : .regular)
-
-                        Spacer()
-
-                        if isCurrent {
-                            Text("Current")
-                                .font(AppTypography.nano)
-                                .foregroundColor(status.statusColor)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(status.statusColor.opacity(0.14)))
+                        HStack {
+                            Text(status.displayName)
+                                .font(isCurrent ? .system(size: 15, weight: .semibold) : AppTypography.bodySmall)
+                                .foregroundStyle(isPast || isCurrent ? .primary : .secondary)
+                            Spacer()
+                            if isCurrent {
+                                Text("Current")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(status.statusColor)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(Capsule().fill(status.statusColor.opacity(0.12)))
+                            }
                         }
+                        .padding(.vertical, isCurrent ? 5 : 0)
                     }
+                    .padding(.vertical, AppSpacing.xxs)
                 }
             }
         }
         .padding(AppSpacing.cardPadding)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        .ticketCardStyle()
     }
 
     var clientCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("CLIENT")
-                .font(AppTypography.overline)
-                .tracking(1.8)
-                .foregroundColor(.secondary)
+            Label("Client", systemImage: "person.circle")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
 
             if let client = vm.client {
                 HStack(spacing: AppSpacing.sm) {
@@ -557,16 +575,14 @@ private extension ServiceTicketDetailView {
             }
         }
         .padding(AppSpacing.cardPadding)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        .ticketCardStyle()
     }
 
     var productCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("PRODUCT")
-                .font(AppTypography.overline)
-                .tracking(1.8)
-                .foregroundColor(.secondary)
+            Label("Product", systemImage: "shippingbox")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
 
             if let product = vm.product {
                 HStack(spacing: AppSpacing.sm) {
@@ -604,47 +620,52 @@ private extension ServiceTicketDetailView {
             }
         }
         .padding(AppSpacing.cardPadding)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        .ticketCardStyle()
     }
 
     var detailsCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("DETAILS")
-                .font(AppTypography.overline)
-                .tracking(1.8)
-                .foregroundColor(.secondary)
+            Label("Details", systemImage: "doc.text")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
 
-            if let condition = vm.ticket.conditionNotes, !condition.isEmpty {
-                detailRow(title: "Condition", value: condition)
+            VStack(spacing: 0) {
+                if let condition = vm.ticket.conditionNotes, !condition.isEmpty {
+                    detailRow(title: "Condition", value: condition)
+                    Divider().padding(.leading, 12)
+                }
+                if let notes = vm.ticket.notes, !notes.isEmpty {
+                    detailRow(title: "Notes", value: notes)
+                    Divider().padding(.leading, 12)
+                }
+                if let cost = vm.ticket.estimatedCost {
+                    detailRow(title: "Est. Cost", value: "INR \(String(format: "%.2f", cost))")
+                    Divider().padding(.leading, 12)
+                }
+                if let finalCost = vm.ticket.finalCost {
+                    detailRow(title: "Final Cost", value: "INR \(String(format: "%.2f", finalCost))")
+                    Divider().padding(.leading, 12)
+                }
+                detailRow(title: "Approval", value: vm.ticket.clientApprovalStatus.displayName)
+                if let sla = vm.ticket.slaDueDate {
+                    Divider().padding(.leading, 12)
+                    detailRow(title: "SLA Due", value: sla)
+                }
+                Divider().padding(.leading, 12)
+                detailRow(title: "Updated", value: vm.ticket.updatedAt.formatted(date: .abbreviated, time: .shortened))
             }
-            if let notes = vm.ticket.notes, !notes.isEmpty {
-                detailRow(title: "Notes", value: notes)
-            }
-            if let cost = vm.ticket.estimatedCost {
-                detailRow(title: "Estimated Cost", value: "INR \(String(format: "%.2f", cost))")
-            }
-            if let finalCost = vm.ticket.finalCost {
-                detailRow(title: "Final Cost", value: "INR \(String(format: "%.2f", finalCost))")
-            }
-            detailRow(title: "Client Approval", value: vm.ticket.clientApprovalStatus.displayName)
-            if let sla = vm.ticket.slaDueDate {
-                detailRow(title: "SLA Due", value: sla)
-            }
-            detailRow(title: "Last Updated", value: vm.ticket.updatedAt.formatted(date: .abbreviated, time: .shortened))
+            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .padding(AppSpacing.cardPadding)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        .ticketCardStyle()
     }
 
     var estimateCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack {
-                Text("REPAIR ESTIMATE")
-                    .font(AppTypography.overline)
-                    .tracking(1.8)
-                    .foregroundColor(.secondary)
+                Label("Repair Estimate", systemImage: "wrench")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
                 Spacer()
                 approvalPill(vm.ticket.clientApprovalStatus)
             }
@@ -656,8 +677,7 @@ private extension ServiceTicketDetailView {
             }
         }
         .padding(AppSpacing.cardPadding)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        .ticketCardStyle()
     }
 
     var readOnlyEstimateBreakdown: some View {
@@ -858,10 +878,9 @@ private extension ServiceTicketDetailView {
 
     func photosCard(_ photos: [String]) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("INTAKE PHOTOS")
-                .font(AppTypography.overline)
-                .tracking(1.8)
-                .foregroundColor(.secondary)
+            Label("Intake Photos", systemImage: "photo.stack")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: AppSpacing.xs) {
                 ForEach(Array(photos.enumerated()), id: \.offset) { _, photoPath in
@@ -885,8 +904,7 @@ private extension ServiceTicketDetailView {
             }
         }
         .padding(AppSpacing.cardPadding)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        .ticketCardStyle()
     }
 
     var placeholderPhoto: some View {
@@ -901,10 +919,9 @@ private extension ServiceTicketDetailView {
 
     var actionsCard: some View {
             VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                Text("UPDATE STATUS")
-                    .font(AppTypography.overline)
-                    .tracking(1.8)
-                    .foregroundColor(.secondary)
+                Label("Update Status", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
 
                 if vm.nextStatuses.contains(.completed) {
                     Button {
@@ -1033,8 +1050,7 @@ private extension ServiceTicketDetailView {
                 }
             }
             .padding(AppSpacing.cardPadding)
-            .background(Color(.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+            .ticketCardStyle(cornerRadius: AppSpacing.radiusMedium)
         }
 
     // MARK: - Helpers
@@ -1050,15 +1066,19 @@ private extension ServiceTicketDetailView {
     }
 
     func detailRow(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .top, spacing: AppSpacing.sm) {
             Text(title)
                 .font(AppTypography.caption)
                 .foregroundColor(.secondary)
+                .frame(width: 78, alignment: .leading)
             Text(value)
                 .font(AppTypography.bodySmall)
                 .foregroundColor(.primary)
                 .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, AppSpacing.sm)
+        .padding(.vertical, AppSpacing.xs)
     }
 
     func approvalPill(_ status: ClientApprovalStatus) -> some View {
@@ -1137,5 +1157,17 @@ private extension ServiceTicketDetailView {
             return URL(string: "\(base)/storage/v1/object/public/\(value)")
         }
         return URL(string: "\(base)/storage/v1/object/public/\(value)")
+    }
+}
+
+private extension View {
+    func ticketCardStyle(cornerRadius: CGFloat = 18) -> some View {
+        self
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Color(uiColor: .separator).opacity(0.35), lineWidth: 0.6)
+            )
     }
 }

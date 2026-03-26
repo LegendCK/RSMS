@@ -30,6 +30,7 @@ class AppState {
     // MARK: - Navigation
     var homeNavigationPath: NavigationPath = NavigationPath()
     var showCart: Bool = false  // Programmatic cart navigation
+    var customerSelectedTab: Int = 0   // 0=Home, 1=Categories, 2=Appointments, 3=Profile, 4=Search
 
     /// Set to true by navigateToHome(); CartView and BuyNowSheetView observe this
     /// to dismiss themselves before the path is cleared.
@@ -42,6 +43,7 @@ class AppState {
         print("[AppState] Current homeNavigationPath count: \(homeNavigationPath.count)")
         shouldNavigateHome   = true
         showCart            = false  // Reset cart navigation
+        customerSelectedTab = 0      // Ensure customer flow returns to Home tab
         homeNavigationPath   = NavigationPath()
         print("[AppState] homeNavigationPath cleared, new count: \(homeNavigationPath.count)")
         

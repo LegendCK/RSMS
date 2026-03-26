@@ -44,6 +44,9 @@ struct CheckoutView: View {
     @State private var cardExpiry  = ""
     @State private var cardCVV     = ""
 
+    // Tax-free verification (staff-only)
+    @State private var taxFreeVerification = TaxExemptionVerification()
+
     // BOPIS store selection
     @State private var selectedPickupStore: StoreDTO? = nil
     @State private var showStorePicker = false
@@ -105,11 +108,20 @@ struct CheckoutView: View {
     private var merchandiseSubtotal: Double { pricing.merchandiseSubtotal }
     private var subtotal: Double { pricing.subtotal }
     private var discountTotal: Double { pricing.discountTotal }
-    private var tax:      Double { pricing.taxBreakdown.totalTax }
+    /// Original tax before any exemption — used for savings display.
+    private var originalTax: Double { pricing.taxBreakdown.totalTax }
+    /// Effective tax: zero when the associate has enabled and verified tax-free status.
+    private var tax: Double { taxFreeVerification.isEnabled ? 0 : originalTax }
     private var shipping: Double {
         selectedFulfillment == .bopis ? 0 : (subtotal >= policy.freeShippingThreshold ? 0 : policy.standardShippingFee)
     }
     private var total:    Double { subtotal + tax + shipping }
+
+    /// Whether the current user is staff (eligible to toggle tax-free).
+    private var isStaffUser: Bool {
+        let role = appState.currentUserRole
+        return role == .salesAssociate || role == .boutiqueManager || role == .corporateAdmin
+    }
 
     var body: some View {
         ZStack {
@@ -174,6 +186,11 @@ struct CheckoutView: View {
         .onAppear {
             if appState.currentUserRole != .customer && selectedFulfillment == .standard {
                 selectedFulfillment = .shipFromStore
+            }
+            // Pre-fill the associate's name for tax-free verification audit trail
+            if isStaffUser {
+                taxFreeVerification.verifiedByName = appState.currentUserProfile?.fullName
+                    ?? appState.currentUserEmail
             }
             Task { @MainActor in
                 if savedAddresses.isEmpty,
@@ -485,6 +502,17 @@ struct CheckoutView: View {
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
+
+            // Tax-free option — visible only to staff roles
+            if isStaffUser {
+                GoldDivider()
+                sectionHeader("TAX EXEMPTION")
+                TaxFreeCheckoutSection(
+                    verification: $taxFreeVerification,
+                    originalTax: originalTax,
+                    currencyFormatter: formatCurrency
+                )
+            }
         }
     }
 
@@ -616,6 +644,39 @@ struct CheckoutView: View {
 
             GoldDivider()
 
+            // Tax-free badge (if applicable)
+            if taxFreeVerification.isEnabled {
+                HStack(spacing: AppSpacing.sm) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(AppColors.success)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("TAX-FREE TRANSACTION")
+                            .font(AppTypography.overline)
+                            .tracking(1.5)
+                            .foregroundColor(AppColors.success)
+                        Text(taxFreeVerification.reason.rawValue)
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                        if !taxFreeVerification.documentReference.isEmpty {
+                            Text("Ref: \(taxFreeVerification.documentReference)")
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(AppSpacing.cardPadding)
+                .background(AppColors.success.opacity(0.08))
+                .cornerRadius(AppSpacing.radiusMedium)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                        .stroke(AppColors.success.opacity(0.3), lineWidth: 1)
+                )
+            }
+
+            GoldDivider()
+
             // Price breakdown
             VStack(spacing: AppSpacing.sm) {
                 summaryRow("Items", value: formatCurrency(merchandiseSubtotal))
@@ -623,18 +684,49 @@ struct CheckoutView: View {
                     summaryRow("Offer", value: "-\(formatCurrency(discountTotal))")
                 }
                 summaryRow("Subtotal", value: formatCurrency(subtotal))
-                summaryRow("CGST", value: formatCurrency(pricing.taxBreakdown.cgst))
-                summaryRow("SGST", value: formatCurrency(pricing.taxBreakdown.sgst))
-                if pricing.taxBreakdown.igst > 0 {
-                    summaryRow("IGST", value: formatCurrency(pricing.taxBreakdown.igst))
+
+                if taxFreeVerification.isEnabled {
+                    // Show taxes as struck-through with zero
+                    taxExemptRow("CGST", original: pricing.taxBreakdown.cgst)
+                    taxExemptRow("SGST", original: pricing.taxBreakdown.sgst)
+                    if pricing.taxBreakdown.igst > 0 {
+                        taxExemptRow("IGST", original: pricing.taxBreakdown.igst)
+                    }
+                    if pricing.taxBreakdown.cess > 0 {
+                        taxExemptRow("Cess", original: pricing.taxBreakdown.cess)
+                    }
+                    if pricing.taxBreakdown.additionalLevy > 0 {
+                        taxExemptRow("Other Tax", original: pricing.taxBreakdown.additionalLevy)
+                    }
+                } else {
+                    summaryRow("CGST", value: formatCurrency(pricing.taxBreakdown.cgst))
+                    summaryRow("SGST", value: formatCurrency(pricing.taxBreakdown.sgst))
+                    if pricing.taxBreakdown.igst > 0 {
+                        summaryRow("IGST", value: formatCurrency(pricing.taxBreakdown.igst))
+                    }
+                    if pricing.taxBreakdown.cess > 0 {
+                        summaryRow("Cess", value: formatCurrency(pricing.taxBreakdown.cess))
+                    }
+                    if pricing.taxBreakdown.additionalLevy > 0 {
+                        summaryRow("Other Tax", value: formatCurrency(pricing.taxBreakdown.additionalLevy))
+                    }
                 }
-                if pricing.taxBreakdown.cess > 0 {
-                    summaryRow("Cess", value: formatCurrency(pricing.taxBreakdown.cess))
-                }
-                if pricing.taxBreakdown.additionalLevy > 0 {
-                    summaryRow("Other Tax", value: formatCurrency(pricing.taxBreakdown.additionalLevy))
-                }
+
                 summaryRow("Shipping", value: shipping == 0 ? "Free" : formatCurrency(shipping))
+
+                if taxFreeVerification.isEnabled && originalTax > 0 {
+                    HStack {
+                        Text("Tax Savings")
+                            .font(AppTypography.bodyMedium)
+                            .foregroundColor(AppColors.success)
+                        Spacer()
+                        Text("-\(formatCurrency(originalTax))")
+                            .font(AppTypography.bodyMedium)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.success)
+                    }
+                }
+
                 GoldDivider()
                 HStack {
                     Text("Total")
@@ -726,6 +818,35 @@ struct CheckoutView: View {
         }
     }
 
+    /// Shows the original tax amount struck-through with ₹0.00 next to it.
+    private func taxExemptRow(_ label: String, original: Double) -> some View {
+        HStack {
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(AppTypography.bodyMedium)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                Text("EXEMPT")
+                    .font(AppTypography.pico)
+                    .tracking(0.5)
+                    .foregroundColor(AppColors.success)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(AppColors.success.opacity(0.1))
+                    .cornerRadius(3)
+            }
+            Spacer()
+            HStack(spacing: 6) {
+                Text(formatCurrency(original))
+                    .font(AppTypography.bodyMedium)
+                    .strikethrough(true, color: AppColors.error.opacity(0.6))
+                    .foregroundColor(AppColors.textSecondaryDark.opacity(0.5))
+                Text(formatCurrency(0))
+                    .font(AppTypography.bodyMedium)
+                    .foregroundColor(AppColors.success)
+            }
+        }
+    }
+
     private func lineTotal(for item: CartItem) -> Double {
         pricing.lineItems.first(where: { $0.productId == item.productId })?.taxableValue ?? item.lineTotal
     }
@@ -739,8 +860,10 @@ struct CheckoutView: View {
             return isInlineAddressComplete
         case 1:
             if selectedPayment == .creditCard {
-                return !cardNumber.isEmpty && !cardExpiry.isEmpty && !cardCVV.isEmpty
+                guard !cardNumber.isEmpty && !cardExpiry.isEmpty && !cardCVV.isEmpty else { return false }
             }
+            // If tax-free is toggled on, the document reference must be filled
+            if taxFreeVerification.isEnabled && !taxFreeVerification.isComplete { return false }
             return true
         default:
             return true
@@ -851,7 +974,8 @@ struct CheckoutView: View {
         let itemsArr: [[String: Any]] = cartItems.map { item in
             let effectiveUnitPrice = pricing.lineItems.first(where: { $0.productId == item.productId })?.unitPrice ?? item.unitPrice
             return ["name": item.productName, "brand": item.productBrand,
-                    "qty": item.quantity, "price": effectiveUnitPrice, "image": item.productImageName]
+                    "qty": item.quantity, "price": effectiveUnitPrice, "image": item.productImageName,
+                    "productId": item.productId.uuidString]
         }
         let itemsJSON: String = {
             guard let data = try? JSONSerialization.data(withJSONObject: itemsArr),
@@ -874,7 +998,9 @@ struct CheckoutView: View {
             total: snapshotTotal,
             shippingAddress: addrJSON,
             fulfillmentType: selectedFulfillment,
-            paymentMethod: selectedPayment.title
+            paymentMethod: selectedPayment.title,
+            isTaxFree: taxFreeVerification.isEnabled,
+            taxFreeReason: taxFreeVerification.formattedReason
         )
         // Set boutique ID for BOPIS orders so the manager dashboard picks them up
         if selectedFulfillment == .bopis, let store = selectedPickupStore {
@@ -969,6 +1095,8 @@ struct CheckoutView: View {
                     grandTotal: snapshotTotal,
                     channel: channel,
                     storeId: nearestStoreId,
+                    isTaxFree: taxFreeVerification.isEnabled,
+                    taxFreeReason: taxFreeVerification.formattedReason,
                     deliveryCity: deliveryCity,
                     deliveryState: deliveryState
                 )

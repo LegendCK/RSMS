@@ -30,6 +30,8 @@ struct OrderFulfillmentView: View {
     @State private var selectedFilter: FulfillFilter = .pending
     @State private var errorMessage = ""
     @State private var showError = false
+    private let glassCardRadius: CGFloat = 20
+    private let innerCardRadius: CGFloat = 14
 
     enum FulfillFilter: String, CaseIterable {
         case pending    = "New"
@@ -63,27 +65,37 @@ struct OrderFulfillmentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Stats bar ──────────────────────────────────────────────
-            HStack(spacing: 0) {
-                statCell(value: "\(pendingCount)",    label: "New",        color: AppColors.warning)
-                statDivider()
-                statCell(value: "\(processingCount)", label: "Processing", color: AppColors.accent)
-                statDivider()
-                statCell(value: "\(shippedCount)",    label: "Shipped",    color: AppColors.success)
+            VStack(spacing: AppSpacing.md) {
+                HStack(spacing: AppSpacing.sm) {
+                    statCell(value: "\(pendingCount)", label: "New", color: AppColors.warning)
+                    statCell(value: "\(processingCount)", label: "Processing", color: AppColors.accent)
+                    statCell(value: "\(shippedCount)", label: "Shipped", color: AppColors.success)
+                }
+
+                filterRow
             }
+            .padding(AppSpacing.md)
+            .liquidGlass(
+                config: .thin,
+                backgroundColor: AppColors.backgroundSecondary,
+                cornerRadius: glassCardRadius
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: glassCardRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.12), Color.clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .blendMode(.screen)
+                    .allowsHitTesting(false)
+            )
+            .liquidShadow(LiquidShadow.subtle)
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.sm)
             .padding(.bottom, AppSpacing.xs)
-
-            // ── Filter pill row ────────────────────────────────────────
-            filterRow
-                .padding(.horizontal, AppSpacing.screenHorizontal)
-                .padding(.vertical, AppSpacing.sm)
-
-            // ── Thin separator ─────────────────────────────────────────
-            Rectangle()
-                .fill(Color(uiColor: .separator).opacity(0.4))
-                .frame(height: 0.5)
 
             // ── Content ────────────────────────────────────────────────
             if isLoading {
@@ -128,6 +140,7 @@ struct OrderFulfillmentView: View {
                 filterPill(filter)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func filterPill(_ filter: FulfillFilter) -> some View {
@@ -136,21 +149,25 @@ struct OrderFulfillmentView: View {
             withAnimation(.easeInOut(duration: 0.15)) { selectedFilter = filter }
         } label: {
             Text(filter.rawValue)
-                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
                 .tracking(0.2)
                 .foregroundColor(isSelected ? .white : AppColors.textPrimaryDark)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 7)
+                .frame(height: 34)
                 .background(
                     Capsule()
                         .fill(isSelected ? AppColors.accent : Color(uiColor: .secondarySystemFill))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(isSelected ? AppColors.accent.opacity(0.0) : AppColors.border.opacity(0.22), lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
     }
 
     private func statCell(value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 4) {
             Text(value)
                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                 .foregroundColor(color)
@@ -159,14 +176,9 @@ struct OrderFulfillmentView: View {
                 .tracking(0.5)
                 .foregroundColor(Color(uiColor: .secondaryLabel))
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, AppSpacing.sm)
-    }
-
-    private func statDivider() -> some View {
-        Rectangle()
-            .fill(Color(uiColor: .separator).opacity(0.5))
-            .frame(width: 0.5, height: 36)
+        .frame(maxWidth: .infinity, minHeight: 78)
+        .background(color.opacity(0.08))
+        .liquidGlass(config: .ultraThin, backgroundColor: color.opacity(0.1), cornerRadius: innerCardRadius)
     }
 
     private var emptyState: some View {
@@ -225,6 +237,7 @@ struct OrderFulfillmentCard: View {
     @State private var showStockSheet  = false
     @State private var errorMessage    = ""
     @State private var showError       = false
+    private let cardRadius: CGFloat = 20
 
     // MARK: - Computed
 
@@ -304,8 +317,8 @@ struct OrderFulfillmentCard: View {
                 statusBadge
             }
             .padding(.horizontal, AppSpacing.md)
-            .padding(.top, AppSpacing.md)
-            .padding(.bottom, AppSpacing.xs)
+            .padding(.top, AppSpacing.lg)
+            .padding(.bottom, AppSpacing.sm)
 
             // ── Customer (hero) + date ─────────────────────────────────
             VStack(alignment: .leading, spacing: 2) {
@@ -321,11 +334,11 @@ struct OrderFulfillmentCard: View {
                 }
             }
             .padding(.horizontal, AppSpacing.md)
-            .padding(.bottom, AppSpacing.sm)
+            .padding(.bottom, AppSpacing.md)
 
             // ── Thin separator ─────────────────────────────────────────
             Rectangle()
-                .fill(Color(uiColor: .separator).opacity(0.5))
+                .fill(AppColors.dividerLight.opacity(0.9))
                 .frame(height: 0.5)
                 .padding(.horizontal, AppSpacing.md)
 
@@ -355,7 +368,7 @@ struct OrderFulfillmentCard: View {
                     .foregroundColor(AppColors.accent)
             }
             .padding(.horizontal, AppSpacing.md)
-            .padding(.vertical, AppSpacing.sm)
+            .padding(.vertical, AppSpacing.md)
 
             // ── Expand items disclosure ────────────────────────────────
             Button {
@@ -375,7 +388,7 @@ struct OrderFulfillmentCard: View {
                     }
                 }
                 .padding(.horizontal, AppSpacing.md)
-                .padding(.bottom, isExpanded ? AppSpacing.xs : AppSpacing.sm)
+                .padding(.bottom, isExpanded ? AppSpacing.sm : AppSpacing.md)
             }
 
             // ── Expanded items ─────────────────────────────────────────
@@ -389,7 +402,7 @@ struct OrderFulfillmentCard: View {
             if let action = nextAction {
                 VStack(spacing: AppSpacing.xs) {
                     Rectangle()
-                        .fill(Color(uiColor: .separator).opacity(0.5))
+                        .fill(AppColors.dividerLight.opacity(0.9))
                         .frame(height: 0.5)
 
                     VStack(spacing: AppSpacing.xs) {
@@ -410,10 +423,24 @@ struct OrderFulfillmentCard: View {
                 }
             }
         }
-        .background(Color(uiColor: .systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge))
-        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
-        .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
+        .liquidGlass(
+            config: .regular,
+            backgroundColor: AppColors.backgroundSecondary,
+            cornerRadius: cardRadius
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.15), Color.clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .blendMode(.screen)
+                .allowsHitTesting(false)
+        )
+        .liquidShadow(LiquidShadow.subtle)
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {

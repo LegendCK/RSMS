@@ -202,7 +202,6 @@ struct CorporateAdminClientActivityView: View {
         }
         .navigationTitle("Client Activity")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, prompt: "Search orders, reservations, returns")
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Button {
@@ -335,7 +334,7 @@ struct CorporateAdminClientActivityView: View {
     }
 
     private var fulfillmentCard: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             Text("STORE FULFILLMENT STATUS")
                 .font(AppTypography.overline)
                 .tracking(2)
@@ -347,7 +346,7 @@ struct CorporateAdminClientActivityView: View {
                     .foregroundColor(AppColors.textSecondaryDark)
             } else {
                 ForEach(fulfillmentRows) { row in
-                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(row.storeName)
@@ -365,16 +364,22 @@ struct CorporateAdminClientActivityView: View {
                                 .foregroundColor(AppColors.accent)
                         }
 
-                        HStack(spacing: AppSpacing.xs) {
-                            miniStatusPill("Pending \(row.pending)", color: AppColors.warning)
-                            miniStatusPill("Processing \(row.processing)", color: AppColors.info)
-                            miniStatusPill("Confirmed \(row.confirmed)", color: AppColors.success)
-                            miniStatusPill("Shipped \(row.shipped)", color: AppColors.accent)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: AppSpacing.xs) {
+                                miniStatusPill("Pending \(row.pending)", color: AppColors.warning)
+                                miniStatusPill("Processing \(row.processing)", color: AppColors.info)
+                                miniStatusPill("Confirmed \(row.confirmed)", color: AppColors.success)
+                                miniStatusPill("Shipped \(row.shipped)", color: AppColors.accent)
+                            }
                         }
                     }
-                    .padding(AppSpacing.sm)
-                    .background(AppColors.backgroundPrimary)
+                    .padding(AppSpacing.md)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
                     .cornerRadius(AppSpacing.radiusMedium)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous)
+                            .stroke(AppColors.border.opacity(0.14), lineWidth: 0.6)
+                    )
                 }
             }
         }
@@ -400,6 +405,9 @@ struct CorporateAdminClientActivityView: View {
             }
         }
         .pickerStyle(.segmented)
+        .padding(6)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .cornerRadius(AppSpacing.radiusMedium)
     }
 
     private var searchBar: some View {
@@ -411,8 +419,12 @@ struct CorporateAdminClientActivityView: View {
         }
         .padding(.horizontal, AppSpacing.sm)
         .padding(.vertical, AppSpacing.sm)
-        .background(AppColors.backgroundSecondary)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
         .cornerRadius(AppSpacing.radiusMedium)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous)
+                .stroke(AppColors.border.opacity(0.14), lineWidth: 0.6)
+        )
     }
 
     @ViewBuilder
@@ -668,4 +680,3 @@ private struct AdminFulfillmentRow: Identifiable {
     let confirmed: Int
     let shipped: Int
 }
-
