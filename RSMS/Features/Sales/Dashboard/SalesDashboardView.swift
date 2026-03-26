@@ -16,6 +16,8 @@ struct SalesDashboardView: View {
     @State private var showCreateTicket = false
     @State private var showTicketList = false
     @State private var showLooksList = false
+    @State private var showShippingDocs = false
+    @State private var showInventory = false
 
     var body: some View {
         ZStack(alignment: .top) {

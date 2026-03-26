@@ -550,6 +550,15 @@ struct CreateUserSheet: View {
             modelContext.insert(local)
             try? modelContext.save()
 
+            await AdminAuditService.shared.logActivity(
+                action: "Created Staff User",
+                details: [
+                    "email": dto.email,
+                    "role": dto.userRole.rawValue,
+                    "id": dto.id.uuidString
+                ]
+            )
+
             createdName = dto.fullName
             showSuccess = true
         } catch {
