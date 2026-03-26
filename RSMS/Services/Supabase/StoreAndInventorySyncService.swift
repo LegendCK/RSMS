@@ -54,8 +54,8 @@ final class StoreAndInventorySyncService {
 
         let response = try await SupabaseManager.shared.client
             .from("inventory")
-            .select("id, store_id, product_id, quantity, reorder_point, updated_at, products(sku, name, image_urls, categories(name))")
-            .eq("store_id", value: storeUuid)
+            .select("id, location_id, product_id, quantity, reorder_point, updated_at, products(sku, name, image_urls, categories(name))")
+            .eq("location_id", value: storeUuid)
             .execute()
 
         let records = try JSONDecoder().decode([SupabaseInventoryWithProduct].self, from: response.data)
@@ -204,7 +204,7 @@ struct SupabaseStore: Codable {
 
 struct SupabaseInventory: Codable {
     let id: String
-    let store_id: String
+    let location_id: String?
     let product_id: String
     let quantity: Int
     let reorder_point: Int?
@@ -213,7 +213,7 @@ struct SupabaseInventory: Codable {
 
 struct SupabaseInventoryWithProduct: Decodable {
     let id: String
-    let store_id: String
+    let location_id: String?
     let product_id: String
     let quantity: Int
     let reorder_point: Int?
@@ -221,13 +221,13 @@ struct SupabaseInventoryWithProduct: Decodable {
     let products: SupabaseProduct?
 
     enum CodingKeys: String, CodingKey {
-        case id, store_id, product_id, quantity, reorder_point, updated_at, products
+        case id, location_id, product_id, quantity, reorder_point, updated_at, products
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
-        store_id = try c.decode(String.self, forKey: .store_id)
+        location_id = try c.decodeIfPresent(String.self, forKey: .location_id)
         product_id = try c.decode(String.self, forKey: .product_id)
         quantity = try c.decode(Int.self, forKey: .quantity)
         reorder_point = try c.decodeIfPresent(Int.self, forKey: .reorder_point)

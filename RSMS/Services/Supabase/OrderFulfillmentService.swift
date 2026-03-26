@@ -179,7 +179,7 @@ final class OrderFulfillmentService {
         let rows: [InvRow] = try await client
             .from("inventory")
             .select("product_id, quantity")
-            .eq("store_id", value: storeId.uuidString.lowercased())
+            .eq("location_id", value: storeId.uuidString.lowercased())
             .in("product_id", values: productIds.map { $0.uuidString.lowercased() })
             .execute()
             .value

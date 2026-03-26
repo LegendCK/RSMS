@@ -102,11 +102,11 @@ enum AdminReportExportService {
             lines.append("store_id,product_id,quantity,reorder_point,updated_at")
             for row in snapshot.inventory {
                 lines.append(csv([
-                    row.storeId.uuidString,
+                    row.locationId?.uuidString ?? "N/A",
                     row.productId.uuidString,
                     "\(row.quantity)",
-                    "\(row.reorderPoint)",
-                    iso(row.updatedAt)
+                    "\(row.reorderPoint ?? 5)",
+                    iso(row.updatedAt ?? Date())
                 ]))
             }
             lines.append("")
@@ -209,7 +209,7 @@ enum AdminReportExportService {
                 y += 17
                 row("Inventory Rows", "\(snapshot.inventory.count)")
                 row("Total Units", "\(snapshot.inventory.reduce(0) { $0 + $1.quantity })")
-                row("Low Stock Rows", "\(snapshot.inventory.filter { $0.quantity <= $0.reorderPoint }.count)")
+                row("Low Stock Rows", "\(snapshot.inventory.filter { $0.quantity <= ($0.reorderPoint ?? 5) }.count)")
                 y += 8
             }
 
