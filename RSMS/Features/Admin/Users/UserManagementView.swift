@@ -259,12 +259,15 @@ struct UserManagementView: View {
 struct CreateUserSheet: View {
     let modelContext: ModelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \StoreLocation.name) private var allStores: [StoreLocation]
 
     @State private var name = ""
-    @State private var email = ""
+    @State private var corporateEmail = ""
+    @State private var personalEmail = ""
     @State private var phone = ""
     @State private var password = ""
     @State private var selectedRole: UserRole = .boutiqueManager
+    @State private var selectedStoreId: UUID?
     @State private var isCreating = false
     @State private var showError = false
     @State private var errorMessage = ""
@@ -342,11 +345,19 @@ struct CreateUserSheet: View {
                                     .autocorrectionDisabled()
                             }
                             Divider().padding(.leading, 52)
-                            fieldRow(label: "Email Address", icon: "envelope") {
-                                TextField("Required", text: $email)
+                            fieldRow(label: "Corporate Email", icon: "building.2") {
+                                TextField("name@maisonluxe.me", text: $corporateEmail)
                                     .multilineTextAlignment(.trailing)
                                     .keyboardType(.emailAddress)
-                                    .autocapitalization(.none)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                            }
+                            Divider().padding(.leading, 52)
+                            fieldRow(label: "Personal Email", icon: "envelope") {
+                                TextField("user@gmail.com", text: $personalEmail)
+                                    .multilineTextAlignment(.trailing)
+                                    .keyboardType(.emailAddress)
+                                    .textInputAutocapitalization(.never)
                                     .autocorrectionDisabled()
                             }
                             Divider().padding(.leading, 52)
@@ -360,6 +371,42 @@ struct CreateUserSheet: View {
                                 SecureField("Min 6 characters", text: $password)
                                     .multilineTextAlignment(.trailing)
                             }
+                        }
+
+                        // Boutique Assignment
+                        formSection {
+                            fieldRow(label: "Boutique", icon: "building.2") {
+                                Menu {
+                                    Button("None") { selectedStoreId = nil }
+                                    ForEach(boutiqueStores) { store in
+                                        Button(store.name) { selectedStoreId = store.id }
+                                    }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Text(selectedStoreName)
+                                            .font(.system(size: 15))
+                                            .foregroundColor(selectedStoreId == nil ? .secondary : .primary)
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+
+                        if !corporateEmail.isEmpty && !corporateEmail.lowercased().hasSuffix("@maisonluxe.me") {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.orange)
+                                Text("Corporate email should end with @maisonluxe.me")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.orange)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 28)
+                            .padding(.top, -12)
+                            .padding(.bottom, -8)
                         }
 
                         // Create button
@@ -435,22 +482,37 @@ struct CreateUserSheet: View {
             Text(label)
                 .font(.system(size: 15))
                 .foregroundColor(.primary)
-            Spacer()
+                .layoutPriority(1)
+            Spacer(minLength: 8)
             content()
                 .font(.system(size: 15))
                 .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
     }
 
+    private var boutiqueStores: [StoreLocation] {
+        allStores.filter { $0.type == .boutique }.sorted { $0.name < $1.name }
+    }
+
+    private var selectedStoreName: String {
+        if let id = selectedStoreId, let store = allStores.first(where: { $0.id == id }) {
+            return store.name
+        }
+        return "Select Boutique"
+    }
+
     @MainActor
     private func createUser() async {
-        let trimmedName  = name.trimmingCharacters(in: .whitespaces)
-        let trimmedEmail = email.trimmingCharacters(in: .whitespaces).lowercased()
-        let trimmedPhone = phone.trimmingCharacters(in: .whitespaces)
+        let trimmedName           = name.trimmingCharacters(in: .whitespaces)
+        let trimmedCorporateEmail = corporateEmail.trimmingCharacters(in: .whitespaces).lowercased()
+        let trimmedPersonalEmail  = personalEmail.trimmingCharacters(in: .whitespaces).lowercased()
+        let trimmedPhone          = phone.trimmingCharacters(in: .whitespaces)
 
-        guard !trimmedName.isEmpty, !trimmedEmail.isEmpty,
+        guard !trimmedName.isEmpty, !trimmedCorporateEmail.isEmpty,
+              !trimmedPersonalEmail.isEmpty,
               !password.isEmpty, password.count >= 6 else {
             errorMessage = "Please fill in all fields. Password must be at least 6 characters."
             showError = true
@@ -464,10 +526,13 @@ struct CreateUserSheet: View {
             // 1 — Create in Supabase Auth + users table
             let dto = try await StaffSyncService.shared.createStaffWithAuth(
                 name: trimmedName,
-                email: trimmedEmail,
+                email: trimmedCorporateEmail,
                 phone: trimmedPhone,
                 password: password,
-                role: selectedRole
+                role: selectedRole,
+                storeId: selectedStoreId,
+                corporateEmail: trimmedCorporateEmail,
+                personalEmail: trimmedPersonalEmail
             )
 
             // 2 — Mirror into local SwiftData so UserManagementView refreshes instantly

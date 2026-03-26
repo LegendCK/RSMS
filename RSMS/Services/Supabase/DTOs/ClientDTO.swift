@@ -33,32 +33,34 @@ struct ClientDTO: Codable, Identifiable {
     let marketingOptIn: Bool
     let createdBy: UUID?            // FK to users.id (the associate who created)
     let isActive: Bool
+    let mustResetPassword: Bool
     let createdAt: Date
     let updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
         case id
-        case firstName       = "first_name"
-        case lastName        = "last_name"
+        case firstName          = "first_name"
+        case lastName           = "last_name"
         case email
         case phone
-        case dateOfBirth     = "date_of_birth"
+        case dateOfBirth        = "date_of_birth"
         case nationality
-        case preferredLanguage = "preferred_language"
-        case addressLine1    = "address_line1"
-        case addressLine2    = "address_line2"
+        case preferredLanguage  = "preferred_language"
+        case addressLine1       = "address_line1"
+        case addressLine2       = "address_line2"
         case city
         case state
-        case postalCode      = "postal_code"
+        case postalCode         = "postal_code"
         case country
         case segment
         case notes
-        case gdprConsent     = "gdpr_consent"
-        case marketingOptIn  = "marketing_opt_in"
-        case createdBy       = "created_by"
-        case isActive        = "is_active"
-        case createdAt       = "created_at"
-        case updatedAt       = "updated_at"
+        case gdprConsent        = "gdpr_consent"
+        case marketingOptIn     = "marketing_opt_in"
+        case createdBy          = "created_by"
+        case isActive           = "is_active"
+        case mustResetPassword  = "must_reset_password"
+        case createdAt          = "created_at"
+        case updatedAt          = "updated_at"
     }
 
     // MARK: - Convenience
@@ -90,24 +92,26 @@ struct ClientInsertDTO: Codable {
     let marketingOptIn: Bool
     let createdBy: UUID?
     let isActive: Bool
+    let mustResetPassword: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
-        case firstName      = "first_name"
-        case lastName       = "last_name"
+        case firstName          = "first_name"
+        case lastName           = "last_name"
         case email, phone
-        case dateOfBirth    = "date_of_birth"
+        case dateOfBirth        = "date_of_birth"
         case nationality
-        case preferredLanguage = "preferred_language"
-        case addressLine1   = "address_line1"
-        case addressLine2   = "address_line2"
+        case preferredLanguage  = "preferred_language"
+        case addressLine1       = "address_line1"
+        case addressLine2       = "address_line2"
         case city, state
-        case postalCode     = "postal_code"
+        case postalCode         = "postal_code"
         case country, segment, notes
-        case gdprConsent    = "gdpr_consent"
-        case marketingOptIn = "marketing_opt_in"
-        case createdBy      = "created_by"
-        case isActive       = "is_active"
+        case gdprConsent        = "gdpr_consent"
+        case marketingOptIn     = "marketing_opt_in"
+        case createdBy          = "created_by"
+        case isActive           = "is_active"
+        case mustResetPassword  = "must_reset_password"
     }
 }
 

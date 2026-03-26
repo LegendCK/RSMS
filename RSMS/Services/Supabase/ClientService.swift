@@ -42,7 +42,18 @@ final class ClientService {
                 .execute()
                 .value
 
-            // 5. Restore the associate's session.
+            // 5. Send welcome email to client (fire-and-forget)
+            Task {
+                try? await StaffSyncService.shared.sendWelcomeEmail(
+                    personalEmail: payload.email,
+                    corporateEmail: payload.email,
+                    recipientName: "\(payload.firstName) \(payload.lastName)",
+                    temporaryPassword: tempPassword,
+                    accountType: "client"
+                )
+            }
+
+            // 6. Restore the associate's session.
             try await client.auth.setSession(
                 accessToken: associateSession.accessToken,
                 refreshToken: associateSession.refreshToken

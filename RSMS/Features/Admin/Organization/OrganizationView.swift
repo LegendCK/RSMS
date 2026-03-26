@@ -1095,7 +1095,8 @@ struct OrgCreateStaffSheet: View {
     let onCreated: (User) -> Void
 
     @State private var name = ""
-    @State private var email = ""
+    @State private var corporateEmail = ""
+    @State private var personalEmail = ""
     @State private var phone = ""
     @State private var password = ""
     @State private var selectedRole: UserRole = .boutiqueManager
@@ -1141,9 +1142,21 @@ struct OrgCreateStaffSheet: View {
                     // Staff profile
                     card("Staff Profile", icon: "person.fill") {
                         field("Full Name", text: $name)
-                        field("Email", text: $email, keyboard: .emailAddress)
+                        field("Corporate Email (@maisonluxe.me)", text: $corporateEmail, keyboard: .emailAddress)
+                        field("Personal Email (for login credentials)", text: $personalEmail, keyboard: .emailAddress)
                         field("Phone (optional)", text: $phone, keyboard: .phonePad)
                         secureField("Temporary Password", text: $password)
+                    }
+
+                    if !corporateEmail.isEmpty && !corporateEmail.lowercased().hasSuffix("@maisonluxe.me") {
+                        HStack(spacing: AppSpacing.xs) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                            Text("Corporate email should end with @maisonluxe.me")
+                                .font(AppTypography.caption)
+                                .foregroundColor(.orange)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     card("Store Assignment", icon: "building.2.fill") {
@@ -1212,8 +1225,10 @@ struct OrgCreateStaffSheet: View {
 
     private var isFormValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        email.contains("@") &&
+        !corporateEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        corporateEmail.contains("@") &&
+        !personalEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        personalEmail.contains("@") &&
         password.count >= 6 &&
         selectedStoreId != nil
     }
@@ -1225,14 +1240,19 @@ struct OrgCreateStaffSheet: View {
         successMessage = nil
         defer { isCreating = false }
 
+        let trimmedCorporateEmail = corporateEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trimmedPersonalEmail = personalEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
         do {
             let dto = try await StaffSyncService.shared.createStaffWithAuth(
                 name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+                email: trimmedCorporateEmail,
                 phone: phone.trimmingCharacters(in: .whitespacesAndNewlines),
                 password: password,
                 role: selectedRole,
-                storeId: selectedStoreId
+                storeId: selectedStoreId,
+                corporateEmail: trimmedCorporateEmail,
+                personalEmail: trimmedPersonalEmail
             )
 
             let newUser = User(
