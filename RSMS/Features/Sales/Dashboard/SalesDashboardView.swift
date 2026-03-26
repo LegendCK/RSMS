@@ -11,8 +11,6 @@ import SwiftData
 struct SalesDashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var showAfterSales = false
-    @State private var showShippingDocs = false
-    @State private var showInventory = false
     @State private var vm = SalesDashboardViewModel()
     @State private var activeSheet: ActiveSalesSheet? = nil
     @State private var showCreateTicket = false
@@ -86,14 +84,14 @@ struct SalesDashboardView: View {
                         }
                         .buttonStyle(.plain)
                         Button {
-                            showTicketList = true
+                            activeSheet = .allTickets
                         } label: {
                             quickAction(title: "All Tickets", icon: "wrench.and.screwdriver", color: AppColors.neutral500)
                         }
                         .buttonStyle(.plain)
 
                         Button {
-                            showShippingDocs = true
+                            activeSheet = .shippingDocs
                         } label: {
                             quickAction(title: "Shipping Docs", icon: "doc.text.fill", color: AppColors.info)
                         }
@@ -178,6 +176,18 @@ struct SalesDashboardView: View {
                 SACatalogView()
             case .serviceTicket:
                 SalesAfterSalesView()
+            case .inventory:
+                NavigationStack {
+                    InventoryOverviewView()
+                }
+            case .allTickets:
+                NavigationStack {
+                    ServiceTicketListView()
+                }
+            case .shippingDocs:
+                NavigationStack {
+                    ShippingDocumentsListView()
+                }
             }
         }
         .sheet(isPresented: $showCreateTicket) {
@@ -321,6 +331,9 @@ private enum ActiveSalesSheet: String, Identifiable {
     case bookAppointment
     case startSale
     case serviceTicket
+    case inventory
+    case allTickets
+    case shippingDocs
 
     var id: String { rawValue }
 }

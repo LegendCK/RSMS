@@ -867,13 +867,37 @@ private extension ServiceTicketDetailView {
             }
             .opacity((vm.ticket.estimateSentAt != nil && !vm.isUpdatingApproval) ? 1 : 0.45)
             .disabled(vm.ticket.estimateSentAt == nil || vm.isUpdatingApproval)
+            Text("DETAILS")
+                .font(AppTypography.overline)
+                .tracking(1.8)
+                .foregroundColor(.secondary)
 
+            if let condition = vm.ticket.conditionNotes, !condition.isEmpty {
+                detailRow(title: "Condition", value: condition)
+            }
+            if let notes = vm.ticket.notes, !notes.isEmpty {
+                detailRow(title: "Notes", value: notes)
+            }
+            if let cost = vm.ticket.estimatedCost {
+                detailRow(title: "Estimated Cost", value: "INR \(String(format: "%.2f", cost))")
+            }
+            if let finalCost = vm.ticket.finalCost {
+                detailRow(title: "Final Cost", value: "INR \(String(format: "%.2f", finalCost))")
+            }
+            if let sla = vm.ticket.slaDueDate {
+                detailRow(title: "SLA Due", value: sla)
+            }
+            detailRow(title: "Last Updated", value: vm.ticket.updatedAt.formatted(date: .abbreviated, time: .shortened))
             if vm.ticket.hasRepairEstimate && vm.ticket.clientApprovalStatus != .approved {
                 Text("Repairs are blocked until approval is recorded as Approved.")
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.warning)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.cardPadding)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
     }
 
     func photosCard(_ photos: [String]) -> some View {
