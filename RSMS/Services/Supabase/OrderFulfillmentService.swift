@@ -306,6 +306,18 @@ final class OrderFulfillmentService {
         return orders
     }
 
+    /// Fetches a single order by its business order number.
+    func fetchOrderByNumber(_ orderNumber: String) async throws -> OrderDTO? {
+        let rows: [OrderDTO] = try await client
+            .from("orders")
+            .select("id, order_number, client_id, store_id, associate_id, channel, status, subtotal, tax_total, grand_total, currency, is_tax_free, notes, event_id, created_at, updated_at")
+            .eq("order_number", value: orderNumber)
+            .limit(1)
+            .execute()
+            .value
+        return rows.first
+    }
+
     // MARK: - Fetch Audit Trail
 
     /// Fetches all order_events for a given order, sorted oldest first.

@@ -54,6 +54,7 @@ final class SACartViewModel {
     var itemCount: Int { items.reduce(0) { $0 + $1.quantity } }
     var isEmpty:   Bool { items.isEmpty }
     var subtotal:  Double { items.reduce(0) { $0 + $1.lineTotal } }
+    var hasOutOfStockItems: Bool { items.contains { !$0.isInStockAtAdd } }
 
     // MARK: - Discount logic
 
@@ -114,7 +115,7 @@ final class SACartViewModel {
 
     // MARK: - Cart mutations
 
-    func addItem(_ product: ProductDTO, color: String? = nil, size: String? = nil) {
+    func addItem(_ product: ProductDTO, color: String? = nil, size: String? = nil, isInStock: Bool = true) {
         if let idx = items.firstIndex(where: {
             $0.productId == product.id &&
             $0.selectedColor == color &&
@@ -128,9 +129,13 @@ final class SACartViewModel {
                 productBrand:  product.brand ?? "Maison Luxe",
                 unitPrice:     product.price,
                 imageURL:      product.resolvedImageURLs.first,
+                isInStockAtAdd: isInStock,
                 selectedColor: color,
                 selectedSize:  size
             ))
+        }
+        if !isInStock {
+            isHandoverNow = false
         }
     }
 
@@ -224,7 +229,7 @@ final class SACartViewModel {
         do {
             // Wrap sync in a 15-second timeout so a dropped/slow connection
             // doesn't leave the UI stuck on "Processing…" indefinitely.
-            try await withThrowingTaskGroup(of: Void.self) { group in
+            let syncResult = try await withThrowingTaskGroup(of: OrderService.SyncOrderResult.self) { group in
                 group.addTask {
                     try await self.syncOrderWithRetry(
                         clientId: self.selectedClient?.id,
@@ -246,8 +251,30 @@ final class SACartViewModel {
                     try await Task.sleep(nanoseconds: 15_000_000_000)
                     throw OrderServiceError.edgeFunctionError("Request timed out. Check your connection.")
                 }
-                try await group.next()!
+                let result = try await group.next()!
                 group.cancelAll()
+                return result
+            }
+
+            if !isHandoverNow {
+                let workflowStoreId = syncResult.storeId ?? associateProfile?.storeId
+                let needsClientFallback = syncResult.replenishmentsRequested == 0
+                if let storeId = workflowStoreId {
+                await triggerOutOfStockWorkflow(
+                    orderNumber: orderNumber,
+                    storeId: storeId,
+                    clientId: selectedClient?.id,
+                    createReplenishmentRequests: needsClientFallback
+                )
+                }
+            } else if let clientId = selectedClient?.id {
+                await NotificationService.shared.createOrderLifecycleNotification(
+                    clientId: clientId,
+                    storeId: associateProfile?.storeId,
+                    title: "Order Confirmed",
+                    message: "Your order \(orderNumber) has been placed successfully.",
+                    deepLink: "orders"
+                )
             }
         } catch {
             print("[SACartVM] Supabase sync failed (order saved locally): \(error.localizedDescription)")
@@ -317,13 +344,13 @@ final class SACartViewModel {
         taxFreeReason: String,
         notes: String,
         paymentSplits: [OrderService.PaymentSplitInput]
-    ) async throws {
+    ) async throws -> OrderService.SyncOrderResult {
         let maxAttempts = 2
         var lastError: Error?
 
         for attempt in 1...maxAttempts {
             do {
-                try await OrderService.shared.syncOrder(
+                return try await OrderService.shared.syncOrder(
                     clientId:      clientId,
                     cartItems:     cartItems,
                     orderNumber:   orderNumber,
@@ -338,7 +365,6 @@ final class SACartViewModel {
                     notes:         notes,
                     paymentSplits: paymentSplits
                 )
-                return
             } catch {
                 lastError = error
                 if attempt < maxAttempts {
@@ -348,5 +374,36 @@ final class SACartViewModel {
         }
 
         throw lastError ?? OrderServiceError.edgeFunctionError("Unknown sync failure")
+    }
+
+    @MainActor
+    private func triggerOutOfStockWorkflow(
+        orderNumber: String,
+        storeId: UUID,
+        clientId: UUID?,
+        createReplenishmentRequests: Bool
+    ) async {
+        let outOfStockGrouped = Dictionary(grouping: items.filter { !$0.isInStockAtAdd }, by: \.productId)
+            .mapValues { rows in rows.reduce(0) { $0 + $1.quantity } }
+
+        if createReplenishmentRequests {
+            for (productId, quantity) in outOfStockGrouped {
+                await OrderFulfillmentService.shared.requestReplenishment(
+                    productId: productId,
+                    storeId: storeId,
+                    quantity: quantity,
+                    orderNumber: orderNumber
+                )
+            }
+        }
+
+        guard let clientId else { return }
+        await NotificationService.shared.createOrderLifecycleNotification(
+            clientId: clientId,
+            storeId: storeId,
+            title: "Order Accepted - Stock Requested",
+            message: "Order \(orderNumber) is confirmed. We have requested stock approval and will notify you when it is ready for pickup.",
+            deepLink: "orders"
+        )
     }
 }

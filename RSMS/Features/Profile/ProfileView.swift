@@ -97,7 +97,7 @@ struct ProfileView: View {
 
                 // Preferences
                 Section("Preferences") {
-                    NavigationLink(destination: NotificationCenterView()) {
+                    NavigationLink(destination: NotificationCenterView(showsCloseButton: false)) {
                         Label("Notifications", systemImage: "bell")
                     }
                     NavigationLink(destination: ProfileInfoView(

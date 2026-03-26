@@ -2,8 +2,8 @@
 //  CreateServiceTicketViewModel.swift
 //  RSMS
 //
-//  ViewModel for after-sales ticket creation with product lookup,
-//  client linking, photo uploads, and condition reporting.
+//  ViewModel for after-sales ticket creation with client linking,
+//  order-item lookup, photo uploads, and condition reporting.
 //
 
 import SwiftUI
@@ -27,19 +27,18 @@ final class CreateServiceTicketViewModel {
     var isSearchingClients: Bool = false
     var availableClients: [ClientDTO] = []
 
-    // Product
+    // Order item (source for service ticket product)
     var productSearchText: String = ""
-    var selectedProduct: ProductDTO?
-    var searchedProducts: [ProductDTO] = []
-    var isSearchingProducts: Bool = false
-    var availableProducts: [ProductDTO] = []
+    var selectedOrderItem: ServiceTicketOrderItem?
+    var isSearchingOrderItems: Bool = false
+    var availableOrderItems: [ServiceTicketOrderItem] = []
 
     // Photos
     var selectedPhotoItems: [PhotosPickerItem] = []
     var selectedImages: [UIImage] = []
     var isUploadingPhotos: Bool = false
 
-    // Order (optional link)
+    // Order (optional manual override)
     var orderNumber: String = ""
 
     // State
@@ -51,23 +50,19 @@ final class CreateServiceTicketViewModel {
     // MARK: - Dependencies
 
     private let ticketService: ServiceTicketServiceProtocol
-    private let catalogService: CatalogService
     private let clientService: ClientService
 
     init(
         ticketService: ServiceTicketServiceProtocol,
-        catalogService: CatalogService,
         clientService: ClientService
     ) {
         self.ticketService = ticketService
-        self.catalogService = catalogService
         self.clientService = clientService
     }
 
     convenience init() {
         self.init(
             ticketService: ServiceTicketService.shared,
-            catalogService: CatalogService.shared,
             clientService: ClientService.shared
         )
     }
@@ -76,7 +71,7 @@ final class CreateServiceTicketViewModel {
 
     var canCreateTicket: Bool {
         selectedClient != nil
-        && selectedProduct != nil
+        && selectedOrderItem != nil
         && !issueDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         && !isCreatingTicket
     }
@@ -118,51 +113,60 @@ final class CreateServiceTicketViewModel {
         selectedClient = client
         clientSearchText = client.fullName
         searchedClients = []
+        selectedOrderItem = nil
+        productSearchText = ""
+        availableOrderItems = []
+
+        Task { await loadOrderItemsForSelectedClient() }
     }
 
     func clearClient() {
         selectedClient = nil
         clientSearchText = ""
         searchedClients = []
+        clearOrderItemSelection()
+        availableOrderItems = []
     }
 
-    // MARK: - Product Search
+    // MARK: - Order Item Search
 
-    func loadProducts() async {
-        guard availableProducts.isEmpty, !isSearchingProducts else { return }
-        isSearchingProducts = true
-        defer { isSearchingProducts = false }
+    func loadOrderItemsForSelectedClient() async {
+        guard let clientId = selectedClient?.id else {
+            availableOrderItems = []
+            return
+        }
+        guard !isSearchingOrderItems else { return }
+
+        isSearchingOrderItems = true
+        defer { isSearchingOrderItems = false }
 
         do {
-            availableProducts = try await catalogService.fetchProducts()
-                .filter { $0.isActive }
-                .sorted { $0.name < $1.name }
+            availableOrderItems = try await ticketService.fetchClientOrderItems(clientId: clientId, limit: 40)
         } catch {
-            errorMessage = "Could not load products: \(error.localizedDescription)"
+            errorMessage = "Could not load client order items: \(error.localizedDescription)"
         }
     }
 
-    var filteredProducts: [ProductDTO] {
+    var filteredOrderItems: [ServiceTicketOrderItem] {
         let query = productSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return Array(availableProducts.prefix(30)) }
+        guard !query.isEmpty else { return availableOrderItems }
 
-        return availableProducts
-            .filter {
-                $0.name.lowercased().contains(query)
-                || $0.sku.lowercased().contains(query)
-                || ($0.brand?.lowercased().contains(query) ?? false)
-            }
-            .prefix(40)
-            .map { $0 }
+        return availableOrderItems.filter { item in
+            item.productName.lowercased().contains(query)
+            || item.productSku.lowercased().contains(query)
+            || (item.productBrand?.lowercased().contains(query) ?? false)
+            || item.orderNumber.lowercased().contains(query)
+        }
     }
 
-    func selectProduct(_ product: ProductDTO) {
-        selectedProduct = product
-        productSearchText = product.name
+    func selectOrderItem(_ item: ServiceTicketOrderItem) {
+        selectedOrderItem = item
+        productSearchText = item.productName
+        orderNumber = item.orderNumber
     }
 
-    func clearProduct() {
-        selectedProduct = nil
+    func clearOrderItemSelection() {
+        selectedOrderItem = nil
         productSearchText = ""
     }
 
@@ -195,20 +199,12 @@ final class CreateServiceTicketViewModel {
             errorMessage = "Store context unavailable. Cannot create ticket."
             return
         }
-        guard let product = selectedProduct else { return }
+        guard let orderItem = selectedOrderItem else { return }
 
         isCreatingTicket = true
         errorMessage = nil
 
         do {
-            // Resolve order context if provided
-            var orderId: UUID?
-            let trimmedOrder = orderNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmedOrder.isEmpty {
-                let context = try? await ticketService.resolveOrderContext(orderNumber: trimmedOrder)
-                orderId = context?.orderId
-            }
-
             // Build condition notes
             let condition = buildConditionNotes()
 
@@ -225,8 +221,8 @@ final class CreateServiceTicketViewModel {
                 clientId: selectedClient?.id,
                 storeId: storeId,
                 assignedTo: assignedUserId,
-                productId: product.id,
-                orderId: orderId,
+                productId: orderItem.productId,
+                orderId: orderItem.orderId,
                 type: selectedTicketType.rawValue,
                 status: RepairStatus.intake.rawValue,
                 conditionNotes: condition,
@@ -287,12 +283,13 @@ final class CreateServiceTicketViewModel {
         if let client = selectedClient {
             lines.append("Client: \(client.fullName) (\(client.email))")
         }
-        if let product = selectedProduct {
-            lines.append("Product: \(product.name) (SKU: \(product.sku))")
+        if let orderItem = selectedOrderItem {
+            lines.append("Order: \(orderItem.orderNumber)")
+            lines.append("Order Item: \(orderItem.productName) (SKU: \(orderItem.productSku))")
         }
         let trimmedOrder = orderNumber.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedOrder.isEmpty {
-            lines.append("Order: \(trimmedOrder)")
+            lines.append("Reference: \(trimmedOrder)")
         }
         let additional = additionalNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !additional.isEmpty {
@@ -310,7 +307,8 @@ final class CreateServiceTicketViewModel {
         selectedClient = nil
         searchedClients = []
         productSearchText = ""
-        selectedProduct = nil
+        selectedOrderItem = nil
+        availableOrderItems = []
         selectedPhotoItems = []
         selectedImages = []
         orderNumber = ""

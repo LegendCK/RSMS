@@ -53,10 +53,19 @@ final class OrderService {
         }
     }
 
+    struct SyncOrderResult {
+        let orderId: UUID?
+        let orderNumber: String?
+        let itemsInserted: Int
+        let storeId: UUID?
+        let replenishmentsRequested: Int
+    }
+
     // MARK: - Sync order to Supabase via Edge Function
 
     /// Sends the order to the `create-order` Edge Function which uses the service role
     /// key to insert into `orders` and `order_items`, bypassing RLS safely.
+    @discardableResult
     func syncOrder(
         clientId: UUID?,
         cartItems: [(productId: UUID, productName: String, quantity: Int, unitPrice: Double)],
@@ -73,7 +82,7 @@ final class OrderService {
         deliveryCity: String? = nil,
         deliveryState: String? = nil,
         paymentSplits: [PaymentSplitInput]? = nil
-    ) async throws {
+    ) async throws -> SyncOrderResult {
 
         struct CartItemPayload: Encodable {
             let productId: String
@@ -112,8 +121,10 @@ final class OrderService {
             let success: Bool?
             let orderId: String?
             let orderNumber: String?
+            let storeId: String?
             let itemsInserted: Int?
             let error: String?
+            let replenishmentsRequested: Int?
         }
 
         let items = cartItems.map {
@@ -186,5 +197,13 @@ final class OrderService {
         print("[OrderService] ✅ Order \(orderNumber) saved to Supabase — id: \(orderId), items: \(itemCount), status: completed")
         // Store routing is handled entirely server-side (city → state → fallback).
         // The edge function always sets store_id; no client-side patch needed.
+
+        return SyncOrderResult(
+            orderId: response.orderId.flatMap(UUID.init(uuidString:)),
+            orderNumber: response.orderNumber,
+            itemsInserted: itemCount,
+            storeId: response.storeId.flatMap(UUID.init(uuidString:)),
+            replenishmentsRequested: response.replenishmentsRequested ?? 0
+        )
     }
 }

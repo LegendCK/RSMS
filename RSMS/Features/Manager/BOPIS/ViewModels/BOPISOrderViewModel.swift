@@ -143,7 +143,7 @@ final class BOPISOrderViewModel {
         do {
             let rows: [_BOPISOrderDTO] = try await client
                 .from("orders")
-                .select("id, order_number, channel, status, grand_total, currency, created_at, clients(email)")
+                .select("id, order_number, client_id, channel, status, grand_total, currency, created_at, clients(email)")
                 .eq("store_id", value: storeId.uuidString)
                 .in("channel", values: ["bopis", "ship_from_store"])
                 .not("status", operator: .in, value: "(completed,cancelled,delivered)")

@@ -353,10 +353,10 @@ struct SACatalogProductDetailSheet: View {
 
     private var addToSaleButton: some View {
         Button {
-            guard stockQty > 0 else { return }
             cart.addItem(product,
                          color: colorVariants[selectedColorIndex],
-                         size: selectedSizeIndex.map { sizeVariants[$0] })
+                         size: selectedSizeIndex.map { sizeVariants[$0] },
+                         isInStock: stockQty > 0)
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                 addedToCart = true
             }
@@ -367,7 +367,7 @@ struct SACatalogProductDetailSheet: View {
             HStack(spacing: 10) {
                 Image(systemName: addedToCart ? "checkmark" : "cart.badge.plus")
                     .font(.system(size: 16, weight: .semibold))
-                Text(addedToCart ? "Added to Cart" : (stockQty == 0 ? "Out of Stock" : "Add to Sale"))
+                Text(addedToCart ? "Added to Cart" : (stockQty == 0 ? "Add to Sale (Order)" : "Add to Sale"))
                     .font(.system(size: 16, weight: .semibold))
             }
             .foregroundColor(.white)
@@ -375,12 +375,11 @@ struct SACatalogProductDetailSheet: View {
             .padding(.vertical, 16)
             .background(
                 addedToCart ? AppColors.success :
-                (stockQty == 0 ? AppColors.neutral500 : AppColors.accent)
+                AppColors.accent
             )
             .clipShape(Capsule())
             .animation(.easeInOut(duration: 0.2), value: addedToCart)
         }
-        .disabled(stockQty == 0)
     }
 
     // MARK: - Specs Grid

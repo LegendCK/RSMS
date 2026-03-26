@@ -570,6 +570,7 @@ struct BOPISOrderCard: View {
                 orderId: order.id,
                 newStatus: newStatus
             )
+            await sendClientStatusNotification(newStatus: newStatus)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             await onStatusUpdated?()
         } catch {
@@ -577,5 +578,39 @@ struct BOPISOrderCard: View {
             showUpdateError = true
             UINotificationFeedbackGenerator().notificationOccurred(.error)
         }
+    }
+
+    @MainActor
+    private func sendClientStatusNotification(newStatus: String) async {
+        guard let clientId = order.clientId else { return }
+        let canonical = OrderStatusMapper.canonical(newStatus)
+        let message: String
+        let title: String
+
+        switch canonical {
+        case "processing":
+            title = "Order Processing"
+            message = "Order \(order.orderNumber) is being prepared by the boutique."
+        case "ready_for_pickup":
+            let deadline = Calendar.current.date(byAdding: .hour, value: 48, to: Date()) ?? Date()
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            title = "Ready for Pickup"
+            message = "Order \(order.orderNumber) is ready for pickup. Please collect by \(formatter.string(from: deadline))."
+        case "completed":
+            title = "Order Collected"
+            message = "Order \(order.orderNumber) has been marked as collected."
+        default:
+            return
+        }
+
+        await NotificationService.shared.createOrderLifecycleNotification(
+            clientId: clientId,
+            storeId: nil,
+            title: title,
+            message: message,
+            deepLink: "orders"
+        )
     }
 }

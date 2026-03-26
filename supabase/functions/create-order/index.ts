@@ -1,12 +1,12 @@
 // create-order/index.ts
 // Edge Function — creates an order + order_items using the service role key.
 // Runs server-side so RLS policies on `orders`/`order_items` are bypassed.
-// The caller's JWT is still validated, ensuring only authenticated users can place orders.
+// The caller's JWT is still validated inside the function via auth.getUser().
 //
 // Store routing priority:
 //   1. Client city  → store city  (case-insensitive, exact match)
 //   2. Client state → store region (case-insensitive, exact match)
-//   3. Fallback     → first active store (original behaviour)
+//   3. Fallback     → first active store
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -26,7 +26,7 @@ interface PaymentSplitPayload {
 }
 
 interface CreateOrderPayload {
-  clientId?: string;      // explicit client UUID for POS/in-store sales (SA selects client)
+  clientId?: string;
   orderNumber: string;
   cartItems: CartItemPayload[];
   subtotal: number;
@@ -34,14 +34,14 @@ interface CreateOrderPayload {
   taxTotal: number;
   grandTotal: number;
   channel: string;        // "online" | "bopis" | "in_store" | "ship_from_store"
-  currency?: string;      // defaults to "INR"
-  storeId?: string;       // client-resolved store UUID — used directly when present, geo-routing only as fallback
-  isTaxFree?: boolean;    // true for international visitors / tax-exempt purchases
-  taxFreeReason?: string; // eligibility note captured by the sales associate
-  notes?: string;         // free-form checkout notes from POS
-  deliveryCity?: string;  // delivery-address city hint from app checkout
-  deliveryState?: string; // delivery-address state hint from app checkout
-  paymentSplits?: PaymentSplitPayload[]; // optional split-payment rows for POS
+  currency?: string;
+  storeId?: string;
+  isTaxFree?: boolean;
+  taxFreeReason?: string;
+  notes?: string;
+  deliveryCity?: string;
+  deliveryState?: string;
+  paymentSplits?: PaymentSplitPayload[];
 }
 
 interface StoreRow {
@@ -49,6 +49,11 @@ interface StoreRow {
   name: string;
   city: string | null;
   region: string | null;
+}
+
+interface InventoryRow {
+  product_id: string;
+  quantity: number;
 }
 
 interface ClientAddressRow {
@@ -72,15 +77,79 @@ async function rollbackCreatedOrder(admin: ReturnType<typeof createClient>, orde
   await admin.from("orders").delete().eq("id", orderId);
 }
 
+async function createReplenishmentRequestsIfNeeded(
+  admin: ReturnType<typeof createClient>,
+  order: { id: string; order_number: string },
+  storeId: string,
+  cartItems: CartItemPayload[]
+): Promise<number> {
+  if (cartItems.length === 0) return 0;
+
+  const requiredByProduct = new Map<string, number>();
+  for (const item of cartItems) {
+    const pid = item.productId.toLowerCase();
+    requiredByProduct.set(pid, (requiredByProduct.get(pid) ?? 0) + Math.max(0, item.quantity));
+  }
+  const productIds = Array.from(requiredByProduct.keys());
+  if (productIds.length === 0) return 0;
+
+  const { data: invRows, error: invError } = await admin
+    .from("inventory")
+    .select("product_id, quantity")
+    .eq("location_id", storeId)
+    .in("product_id", productIds);
+
+  if (invError) {
+    console.warn("[create-order] Inventory check failed for replenishment:", invError.message);
+    return 0;
+  }
+
+  const availableByProduct = new Map<string, number>();
+  for (const row of (invRows as InventoryRow[]) ?? []) {
+    availableByProduct.set(row.product_id.toLowerCase(), Number(row.quantity ?? 0));
+  }
+
+  const rows: Array<Record<string, unknown>> = [];
+  for (const [productId, requiredQty] of requiredByProduct.entries()) {
+    const availableQty = availableByProduct.get(productId) ?? 0;
+    const shortage = Math.max(0, requiredQty - availableQty);
+    if (shortage <= 0) continue;
+
+    rows.push({
+      transfer_number: `REP-${order.order_number}-${productId.slice(0, 4).toUpperCase()}`,
+      product_id: productId,
+      quantity: shortage,
+      from_boutique_id: storeId,
+      to_boutique_id: storeId,
+      status: "pending_admin_approval",
+      requested_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      notes: `Auto-created for order ${order.order_number}`,
+    });
+  }
+
+  if (rows.length === 0) return 0;
+
+  const { error: transferError } = await admin
+    .from("transfers")
+    .upsert(rows, { onConflict: "transfer_number" });
+
+  if (transferError) {
+    console.warn("[create-order] Replenishment upsert failed:", transferError.message);
+    return 0;
+  }
+
+  console.log(`[create-order] Replenishment requests created: ${rows.length}`);
+  return rows.length;
+}
+
 // ── Smart Store Resolution ──────────────────────────────────────────────────
-// Tries city match → state/region match → fallback (first active store).
 async function resolveStore(
   admin: ReturnType<typeof createClient>,
   clientId: string,
   deliveryCityHint?: string,
   deliveryStateHint?: string
 ): Promise<StoreRow> {
-  // Fetch all active stores once (ordered deterministically)
   const { data: allStores, error: storesError } = await admin
     .from("stores")
     .select("id, name, city, region")
@@ -91,8 +160,6 @@ async function resolveStore(
     throw new Error("No active stores found");
   }
 
-  // Prefer explicit delivery-address hints (from checkout form), then fall back
-  // to client profile city/state if hints are absent.
   const hintedCity = deliveryCityHint?.trim().toLowerCase() ?? "";
   const hintedState = deliveryStateHint?.trim().toLowerCase() ?? "";
 
@@ -110,53 +177,35 @@ async function resolveStore(
     clientState = clientAddr?.state?.trim().toLowerCase() ?? "";
   }
 
-  console.log(`[create-order] Routing location — city: "${clientCity}", state: "${clientState}"`);
-
-  // Tier 1: exact city match (e.g. "Mumbai" → Mumbai store)
   if (clientCity) {
     const cityMatch = (allStores as StoreRow[]).find(
       (s) => (s.city ?? "").trim().toLowerCase() === clientCity
     );
-    if (cityMatch) {
-      console.log(`[create-order] ✅ Store resolved by CITY: ${cityMatch.name} (${cityMatch.id})`);
-      return cityMatch;
-    }
+    if (cityMatch) return cityMatch;
   }
 
-  // Tier 2: state → region match (e.g. "Maharashtra" → stores with region="Maharashtra")
   if (clientState) {
     const regionMatch = (allStores as StoreRow[]).find(
       (s) => (s.region ?? "").trim().toLowerCase() === clientState
     );
-    if (regionMatch) {
-      console.log(`[create-order] ✅ Store resolved by STATE/REGION: ${regionMatch.name} (${regionMatch.id})`);
-      return regionMatch;
-    }
+    if (regionMatch) return regionMatch;
   }
 
-  // Tier 3: fallback — first active store (preserves original behaviour)
-  const fallback = (allStores as StoreRow[])[0];
-  console.log(`[create-order] ⚠️ Store resolved by FALLBACK (no location match): ${fallback.name} (${fallback.id})`);
-  return fallback;
+  return (allStores as StoreRow[])[0];
 }
 
 serve(async (req: Request) => {
-  // CORS pre-flight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // ── 1. Validate JWT ────────────────────────────────────────────────────────
+    // ── 1. Validate JWT (function-level) ───────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return json({ error: "Missing Authorization header" }, 401);
     }
 
-    // ── 2. Verify identity via user-scoped client (recommended pattern) ─────────
-    // Using a user-context client with auth.getUser() is more reliable than
-    // admin.auth.getUser(jwt) across Supabase SDK versions — it calls the simpler
-    // GET /auth/v1/user endpoint rather than the admin JWT-decode path.
     const userClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -169,28 +218,22 @@ serve(async (req: Request) => {
       return json({ error: "Unauthorized: " + (userError?.message ?? "no user") }, 401);
     }
 
-    // ── 2b. Admin client — bypasses RLS for privileged DB operations ───────────
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     // ── 3. Resolve client_id ───────────────────────────────────────────────────
-    // For POS/in-store sales the caller is a sales associate, not the client.
-    // For online sales the JWT owner IS the client — resolve by auth.uid or email.
     const payload: CreateOrderPayload = await req.json();
     const isPOS = payload.channel === "in_store";
-    // SA can place orders for delivery (ship_from_store) when item is not in stock
     const isSADeliveryOrder = payload.channel === "ship_from_store";
 
     let clientId: string | null = null;
 
     if (payload.clientId) {
-      // POS sale with known client — SA explicitly provided the UUID
       clientId = payload.clientId;
       console.log(`[create-order] Client from payload (POS sale): ${clientId}`);
     } else if (!isPOS) {
-      // Online sale — resolve client from JWT (caller IS the client)
       clientId = user.id;
 
       const { data: clientById } = await admin
@@ -200,7 +243,6 @@ serve(async (req: Request) => {
         .maybeSingle();
 
       if (!clientById) {
-        // Fallback: match by email (client pre-created by sales associate)
         const email = user.email?.toLowerCase() ?? "";
         if (!email) {
           return json({ error: "Cannot resolve client: no matching clients row" }, 400);
@@ -221,7 +263,6 @@ serve(async (req: Request) => {
         console.log(`[create-order] Resolved client by id: ${clientId}`);
       }
     } else {
-      // Walk-in POS sale — no client profile; client_id will be null
       console.log(`[create-order] Walk-in POS sale — no client linked`);
     }
 
@@ -233,6 +274,8 @@ serve(async (req: Request) => {
       ? `TAX-FREE: ${payload.taxFreeReason.trim()}`
       : "";
     const combinedNotes = [baseNotes, taxNote].filter((x) => x.length > 0).join(" | ") || null;
+
+    // Only include splits that have a valid method and positive amount
     const normalizedPaymentSplits: PaymentSplitPayload[] = (payload.paymentSplits ?? [])
       .map((split) => ({
         method: split.method?.trim().toLowerCase() ?? "",
@@ -240,17 +283,13 @@ serve(async (req: Request) => {
         paymentReference: split.paymentReference?.trim() || null,
         status: split.status?.trim().toLowerCase() || "completed",
       }))
-      .filter((split) => split.method.length > 0);
+      .filter((split) => split.method.length > 0 && split.amount > 0);
 
+    // Validate split totals with float tolerance (INR amounts can be large)
     if (normalizedPaymentSplits.length > 0) {
-      const hasInvalidSplit = normalizedPaymentSplits.some((split) => split.amount <= 0);
-      if (hasInvalidSplit) {
-        return json({ error: "All split payments must have amount greater than 0." }, 400);
-      }
-
       const paidTotal = roundMoney(normalizedPaymentSplits.reduce((sum, split) => sum + split.amount, 0));
       const orderTotal = roundMoney(payload.grandTotal);
-      if (paidTotal !== orderTotal) {
+      if (Math.abs(paidTotal - orderTotal) > 0.01) {
         return json({
           error: `Split payments total (${paidTotal.toFixed(2)}) must equal order grand total (${orderTotal.toFixed(2)}).`,
         }, 400);
@@ -258,9 +297,6 @@ serve(async (req: Request) => {
     }
 
     // ── 5. Resolve store ───────────────────────────────────────────────────────
-    // Priority:
-    //   1. Client-provided storeId (iOS already ran StoreAssignmentService on the shipping address)
-    //   2. Server geo-routing: clients.city → region → fallback
     let store: StoreRow;
     if (payload.storeId) {
       const { data: storeById } = await admin
@@ -273,24 +309,20 @@ serve(async (req: Request) => {
       if (storeById) {
         store = storeById as StoreRow;
         console.log(`[create-order] ✅ Store from client hint: ${store.name} (${store.id})`);
+      } else if (clientId) {
+        try {
+          store = await resolveStore(admin, clientId, payload.deliveryCity, payload.deliveryState);
+        } catch (e) { return json({ error: String(e) }, 400); }
       } else {
-        console.warn(`[create-order] ⚠️ Client storeId ${payload.storeId} not found — falling back to geo-routing`);
-        if (clientId) {
-          try {
-            store = await resolveStore(admin, clientId, payload.deliveryCity, payload.deliveryState);
-          } catch (e) { return json({ error: String(e) }, 400); }
-        } else {
-          const { data: fb } = await admin.from("stores").select("id, name, city, region").eq("is_active", true).order("created_at", { ascending: true });
-          if (!fb || fb.length === 0) return json({ error: "No active stores found" }, 400);
-          store = (fb as StoreRow[])[0];
-        }
+        const { data: fb } = await admin.from("stores").select("id, name, city, region").eq("is_active", true).order("created_at", { ascending: true });
+        if (!fb || fb.length === 0) return json({ error: "No active stores found" }, 400);
+        store = (fb as StoreRow[])[0];
       }
     } else if (clientId) {
       try {
         store = await resolveStore(admin, clientId, payload.deliveryCity, payload.deliveryState);
       } catch (e) { return json({ error: String(e) }, 400); }
     } else {
-      // Walk-in with no storeId hint — fallback to first active store
       const { data: allStores } = await admin
         .from("stores").select("id, name, city, region").eq("is_active", true).order("created_at", { ascending: true });
       if (!allStores || allStores.length === 0) return json({ error: "No active stores found" }, 400);
@@ -324,7 +356,7 @@ serve(async (req: Request) => {
       return json({ error: "Failed to create order: " + orderError?.message }, 500);
     }
 
-    console.log(`[create-order] Order created: ${order.order_number} (${order.id}) → store: ${store.name} [pending]`);
+    console.log(`[create-order] Order created: ${order.order_number} (${order.id}) → store: ${store.name}`);
 
     // ── 7. Write initial audit event ──────────────────────────────────────────
     const auditNote = isPOS
@@ -342,7 +374,7 @@ serve(async (req: Request) => {
       notes:       auditNote,
     });
 
-    // ── 8. Insert order_items (best-effort) ────────────────────────────────────
+    // ── 8. Insert order_items ──────────────────────────────────────────────────
     let itemsInserted = 0;
     if (payload.cartItems && payload.cartItems.length > 0) {
       const taxRate = (payload.isTaxFree || payload.subtotal === 0)
@@ -366,17 +398,15 @@ serve(async (req: Request) => {
         .insert(items);
 
       if (itemsError) {
-        // Keep order header + items atomic for downstream sync reliability.
         await rollbackCreatedOrder(admin, order.id);
         console.error("[create-order] order_items insert failed, rolled back order:", itemsError.message);
         return json({ error: "Failed to create order items: " + itemsError.message }, 500);
-      } else {
-        itemsInserted = items.length;
-        console.log(`[create-order] ${itemsInserted} order item(s) inserted`);
       }
+      itemsInserted = items.length;
+      console.log(`[create-order] ${itemsInserted} order item(s) inserted`);
     }
 
-    // ── 9. Insert payments (when supplied by POS split-payment flow) ──────────
+    // ── 9. Insert payments (non-fatal — order is already committed) ───────────
     let paymentsInserted = 0;
     if (normalizedPaymentSplits.length > 0) {
       const paymentRows = normalizedPaymentSplits.map((split) => ({
@@ -386,7 +416,7 @@ serve(async (req: Request) => {
         currency,
         status: split.status ?? "completed",
         payment_reference: split.paymentReference ?? null,
-        processed_by: isPOS ? user.id : null,
+        processed_by: (isPOS || isSADeliveryOrder) ? user.id : null,
       }));
 
       const { error: paymentError } = await admin
@@ -394,13 +424,23 @@ serve(async (req: Request) => {
         .insert(paymentRows);
 
       if (paymentError) {
-        await rollbackCreatedOrder(admin, order.id);
-        console.error("[create-order] payments insert failed, rolled back order:", paymentError.message);
-        return json({ error: "Failed to log payment methods: " + paymentError.message }, 500);
+        // Non-fatal: order header + items already committed; log and continue.
+        console.warn("[create-order] payments insert failed (non-fatal):", paymentError.message);
+      } else {
+        paymentsInserted = paymentRows.length;
+        console.log(`[create-order] ${paymentsInserted} payment row(s) inserted`);
       }
+    }
 
-      paymentsInserted = paymentRows.length;
-      console.log(`[create-order] ${paymentsInserted} payment row(s) inserted`);
+    // ── 9b. Replenishment requests (SA delivery orders only) ──────────────────
+    let replenishmentsRequested = 0;
+    if (isSADeliveryOrder) {
+      replenishmentsRequested = await createReplenishmentRequestsIfNeeded(
+        admin,
+        { id: order.id, order_number: order.order_number },
+        store.id,
+        payload.cartItems ?? []
+      );
     }
 
     // ── 10. Return success ─────────────────────────────────────────────────────
@@ -412,6 +452,7 @@ serve(async (req: Request) => {
       storeName: store.name,
       itemsInserted,
       paymentsInserted,
+      replenishmentsRequested,
     });
 
   } catch (err) {
