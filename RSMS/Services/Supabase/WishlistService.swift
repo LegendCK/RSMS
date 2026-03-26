@@ -6,7 +6,12 @@ import Supabase
 final class WishlistService {
     static let shared = WishlistService()
 
+    enum SyncCapabilityError: Error {
+        case missingWishlistTable
+    }
+
     private let client = SupabaseManager.shared.client
+    private var hasLoggedMissingTableWarning = false
 
     private init() {}
 
@@ -32,19 +37,56 @@ final class WishlistService {
         try await client.auth.session.user.id
     }
 
+    private func isMissingWishlistTableError(_ error: Error) -> Bool {
+        if let postgrestError = error as? PostgrestError {
+            let code = postgrestError.code ?? ""
+            let message = postgrestError.message.lowercased()
+            let hint = postgrestError.hint?.lowercased() ?? ""
+            if code == "PGRST205" && (message.contains("wishlist_items") || hint.contains("wishlist_items")) {
+                return true
+            }
+        }
+
+        let description = error.localizedDescription.lowercased()
+        return description.contains("pgrst205") && description.contains("wishlist_items")
+    }
+
+    private func normalizeWishlistError(_ error: Error) -> Error {
+        if isMissingWishlistTableError(error) {
+            return SyncCapabilityError.missingWishlistTable
+        }
+        return error
+    }
+
+    private func logMissingTableWarningOnce() {
+        guard !hasLoggedMissingTableWarning else { return }
+        hasLoggedMissingTableWarning = true
+        print("[WishlistService] Supabase table 'public.wishlist_items' is missing. Apply migration: supabase/migrations/20260324_wishlist_items.sql")
+    }
+
     func fetchWishlistProductIDs() async throws -> Set<UUID> {
         let userId = try await currentUserId()
-        let rows: [WishlistRow] = try await client
-            .from("wishlist_items")
-            .select("product_id")
-            .eq("user_id", value: userId.uuidString.lowercased())
-            .execute()
-            .value
-        return Set(rows.map(\.productId))
+        do {
+            let rows: [WishlistRow] = try await client
+                .from("wishlist_items")
+                .select("product_id")
+                .eq("user_id", value: userId.uuidString.lowercased())
+                .execute()
+                .value
+            return Set(rows.map(\.productId))
+        } catch {
+            throw normalizeWishlistError(error)
+        }
     }
 
     func hydrateLocalWishlist(modelContext: ModelContext) async throws {
-        let wishedIds = try await fetchWishlistProductIDs()
+        let wishedIds: Set<UUID>
+        do {
+            wishedIds = try await fetchWishlistProductIDs()
+        } catch SyncCapabilityError.missingWishlistTable {
+            logMissingTableWarningOnce()
+            return
+        }
         let products = try modelContext.fetch(FetchDescriptor<Product>())
         for product in products {
             let shouldBeWishlisted = wishedIds.contains(product.id)
@@ -58,10 +100,18 @@ final class WishlistService {
     func setWishlisted(productId: UUID, isWishlisted: Bool) async throws {
         if isWishlisted {
             let payload = WishlistUpsertPayload(userId: try await currentUserId(), productId: productId)
-            _ = try await client
-                .from("wishlist_items")
-                .upsert(payload, onConflict: "user_id,product_id")
-                .execute()
+            do {
+                _ = try await client
+                    .from("wishlist_items")
+                    .upsert(payload, onConflict: "user_id,product_id")
+                    .execute()
+            } catch {
+                let normalized = normalizeWishlistError(error)
+                if case SyncCapabilityError.missingWishlistTable = normalized {
+                    logMissingTableWarningOnce()
+                }
+                throw normalized
+            }
         } else {
             try await remove(productId: productId)
         }
@@ -69,11 +119,19 @@ final class WishlistService {
 
     func remove(productId: UUID) async throws {
         let userId = try await currentUserId()
-        try await client
-            .from("wishlist_items")
-            .delete()
-            .eq("user_id", value: userId.uuidString.lowercased())
-            .eq("product_id", value: productId.uuidString.lowercased())
-            .execute()
+        do {
+            try await client
+                .from("wishlist_items")
+                .delete()
+                .eq("user_id", value: userId.uuidString.lowercased())
+                .eq("product_id", value: productId.uuidString.lowercased())
+                .execute()
+        } catch {
+            let normalized = normalizeWishlistError(error)
+            if case SyncCapabilityError.missingWishlistTable = normalized {
+                logMissingTableWarningOnce()
+            }
+            throw normalized
+        }
     }
 }

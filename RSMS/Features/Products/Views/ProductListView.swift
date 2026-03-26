@@ -13,8 +13,6 @@ struct ProductListView: View {
     var productTypeFilter: String? = nil
     var showsTabBar: Bool = false
     @Query private var allProducts: [Product]
-    @Environment(\.modelContext) private var modelContext
-    @Environment(AppState.self) private var appState
 
     @State private var sortOption: SortOption = .featured
     @State private var selectedGender: GenderFilter = .all
@@ -198,20 +196,6 @@ struct ProductListView: View {
                             .padding(6)
                     }
                 }
-                .overlay(alignment: .topTrailing) {
-                    // Wishlist button — top-right
-                    Button(action: {
-                        toggleWishlist(product)
-                    }) {
-                        Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
-                            .font(.system(size: 13, weight: .light))
-                            .foregroundColor(product.isWishlisted ? AppColors.accent : .black)
-                            .padding(9)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                    }
-                    .padding(8)
-                }
             }
             .aspectRatio(3/4, contentMode: .fit)   // ← fixed ratio: all tiles identical
 
@@ -237,24 +221,6 @@ struct ProductListView: View {
             .background(AppColors.backgroundPrimary)
         }
         .background(AppColors.backgroundPrimary)
-    }
-
-    private func toggleWishlist(_ product: Product) {
-        let targetState = !product.isWishlisted
-        product.isWishlisted = targetState
-        try? modelContext.save()
-
-        guard appState.isAuthenticated, !appState.isGuest else { return }
-
-        Task { @MainActor in
-            do {
-                try await WishlistService.shared.setWishlisted(productId: product.id, isWishlisted: targetState)
-            } catch {
-                product.isWishlisted = !targetState
-                try? modelContext.save()
-                print("[ProductListView] Wishlist sync failed for \(product.id): \(error)")
-            }
-        }
     }
 }
 
