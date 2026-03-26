@@ -62,6 +62,8 @@ struct HomeView: View {
     @State private var showNotifications = false
     @State private var unreadCount = 0
     @State private var selectedProduct: Product? = nil
+    @State private var showVIPOnlyAlert = false
+    @State private var resolvedClientSegment: String? = nil
 
     private let banners: [BannerData] = [
         BannerData(label: "NEW SEASON", title: "Spring\n2026", subtitle: "Curated luxury for the modern connoisseur.", buttonText: "Shop Now"),
@@ -83,6 +85,15 @@ struct HomeView: View {
     private var genderFilteredFeatured: [Product] {
         if selectedGender == .all { return featuredProducts }
         return featuredProducts.filter { selectedGender.matches($0) }
+    }
+
+    private var isVIPMember: Bool {
+        let segment = (
+            appState.currentClientProfile?.segment ??
+            resolvedClientSegment ??
+            ""
+        ).lowercased()
+        return segment == "vip" || segment == "ultra_vip"
     }
 
     var body: some View {
@@ -139,14 +150,22 @@ struct HomeView: View {
             CartView()
         }
         .sheet(isPresented: $showNotifications, onDismiss: { Task { await refreshUnreadCount() } }) {
-            NotificationCenterView()
-                .environment(appState)
+            NavigationStack {
+                NotificationCenterView(showsCloseButton: true)
+                    .environment(appState)
+            }
         }
         .sheet(item: $selectedProduct) { product in
             ProductDetailView(product: product, isSheet: true)
                 .environment(appState)
         }
+        .alert("VIP Access Only", isPresented: $showVIPOnlyAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("This collection is available only for VIP members.")
+        }
         .task {
+            await resolveClientSegmentIfNeeded()
             await NotificationService.shared.requestPermission()
             await refreshUnreadCount()
             if let clientId = appState.currentUserProfile?.id {
@@ -161,6 +180,18 @@ struct HomeView: View {
         guard let clientId = appState.currentUserProfile?.id else { return }
         let dtos = (try? await NotificationService.shared.fetchNotifications(clientId: clientId)) ?? []
         unreadCount = dtos.filter { !$0.isRead }.count
+    }
+
+    private func resolveClientSegmentIfNeeded() async {
+        if let segment = appState.currentClientProfile?.segment, !segment.isEmpty {
+            resolvedClientSegment = segment
+            return
+        }
+        if appState.currentUserRole != .customer { return }
+        if let profile = try? await ProfileService.shared.fetchMyClientProfile() {
+            resolvedClientSegment = profile.segment
+            appState.updateCurrentClientProfile(profile)
+        }
     }
 
     // MARK: - Banner Carousel
@@ -222,7 +253,7 @@ struct HomeView: View {
                     .foregroundColor(.secondary)
                     .lineLimit(1)
 
-                Button(action: { showAllFeatured = true }) {
+                Button(action: { handleBannerTap(data) }) {
                     Text(data.buttonText)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
@@ -238,6 +269,19 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 200)
         .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+    }
+
+    private func handleBannerTap(_ data: BannerData) {
+        let isMembersOnlyBanner = data.label.uppercased() == "PRIVATE ACCESS"
+        guard isMembersOnlyBanner else {
+            showAllFeatured = true
+            return
+        }
+        if isVIPMember {
+            showAllFeatured = true
+        } else {
+            showVIPOnlyAlert = true
+        }
     }
 
     // MARK: - Category Filter Pills

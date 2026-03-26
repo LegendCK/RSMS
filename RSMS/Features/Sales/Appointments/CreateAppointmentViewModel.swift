@@ -175,6 +175,12 @@ final class CreateAppointmentViewModel {
                 return appointment
             } else {
                 let appointment = try await AppointmentService.shared.createAppointment(payload)
+                await NotificationService.shared.createAppointmentBookedNotification(
+                    clientId: clientId,
+                    storeId: storeId,
+                    scheduledAt: scheduledAt,
+                    appointmentType: normalizedType
+                )
                 return appointment
             }
         } catch {

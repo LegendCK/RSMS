@@ -760,6 +760,8 @@ struct OrderFulfillmentCard: View {
                 newStatus: newStatus
             )
 
+            await sendClientStatusNotification(newStatus: targetCanonical)
+
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             NotificationCenter.default.post(name: .inventoryStockUpdated, object: nil)
             await onStatusChanged()
@@ -806,6 +808,40 @@ struct OrderFulfillmentCard: View {
         f.numberStyle = .currency
         f.currencyCode = order.currency
         return f.string(from: NSNumber(value: value)) ?? "₹\(value)"
+    }
+
+    @MainActor
+    private func sendClientStatusNotification(newStatus: String) async {
+        guard let clientId = order.clientId else { return }
+        let canonical = OrderStatusMapper.canonical(newStatus)
+        let message: String
+        let title: String
+
+        switch canonical {
+        case "processing":
+            title = "Order Processing"
+            message = "Order \(order.orderNumber ?? "") is now being prepared by the boutique."
+        case "ready_for_pickup":
+            let deadline = Calendar.current.date(byAdding: .hour, value: 48, to: Date()) ?? Date()
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            title = "Ready for Pickup"
+            message = "Order \(order.orderNumber ?? "") is ready for pickup. Please collect by \(formatter.string(from: deadline))."
+        case "completed":
+            title = "Order Collected"
+            message = "Order \(order.orderNumber ?? "") has been marked as collected. Thank you for shopping with Maison Luxe."
+        default:
+            return
+        }
+
+        await NotificationService.shared.createOrderLifecycleNotification(
+            clientId: clientId,
+            storeId: order.storeId,
+            title: title,
+            message: message,
+            deepLink: "orders"
+        )
     }
 }
 

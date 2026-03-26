@@ -33,43 +33,48 @@ struct NotificationCenterView: View {
     private var unreadCount: Int {
         notifications.filter { !$0.isRead }.count
     }
+    private let showsCloseButton: Bool
+
+    init(showsCloseButton: Bool = true) {
+        self.showsCloseButton = showsCloseButton
+    }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color(.systemGroupedBackground).ignoresSafeArea()
+        ZStack {
+            Color(.systemGroupedBackground).ignoresSafeArea()
 
-                if isLoading && notifications.isEmpty {
-                    ProgressView("Loading…")
-                        .tint(AppColors.accent)
-                } else if notifications.isEmpty {
-                    emptyState
-                } else {
-                    notificationList
-                }
+            if isLoading && notifications.isEmpty {
+                ProgressView("Loading…")
+                    .tint(AppColors.accent)
+            } else if notifications.isEmpty {
+                emptyState
+            } else {
+                notificationList
             }
-            .navigationTitle("Notifications")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+        }
+        .navigationTitle("Notifications")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if showsCloseButton {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
-                if unreadCount > 0 {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Mark all read") {
-                            Task { await markAllRead() }
-                        }
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppColors.accent)
+            }
+            if unreadCount > 0 {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Mark all read") {
+                        Task { await markAllRead() }
                     }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppColors.accent)
                 }
             }
-            .task { await load() }
-            .refreshable { await load() }
-            .sheet(isPresented: $showEventDetail) {
-                if let eventId = selectedEventId {
-                    CustomerEventDetailView(eventId: eventId)
-                }
+        }
+        .task { await load() }
+        .refreshable { await load() }
+        .sheet(isPresented: $showEventDetail) {
+            if let eventId = selectedEventId {
+                CustomerEventDetailView(eventId: eventId)
             }
         }
     }

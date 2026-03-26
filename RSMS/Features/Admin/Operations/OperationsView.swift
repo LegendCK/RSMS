@@ -479,10 +479,48 @@ struct OperationsView: View {
                 .update(patch)
                 .eq("id", value: req.id.uuidString.lowercased())
                 .execute()
+
+            await updateLinkedOrderAfterApproval(req)
             await loadReplenishmentRequests()
         } catch {
             print("[OperationsView] Approval failed: \(error.localizedDescription)")
         }
+    }
+
+    @MainActor
+    private func updateLinkedOrderAfterApproval(_ req: ReplenishmentRequest) async {
+        guard let orderNumber = extractOrderNumber(from: req.transferNumber) else { return }
+        do {
+            guard let order = try await OrderFulfillmentService.shared.fetchOrderByNumber(orderNumber) else { return }
+            let current = OrderStatusMapper.canonical(order.status)
+            if ["pending", "confirmed"].contains(current) {
+                try await OrderFulfillmentService.shared.updateOrderStatus(
+                    orderId: order.id,
+                    newStatus: "processing",
+                    notes: "Corporate approved replenishment request \(req.transferNumber)."
+                )
+            }
+
+            if let clientId = order.clientId {
+                await NotificationService.shared.createOrderLifecycleNotification(
+                    clientId: clientId,
+                    storeId: order.storeId,
+                    title: "Stock Request Approved",
+                    message: "Order \(orderNumber) has been approved by corporate and is being prepared at the boutique.",
+                    deepLink: "orders"
+                )
+            }
+        } catch {
+            print("[OperationsView] Linked-order update failed for \(req.transferNumber): \(error.localizedDescription)")
+        }
+    }
+
+    private func extractOrderNumber(from transferNumber: String) -> String? {
+        guard transferNumber.hasPrefix("REP-") else { return nil }
+        let stripped = String(transferNumber.dropFirst(4))
+        guard let lastDash = stripped.lastIndex(of: "-") else { return nil }
+        let orderNumber = String(stripped[..<lastDash]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return orderNumber.isEmpty ? nil : orderNumber
     }
 
     private func sectionLabel(_ text: String) -> some View {

@@ -58,6 +58,7 @@ enum SLAStatus: String, Codable {
 struct BOPISOrder: Identifiable, Codable, Equatable {
     let id: UUID
     let orderNumber: String
+    let clientId: UUID?
     let channel: BOPISChannel
     let status: String          // mirrors OrderDTO.status
     let clientEmail: String
@@ -123,6 +124,7 @@ struct BOPISOrder: Identifiable, Codable, Equatable {
         return BOPISOrder(
             id: dto.id,
             orderNumber: dto.orderNumber ?? "#\(dto.id.uuidString.prefix(8).uppercased())",
+            clientId: dto.clientId,
             channel: channel,
             status: dto.status,
             clientEmail: dto.clientEmail ?? "—",
@@ -144,6 +146,7 @@ private struct _BOPISClientSnippet: Codable {
 struct _BOPISOrderDTO: Codable {
     let id: UUID
     let orderNumber: String?
+    let clientId: UUID?
     let channel: String
     let status: String
     let grandTotal: Double
@@ -159,6 +162,7 @@ struct _BOPISOrderDTO: Codable {
     enum CodingKeys: String, CodingKey {
         case id
         case orderNumber = "order_number"
+        case clientId    = "client_id"
         case channel, status
         case grandTotal  = "grand_total"
         case currency

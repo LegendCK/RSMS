@@ -29,7 +29,7 @@ struct CreateServiceTicketView: View {
                 VStack(spacing: AppSpacing.lg) {
                     ticketTypeSection
                     clientSection
-                    productSection
+                    orderItemSection
                     issueSection
                     conditionSection
                     photosSection
@@ -71,7 +71,6 @@ struct CreateServiceTicketView: View {
 
     private func loadInitialProducts() async {
         await vm.loadClients()
-        await vm.loadProducts()
     }
 
     private func handlePhotoSelectionChange(_ newItems: [PhotosPickerItem]) {
@@ -230,14 +229,14 @@ private extension CreateServiceTicketView {
         .background(cardBackground)
     }
 
-    // MARK: Product
-    var productSection: some View {
+    // MARK: Order Item
+    var orderItemSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            sectionHeader("PRODUCT")
+            sectionHeader("ORDER ITEM")
 
-            if let product = vm.selectedProduct {
+            if let orderItem = vm.selectedOrderItem {
                 HStack(spacing: AppSpacing.sm) {
-                    if let raw = product.primaryImageUrl {
+                    if let raw = orderItem.productImageURL {
                         ProductArtworkView(imageSource: raw, fallbackSymbol: "shippingbox.fill", cornerRadius: 10)
                             .frame(width: 48, height: 48)
                     } else {
@@ -250,14 +249,17 @@ private extension CreateServiceTicketView {
                             )
                     }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(product.name)
+                        Text(orderItem.productName)
                             .font(AppTypography.bodyMedium)
                             .foregroundColor(AppColors.textPrimaryDark)
                             .lineLimit(1)
-                        Text("SKU: \(product.sku)")
+                        Text("Order: \(orderItem.orderNumber)")
                             .font(AppTypography.caption)
                             .foregroundColor(AppColors.textSecondaryDark)
-                        if let brand = product.brand {
+                        Text("SKU: \(orderItem.productSku)")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                        if let brand = orderItem.productBrand {
                             Text(brand.uppercased())
                                 .font(AppTypography.nano)
                                 .tracking(1)
@@ -265,7 +267,7 @@ private extension CreateServiceTicketView {
                         }
                     }
                     Spacer()
-                    Button { vm.clearProduct() } label: {
+                    Button { vm.clearOrderItemSelection() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(AppColors.textSecondaryDark)
                     }
@@ -279,7 +281,7 @@ private extension CreateServiceTicketView {
                 HStack(spacing: AppSpacing.xs) {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(AppColors.textSecondaryDark)
-                    TextField("Search product by name, SKU, or brand", text: $vm.productSearchText)
+                    TextField("Search order items by order no., name, SKU, brand", text: $vm.productSearchText)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
                         .font(AppTypography.bodyMedium)
@@ -291,21 +293,27 @@ private extension CreateServiceTicketView {
                         .fill(AppColors.backgroundSecondary)
                 )
 
-                if vm.isSearchingProducts {
+                if vm.selectedClient == nil {
+                    Text("Select a client first to load purchased items.")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+
+                if vm.isSearchingOrderItems {
                     HStack(spacing: AppSpacing.xs) {
                         ProgressView().tint(AppColors.accent)
-                        Text("Loading products...")
+                        Text("Loading order items...")
                             .font(AppTypography.caption)
                             .foregroundColor(AppColors.textSecondaryDark)
                     }
                 }
 
-                if !vm.filteredProducts.isEmpty && vm.selectedProduct == nil {
+                if !vm.filteredOrderItems.isEmpty && vm.selectedOrderItem == nil {
                     ScrollView {
                         LazyVStack(spacing: AppSpacing.xs) {
-                            ForEach(vm.filteredProducts, id: \.id) { product in
-                                Button { vm.selectProduct(product) } label: {
-                                    productRow(product)
+                            ForEach(vm.filteredOrderItems, id: \.id) { item in
+                                Button { vm.selectOrderItem(item) } label: {
+                                    orderItemRow(item)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -313,6 +321,10 @@ private extension CreateServiceTicketView {
                         .padding(.vertical, 2)
                     }
                     .frame(maxHeight: 200)
+                } else if vm.selectedClient != nil && !vm.isSearchingOrderItems && vm.selectedOrderItem == nil {
+                    Text("No order items found for this client.")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
                 }
             }
         }
@@ -320,10 +332,10 @@ private extension CreateServiceTicketView {
         .background(cardBackground)
     }
 
-    func productRow(_ product: ProductDTO) -> some View {
+    func orderItemRow(_ item: ServiceTicketOrderItem) -> some View {
         HStack(spacing: AppSpacing.sm) {
             Group {
-                if let raw = product.primaryImageUrl {
+                if let raw = item.productImageURL {
                     ProductArtworkView(imageSource: raw, fallbackSymbol: "shippingbox.fill", cornerRadius: 8)
                 } else {
                     RoundedRectangle(cornerRadius: 8)
@@ -337,11 +349,11 @@ private extension CreateServiceTicketView {
             .frame(width: 40, height: 40)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(product.name)
+                Text(item.productName)
                     .font(AppTypography.bodySmall)
                     .foregroundColor(AppColors.textPrimaryDark)
                     .lineLimit(1)
-                Text(product.sku)
+                Text("\(item.orderNumber) • \(item.productSku)")
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
             }
@@ -570,8 +582,8 @@ private extension CreateServiceTicketView {
             if let client = vm.selectedClient {
                 metadataRow(title: "Client", value: client.fullName)
             }
-            if let product = vm.selectedProduct {
-                metadataRow(title: "Product", value: product.name)
+            if let item = vm.selectedOrderItem {
+                metadataRow(title: "Order Item", value: item.productName)
             }
 
             Button {

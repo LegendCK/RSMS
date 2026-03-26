@@ -19,7 +19,7 @@ struct SalesClientsView: View {
     var filteredClients: [ClientDTO] {
         var list = clients
         if selectedSection == 2 {
-            list = list.filter { ["gold", "vip", "ultra_vip"].contains($0.segment ?? "") }
+            list = list.filter { ["gold", "vip"].contains($0.segment ?? "") }
         } else if selectedSection == 0 {
             let myId = appState.currentUserProfile?.id.uuidString ?? ""
             list = list.filter { $0.createdBy?.uuidString == myId }
@@ -214,8 +214,8 @@ struct SalesClientsView: View {
                     .font(AppTypography.micro)
                     .padding(.horizontal, AppSpacing.xs)
                     .padding(.vertical, 4)
-                    .background(segment == "vip" || segment == "ultra_vip" ? AppColors.accent : AppColors.neutral300)
-                    .foregroundColor(segment == "vip" || segment == "ultra_vip" ? .white : AppColors.textPrimaryDark)
+                    .background(segment == "vip" ? AppColors.accent : AppColors.neutral300)
+                    .foregroundColor(segment == "vip" ? .white : AppColors.textPrimaryDark)
                     .cornerRadius(4)
             }
             
@@ -232,8 +232,6 @@ struct SalesClientsView: View {
         switch segment.lowercased() {
         case "vip":
             return "VIP"
-        case "ultra_vip":
-            return "Ultra VIP"
         default:
             return segment.capitalized.replacingOccurrences(of: "_", with: " ")
         }

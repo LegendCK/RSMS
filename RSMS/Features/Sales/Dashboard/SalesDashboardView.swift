@@ -135,13 +135,19 @@ struct SalesDashboardView: View {
         .task { await vm.load(storeId: appState.currentStoreId) }
         .refreshable { await vm.load(storeId: appState.currentStoreId) }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarRole(.editor)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("MAISON LUXE")
                     .font(.system(size: 12, weight: .black))
                     .tracking(4)
                     .foregroundColor(.primary)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink(destination: NotificationCenterView(showsCloseButton: false).toolbar(.hidden, for: .tabBar)) {
+                    Image(systemName: "bell")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundColor(AppColors.accent)
+                }
             }
         }
         .sheet(item: $activeSheet) { sheet in
@@ -190,6 +196,9 @@ struct SalesDashboardView: View {
             Text(value)
                 .font(.system(size: 22, weight: .bold))
                 .foregroundColor(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .monospacedDigit()
             Text(label)
                 .font(.system(size: 10, weight: .light))
                 .foregroundColor(.secondary)
