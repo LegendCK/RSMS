@@ -21,6 +21,7 @@ struct ManagerDashboardView: View {
     @State private var statusMessage: String?
     @State private var upcomingAppointments: [AppointmentDTO] = []
     @State private var appointmentClientsById: [UUID: ClientDTO] = [:]
+    @State private var aiInsights: [AIInsightsEngine.DashboardInsight] = []
 
     private let service = ManagerDashboardService.shared
 
@@ -102,6 +103,18 @@ struct ManagerDashboardView: View {
                         heroMetrics(snapshot)
                         supportingMetrics(snapshot)
                     }
+
+                    // AI Insights Section
+                    AIInsightsCard(insights: aiInsights)
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                        .padding(.top, AppSpacing.sm)
+                        .onChange(of: snapshot.syncedAt) { _, _ in
+                            aiInsights = AIInsightsEngine.shared.generateManagerInsights(snapshot: snapshot)
+                        }
+                        .onAppear {
+                            aiInsights = AIInsightsEngine.shared.generateManagerInsights(snapshot: snapshot)
+                        }
+
                     operationalSignals(snapshot)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
                     staffPerformanceSection(snapshot)
