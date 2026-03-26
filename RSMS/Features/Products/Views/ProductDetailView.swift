@@ -187,8 +187,6 @@ struct ProductDetailView: View {
                         headerSection
                         priceStockRow
                         if !isAdminMode {
-                            colorPickerSection
-                            if needsSizeSelector { sizePickerSection }
                             inlineActionSection
                         }
 
@@ -319,11 +317,6 @@ struct ProductDetailView: View {
             if let url = exportAllPDFURL {
                 ShareSheet(activityItems: [url])
             }
-        }
-        .alert("Select a Size", isPresented: $showSizeRequiredAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Please select a size before adding this item to your bag.")
         }
     }
 
@@ -1091,11 +1084,6 @@ struct ProductDetailView: View {
     // MARK: - Actions
 
     private func handleAddToBag() {
-        if needsSizeSelector && selectedSizeIndex == nil {
-            showSizeRequiredAlert = true
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
-            return
-        }
         guard variantStockCount > 0 || appState.isGuest else { return }
         if appState.isGuest {
             guestGateAction = "Add to Bag"
@@ -1107,11 +1095,6 @@ struct ProductDetailView: View {
     }
 
     private func handleBuyNow() {
-        if needsSizeSelector && selectedSizeIndex == nil {
-            showSizeRequiredAlert = true
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
-            return
-        }
         if appState.isGuest {
             guestGateAction = "Buy Now"
             showGuestGate   = true
