@@ -450,6 +450,18 @@ struct CreateProductSheet: View {
 
         modelContext.insert(product)
         try? modelContext.save()
+        
+        Task {
+            await AdminAuditService.shared.logActivity(
+                action: "Created Product",
+                details: [
+                    "name": product.name,
+                    "category": product.categoryName,
+                    "price": "\(product.price)"
+                ]
+            )
+        }
+        
         dismiss()
     }
 }

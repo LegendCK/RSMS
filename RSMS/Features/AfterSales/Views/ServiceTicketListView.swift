@@ -100,10 +100,7 @@ struct ServiceTicketListView: View {
                 .padding()
             } else {
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: AppSpacing.md) {
-                        // Stats row
-                        statsRow
-
+                    VStack(spacing: AppSpacing.sm) {
                         // Status filter
                         statusFilterRow
 
@@ -127,7 +124,7 @@ struct ServiceTicketListView: View {
                         Spacer(minLength: 80)
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
-                    .padding(.top, AppSpacing.sm)
+                    .padding(.top, AppSpacing.md)
                 }
             }
         }
@@ -164,47 +161,6 @@ struct ServiceTicketListView: View {
 // MARK: - Subviews
 
 private extension ServiceTicketListView {
-
-    var statsRow: some View {
-        HStack(spacing: AppSpacing.sm) {
-            statBadge(
-                count: vm.tickets.count,
-                label: "Total",
-                color: AppColors.info
-            )
-            statBadge(
-                count: vm.tickets.filter { $0.status == RepairStatus.intake.rawValue }.count,
-                label: "Intake",
-                color: AppColors.warning
-            )
-            statBadge(
-                count: vm.tickets.filter { $0.status == RepairStatus.inProgress.rawValue }.count,
-                label: "Active",
-                color: .blue
-            )
-            statBadge(
-                count: vm.tickets.filter { $0.status == RepairStatus.completed.rawValue }.count,
-                label: "Done",
-                color: AppColors.success
-            )
-        }
-    }
-
-    func statBadge(count: Int, label: String, color: Color) -> some View {
-        VStack(spacing: 4) {
-            Text("\(count)")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(color)
-            Text(label)
-                .font(AppTypography.caption)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, AppSpacing.sm)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
-    }
-
     var statusFilterRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppSpacing.xs) {

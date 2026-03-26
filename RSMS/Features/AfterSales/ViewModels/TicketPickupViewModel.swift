@@ -54,7 +54,7 @@ final class TicketPickupViewModel {
         storeAddress: String?,
         specialistName: String,
         currentUserId: UUID?,
-        pickupService: TicketPickupServiceProtocol = TicketPickupService.shared
+        pickupService: TicketPickupServiceProtocol? = nil
     ) {
         self.ticket         = ticket
         self.client         = client
@@ -64,7 +64,7 @@ final class TicketPickupViewModel {
         self.storeAddress   = storeAddress
         self.specialistName = specialistName
         self.currentUserId  = currentUserId
-        self.pickupService  = pickupService
+        self.pickupService  = pickupService ?? TicketPickupService.shared
     }
 
     // MARK: - Load

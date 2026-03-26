@@ -99,8 +99,10 @@ struct ManagerDashboardView: View {
                 }
 
                 if let snapshot {
-                    heroMetrics(snapshot)
-                    supportingMetrics(snapshot)
+                    VStack(spacing: AppSpacing.sm) {
+                        heroMetrics(snapshot)
+                        supportingMetrics(snapshot)
+                    }
 
                     // AI Insights Section
                     AIInsightsCard(insights: aiInsights)
@@ -205,7 +207,7 @@ struct ManagerDashboardView: View {
                 .padding(.horizontal, AppSpacing.screenHorizontal)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppSpacing.sm) {
+                HStack(alignment: .top, spacing: AppSpacing.sm) {
                     // Sales vs Target card
                     Button(action: { showSalesAnalytics = true }) {
                         VStack(alignment: .leading, spacing: AppSpacing.sm) {
@@ -245,9 +247,11 @@ struct ManagerDashboardView: View {
                             }
                             .foregroundColor(AppColors.accent.opacity(0.5))
                         }
+                        .frame(maxHeight: .infinity, alignment: .topLeading)
                         .padding(AppSpacing.md)
                         .frame(width: 280)
-                        .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
+                        .frame(height: 196)
+                        .keyMetricCardSurface(cornerRadius: AppSpacing.radiusMedium)
                     }
                     .buttonStyle(.plain)
 
@@ -277,11 +281,14 @@ struct ManagerDashboardView: View {
                             compactMetric(label: "Clients", value: "\(snapshot.sales.uniqueClients)")
                         }
                     }
+                    .frame(maxHeight: .infinity, alignment: .topLeading)
                     .padding(AppSpacing.md)
                     .frame(width: 260)
-                    .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
+                    .frame(height: 196)
+                    .keyMetricCardSurface(cornerRadius: AppSpacing.radiusMedium)
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.vertical, AppSpacing.xs)
             }
         }
     }
@@ -318,6 +325,7 @@ struct ManagerDashboardView: View {
                 )
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.vertical, AppSpacing.xs)
         }
     }
 
@@ -343,7 +351,7 @@ struct ManagerDashboardView: View {
         }
         .padding(.horizontal, AppSpacing.md)
         .padding(.vertical, AppSpacing.sm)
-        .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
+        .keyMetricCardSurface(cornerRadius: AppSpacing.radiusMedium)
     }
 
     private func operationalSignals(_ snapshot: ManagerDashboardSnapshot) -> some View {
@@ -913,6 +921,19 @@ struct ManagerDashboardView: View {
             upcomingAppointments = []
             appointmentClientsById = [:]
         }
+    }
+}
+
+private extension View {
+    func keyMetricCardSurface(cornerRadius: CGFloat) -> some View {
+        self
+            .background(AppColors.backgroundSecondary.opacity(0.9))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(AppColors.border.opacity(0.22), lineWidth: 0.85)
+            }
+            .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
     }
 }
 

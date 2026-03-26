@@ -1065,6 +1065,14 @@ struct AdminDashboardView: View {
                 return
             }
 
+            await AdminAuditService.shared.logActivity(
+                action: "Exported Report",
+                details: [
+                    "scope": selectedReportScope.rawValue,
+                    "format": selectedReportFormat.rawValue
+                ]
+            )
+
             // Avoid sheet collision (export picker + share sheet).
             activeSheet = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -2878,7 +2886,7 @@ struct CreateStoreSheet: View {
             // 2 — Assign the selected manager to this store
             if let manager = selectedManager {
                 struct StoreAssignPatch: Encodable { let store_id: UUID }
-                try? await SupabaseManager.shared.client
+                _ = try? await SupabaseManager.shared.client
                     .from("users")
                     .update(StoreAssignPatch(store_id: newId))
                     .eq("id", value: manager.id.uuidString.lowercased())
