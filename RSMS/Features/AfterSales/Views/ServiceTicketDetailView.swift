@@ -309,6 +309,9 @@ final class ServiceTicketDetailViewModel {
 struct ServiceTicketDetailView: View {
     @State private var vm: ServiceTicketDetailViewModel
     @Environment(AppState.self) private var appState
+    
+    @State private var showCompleteConfirmation = false
+    @State private var showCompletionToast = false
 
     /// Whether this is shown to a customer (read-only status)
     var isCustomerView: Bool = false
@@ -373,6 +376,55 @@ struct ServiceTicketDetailView: View {
                 )
             )
         }
+        .confirmationDialog(
+            "Are you sure you want to mark this repair as completed?",
+            isPresented: $showCompleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Confirm", role: .none) {
+                Task {
+                    await vm.updateStatus(to: .completed)
+                    if vm.errorMessage == nil {
+                        // Flash the success toast to simulate client notification
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                            showCompletionToast = true
+                        }
+                        try? await Task.sleep(for: .seconds(4))
+                        withAnimation {
+                            showCompletionToast = false
+                        }
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .overlay(alignment: .top) {
+            if showCompletionToast {
+                HStack(spacing: 12) {
+                    Image(systemName: "bell.fill")
+                        .foregroundColor(AppColors.accent)
+                        .font(.system(size: 20))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Client Notified")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.primary)
+                        Text("Your product is ready for pickup! Visit the boutique for handover.")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(16)
+                .background(Color(.systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: .black.opacity(0.12), radius: 15, x: 0, y: 8)
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(100)
+            }
+        }
     }
 }
 
@@ -430,11 +482,12 @@ private extension ServiceTicketDetailView {
                         VStack(spacing: 0) {
                             Circle()
                                 .fill(isPast ? status.statusColor : Color(.systemGray4))
-                                .frame(width: isCurrent ? 16 : 10, height: isCurrent ? 16 : 10)
+                                .frame(width: isCurrent ? (status == .completed ? 20 : 16) : 10,
+                                       height: isCurrent ? (status == .completed ? 20 : 16) : 10)
                                 .overlay {
                                     if isCurrent {
-                                        Circle().stroke(status.statusColor.opacity(0.3), lineWidth: 3)
-                                            .frame(width: 22, height: 22)
+                                        Circle().stroke(status.statusColor.opacity(0.3), lineWidth: status == .completed ? 5 : 3)
+                                            .frame(width: status == .completed ? 28 : 22, height: status == .completed ? 28 : 22)
                                     }
                                 }
 
@@ -853,7 +906,33 @@ private extension ServiceTicketDetailView {
                     .tracking(1.8)
                     .foregroundColor(.secondary)
 
-                ForEach(vm.nextStatuses) { status in
+                if vm.nextStatuses.contains(.completed) {
+                    Button {
+                        showCompleteConfirmation = true
+                    } label: {
+                        HStack(spacing: AppSpacing.xs) {
+                            if vm.isUpdatingStatus {
+                                ProgressView().tint(.white)
+                            }
+                            Image(systemName: "checkmark.seal.fill")
+                            Text("Mark as Completed")
+                                .font(AppTypography.buttonSecondary)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                                .fill(AppColors.success)
+                        )
+                        .opacity(statusActionDisabled(.completed) ? 0.45 : 1)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(vm.isUpdatingStatus || statusActionDisabled(.completed))
+                    .padding(.bottom, 4)
+                }
+
+                ForEach(vm.nextStatuses.filter { $0 != .completed }) { status in
                     Button {
                         Task { await vm.updateStatus(to: status) }
                     } label: {
@@ -913,23 +992,44 @@ private extension ServiceTicketDetailView {
 
                 // ── Pickup & Handover ────────────────────────────────────────
                 if vm.ticket.ticketStatus == .completed {
-                    Button {
-                        vm.showPickupSheet = true
-                    } label: {
+                    VStack(spacing: AppSpacing.md) {
                         HStack(spacing: AppSpacing.xs) {
-                            Image(systemName: "shippingbox.fill")
-                            Text("Schedule Pickup & Handover")
-                                .font(AppTypography.buttonSecondary)
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundColor(AppColors.success)
+                                .font(.system(size: 24))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Repair Completed")
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(.primary)
+                                    .fontWeight(.bold)
+                                Text("Completed on: \(vm.ticket.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
                         }
-                        .foregroundColor(AppColors.success)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                                .stroke(AppColors.success, lineWidth: 1.2)
-                        )
+                        .padding(AppSpacing.sm)
+                        .background(AppColors.success.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+
+                        Button {
+                            vm.showPickupSheet = true
+                        } label: {
+                            HStack(spacing: AppSpacing.xs) {
+                                Image(systemName: "shippingbox.fill")
+                                Text("Schedule Pickup & Handover")
+                                    .font(AppTypography.buttonSecondary)
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                                    .fill(AppColors.success)
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .padding(AppSpacing.cardPadding)
