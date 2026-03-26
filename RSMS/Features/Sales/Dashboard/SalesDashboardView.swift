@@ -17,6 +17,7 @@ struct SalesDashboardView: View {
     @State private var activeSheet: ActiveSalesSheet? = nil
     @State private var showCreateTicket = false
     @State private var showTicketList = false
+    @State private var showLooksList = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -95,6 +96,13 @@ struct SalesDashboardView: View {
                             showShippingDocs = true
                         } label: {
                             quickAction(title: "Shipping Docs", icon: "doc.text.fill", color: AppColors.info)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            showLooksList = true
+                        } label: {
+                            quickAction(title: "Curated Looks", icon: "sparkles.rectangle.stack.fill", color: AppColors.primary)
                         }
                         .buttonStyle(.plain)
 
@@ -179,6 +187,9 @@ struct SalesDashboardView: View {
         }
         .navigationDestination(isPresented: $showTicketList) {
             ServiceTicketListView()
+        }
+        .navigationDestination(isPresented: $showLooksList) {
+            LooksListView()
         }
         .navigationDestination(isPresented: $showShippingDocs) {
             ShippingDocumentsListView()
