@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		296424362F75AB97002E82A1 /* StripePaymentSheet in Frameworks */ = {isa = PBXBuildFile; productRef = 296424352F75AB97002E82A1 /* StripePaymentSheet */; };
 		29AB98482F62C29300EAD62F /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 29AB98472F62C29300EAD62F /* Auth */; };
 		29AB984A2F62C29300EAD62F /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 29AB98492F62C29300EAD62F /* Functions */; };
 		29AB984C2F62C29300EAD62F /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 29AB984B2F62C29300EAD62F /* PostgREST */; };
@@ -19,9 +20,22 @@
 		76C91C442F62C05600C4F325 /* RSMS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RSMS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		296424382F75AF36002E82A1 /* Exceptions for "RSMS" folder in "RSMS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 76C91C432F62C05600C4F325 /* RSMS */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		76C91C462F62C05600C4F325 /* RSMS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				296424382F75AF36002E82A1 /* Exceptions for "RSMS" folder in "RSMS" target */,
+			);
 			path = RSMS;
 			sourceTree = "<group>";
 		};
@@ -36,6 +50,7 @@
 				29AB984A2F62C29300EAD62F /* Functions in Frameworks */,
 				29AB98532F62C2A000EAD62F /* Supabase in Frameworks */,
 				29AB98482F62C29300EAD62F /* Auth in Frameworks */,
+				296424362F75AB97002E82A1 /* StripePaymentSheet in Frameworks */,
 				29AB98502F62C29300EAD62F /* Storage in Frameworks */,
 				29AB984E2F62C29300EAD62F /* Realtime in Frameworks */,
 			);
@@ -94,6 +109,7 @@
 				29AB984D2F62C29300EAD62F /* Realtime */,
 				29AB984F2F62C29300EAD62F /* Storage */,
 				29AB98522F62C2A000EAD62F /* Supabase */,
+				296424352F75AB97002E82A1 /* StripePaymentSheet */,
 			);
 			productName = RSMS;
 			productReference = 76C91C442F62C05600C4F325 /* RSMS.app */;
@@ -125,6 +141,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				29AB98462F62C29300EAD62F /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				296424342F75AB97002E82A1 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 76C91C452F62C05600C4F325 /* Products */;
@@ -286,6 +303,7 @@
 				DEVELOPMENT_TEAM = 3DXUA7RP32;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RSMS/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "RSMS uses the camera to scan product barcodes for inventory management.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -320,6 +338,7 @@
 				DEVELOPMENT_TEAM = 3DXUA7RP32;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RSMS/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "RSMS uses the camera to scan product barcodes for inventory management.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -368,6 +387,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		296424342F75AB97002E82A1 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stripe/stripe-ios-spm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 25.9.0;
+			};
+		};
 		29AB98462F62C29300EAD62F /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift";
@@ -379,6 +406,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		296424352F75AB97002E82A1 /* StripePaymentSheet */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 296424342F75AB97002E82A1 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */;
+			productName = StripePaymentSheet;
+		};
 		29AB98472F62C29300EAD62F /* Auth */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 29AB98462F62C29300EAD62F /* XCRemoteSwiftPackageReference "supabase-swift" */;

@@ -8,6 +8,7 @@
 
 import SwiftUI
 import SwiftData
+import StripePaymentSheet
 
 struct BuyNowSheetView: View {
     let product: Product
@@ -50,12 +51,11 @@ struct BuyNowSheetView: View {
     @State private var cardCVV     = ""
 
     // Stripe card details
-    @State private var stripeCardNumber = ""
-    @State private var stripeExpMonth   = ""
-    @State private var stripeExpYear    = ""
-    @State private var stripeCVC        = ""
     @State private var stripeError: String? = nil
     @State private var showStripeError  = false
+    @State private var stripePaymentSheet: PaymentSheet?
+    @State private var isPresentingStripePaymentSheet = false
+    @State private var pendingStripeCheckout: PendingStripeBuyNowContext? = nil
 
     // Order result
     @State private var placedOrder: Order? = nil
@@ -63,6 +63,13 @@ struct BuyNowSheetView: View {
     @State private var isPlacing           = false
     @State private var orderError: String? = nil
     @State private var showOrderError      = false
+
+    private struct PendingStripeBuyNowContext {
+        let order: Order
+        let paymentIntentId: String
+        let amount: Double
+        let processedBy: UUID?
+    }
 
     private var savedAddresses: [SavedAddress] {
         allAddresses
@@ -107,7 +114,7 @@ struct BuyNowSheetView: View {
     private var total: Double    { subtotal + tax }
 
     var body: some View {
-        NavigationStack {
+        let baseView = NavigationStack {
             ZStack {
                 AppColors.backgroundPrimary.ignoresSafeArea()
 
@@ -206,6 +213,17 @@ struct BuyNowSheetView: View {
                 dismiss()
             }
             .task { await refreshPromotions() }
+        }
+
+        if let sheet = stripePaymentSheet {
+            baseView.paymentSheet(
+                isPresented: $isPresentingStripePaymentSheet,
+                paymentSheet: sheet
+            ) { result in
+                handleStripePaymentResult(result)
+            }
+        } else {
+            baseView
         }
     }
 
@@ -761,7 +779,7 @@ struct BuyNowSheetView: View {
                 return !cardNumber.isEmpty && !cardExpiry.isEmpty && !cardCVV.isEmpty
             }
             if selectedPayment == .stripe {
-                return isStripeCardComplete
+                return true
             }
             return true
         default: return true
@@ -955,61 +973,88 @@ struct BuyNowSheetView: View {
 
         // 3. If Stripe selected, process payment before navigating to confirmation
         if selectedPayment == .stripe {
-            print("[BuyNowSheetView] 🔵 Stripe payment flow starting...")
-            print("[BuyNowSheetView] Total: \(total), AmountInPaise: \(Int(total * 100))")
-            print("[BuyNowSheetView] Card number length: \(stripeCardNumber.replacingOccurrences(of: " ", with: "").count)")
-            print("[BuyNowSheetView] ExpMonth: '\(stripeExpMonth)', ExpYear: '\(stripeExpYear)', CVC length: \(stripeCVC.count)")
-
             let amountInPaise = Int(total * 100)
-            let card = StripeCardDetails(
-                number: stripeCardNumber,
-                expMonth: Int(stripeExpMonth) ?? 1,
-                expYear: Int(stripeExpYear) ?? 2030,
-                cvc: stripeCVC
-            )
-
-            print("[BuyNowSheetView] Card isValid: \(card.isValid)")
-
-            let result = await StripePaymentService.shared.processPayment(
+            let result = await StripePaymentService.shared.preparePaymentSheet(
                 amountInPaise: amountInPaise,
                 currency: "inr",
-                orderId: order.id,
-                card: card
+                orderId: order.id
             )
 
             switch result {
-            case .success(let paymentIntentId):
-                print("[BuyNowSheetView] ✅ Stripe payment succeeded: \(paymentIntentId)")
-                do {
-                    try await PaymentRecordService.shared.recordPayment(
-                        orderId: order.id,
-                        method: "stripe",
-                        amount: total,
-                        currency: "INR",
-                        status: "completed",
-                        paymentReference: paymentIntentId,
-                        stripePaymentIntentId: paymentIntentId,
-                        processedBy: appState.currentUserProfile?.id
-                    )
-                } catch {
-                    print("[BuyNowSheetView] Payment record save failed (non-fatal): \(error)")
+            case .success(let session):
+                pendingStripeCheckout = PendingStripeBuyNowContext(
+                    order: order,
+                    paymentIntentId: session.paymentIntentId,
+                    amount: total,
+                    processedBy: appState.currentUserProfile?.id
+                )
+                stripePaymentSheet = session.paymentSheet
+                isPlacing = false
+                DispatchQueue.main.async {
+                    isPresentingStripePaymentSheet = true
                 }
-            case .cancelled:
-                print("[BuyNowSheetView] Stripe payment cancelled")
-            case .failed(let error):
-                print("[BuyNowSheetView] ❌ Stripe payment failed: \(error.localizedDescription)")
+                return
+            case .failure(let error):
+                print("[BuyNowSheetView] ❌ Stripe PaymentSheet preparation failed: \(error.localizedDescription)")
                 stripeError = error.localizedDescription
                 showStripeError = true
-                // Don't navigate to confirmation on payment failure
+                isPlacing = false
                 return
             }
         } else {
             print("[BuyNowSheetView] Payment method: \(selectedPayment.title) (not Stripe, skipping payment processing)")
         }
 
-        // 4. Navigate to confirmation
+        completeBuyNow(order: order)
+    }
+
+    @MainActor
+    private func handleStripePaymentResult(_ result: PaymentSheetResult) {
+        Task { @MainActor in
+            guard let pending = pendingStripeCheckout else {
+                isPlacing = false
+                return
+            }
+
+            switch result {
+            case .completed:
+                do {
+                    try await PaymentRecordService.shared.recordPayment(
+                        orderId: pending.order.id,
+                        method: "stripe",
+                        amount: pending.amount,
+                        currency: "INR",
+                        status: "completed",
+                        paymentReference: pending.paymentIntentId,
+                        stripePaymentIntentId: pending.paymentIntentId,
+                        processedBy: pending.processedBy
+                    )
+                } catch {
+                    print("[BuyNowSheetView] Payment record save failed (non-fatal): \(error)")
+                }
+                completeBuyNow(order: pending.order)
+
+            case .canceled:
+                stripeError = "Payment was cancelled."
+                showStripeError = true
+                isPlacing = false
+
+            case .failed(let error):
+                stripeError = error.localizedDescription
+                showStripeError = true
+                isPlacing = false
+            }
+
+            pendingStripeCheckout = nil
+            stripePaymentSheet = nil
+        }
+    }
+
+    @MainActor
+    private func completeBuyNow(order: Order) {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         placedOrder = order
+        isPlacing = false
         showConfirmation = true
     }
 
@@ -1054,17 +1099,9 @@ enum BuyNowPayment: String, CaseIterable {
 
 private extension BuyNowSheetView {
 
-    var isStripeCardComplete: Bool {
-        let cleanNumber = stripeCardNumber.replacingOccurrences(of: " ", with: "")
-        return cleanNumber.count >= 13
-            && !stripeExpMonth.isEmpty
-            && !stripeExpYear.isEmpty
-            && stripeCVC.count >= 3
-    }
-
     var stripeCardFormSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("STRIPE CARD DETAILS")
+            Text("STRIPE PAYMENT")
                 .font(AppTypography.overline)
                 .tracking(2)
                 .foregroundColor(AppColors.accent)
@@ -1078,31 +1115,10 @@ private extension BuyNowSheetView {
                     .foregroundColor(AppColors.success)
             }
 
-            LuxuryTextField(placeholder: "Card Number (e.g. 4242 4242 4242 4242)", text: $stripeCardNumber)
-                .keyboardType(.numberPad)
-
-            HStack(spacing: AppSpacing.sm) {
-                LuxuryTextField(placeholder: "MM", text: $stripeExpMonth)
-                    .keyboardType(.numberPad)
-                    .frame(maxWidth: 70)
-                LuxuryTextField(placeholder: "YYYY", text: $stripeExpYear)
-                    .keyboardType(.numberPad)
-                    .frame(maxWidth: 90)
-                LuxuryTextField(placeholder: "CVC", text: $stripeCVC)
-                    .keyboardType(.numberPad)
-                    .frame(maxWidth: 80)
-            }
-
-            if StripeConfig.publishableKey == "pk_test_REPLACE_WITH_YOUR_KEY" {
-                HStack(spacing: AppSpacing.xs) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11))
-                        .foregroundColor(AppColors.warning)
-                    Text("Stripe test mode — use card 4242 4242 4242 4242")
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.warning)
-                }
-            }
+            Text("Card entry and authentication are handled in Stripe's secure payment sheet after you tap Place Order.")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

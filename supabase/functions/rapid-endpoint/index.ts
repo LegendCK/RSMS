@@ -1,25 +1,17 @@
-// create-payment-intent/index.ts
-// Edge Function — creates + confirms a Stripe PaymentIntent for card checkout.
+// rapid-endpoint/index.ts
+// Edge Function — creates a Stripe PaymentIntent for client-side PaymentSheet.
 // Returns { clientSecret, paymentIntentId, status }.
 //
-// Env vars required (set via Supabase Dashboard → Edge Functions → Secrets):
+// Env vars required (Supabase Dashboard -> Edge Functions -> Secrets):
 //   STRIPE_SECRET_KEY   — sk_test_... or sk_live_...
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-interface CardDetails {
-  number: string;
-  expMonth: number;
-  expYear: number;
-  cvc: string;
-}
 
 interface CreatePaymentIntentPayload {
   amount: number;       // Amount in smallest currency unit (e.g. paise for INR)
   currency?: string;    // ISO 4217, defaults to "inr"
   orderId?: string;     // Optional — linked order UUID for metadata
   description?: string; // Optional — shown on Stripe dashboard
-  card?: CardDetails;   // Required for direct card confirmation in this flow
 }
 
 const corsHeaders = {
@@ -46,31 +38,19 @@ serve(async (req: Request) => {
       return json({ error: "Amount must be a positive number (in smallest currency unit, e.g. paise)" }, 400);
     }
 
-    if (!payload.card?.number || !payload.card?.expMonth || !payload.card?.expYear || !payload.card?.cvc) {
-      return json({ error: "Missing card details" }, 400);
-    }
-
     const currency = (payload.currency ?? "inr").toLowerCase();
     const amountInt = Math.round(payload.amount);
 
     const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeSecretKey) {
-      console.error("[create-payment-intent] STRIPE_SECRET_KEY not set in env");
+      console.error("[rapid-endpoint] STRIPE_SECRET_KEY not set in env");
       return json({ error: "Stripe is not configured on the server" }, 500);
     }
-
-    const cardNumber = payload.card.number.replace(/\s+/g, "");
 
     const params = new URLSearchParams();
     params.append("amount", String(amountInt));
     params.append("currency", currency);
-    params.append("confirm", "true");
-    params.append("payment_method_data[type]", "card");
-    params.append("payment_method_data[card][number]", cardNumber);
-    params.append("payment_method_data[card][exp_month]", String(payload.card.expMonth));
-    params.append("payment_method_data[card][exp_year]", String(payload.card.expYear));
-    params.append("payment_method_data[card][cvc]", payload.card.cvc);
-    params.append("payment_method_options[card][request_three_d_secure]", "automatic");
+    params.append("automatic_payment_methods[enabled]", "true");
 
     if (payload.description) {
       params.append("description", payload.description);
@@ -79,7 +59,7 @@ serve(async (req: Request) => {
       params.append("metadata[order_id]", payload.orderId);
     }
 
-    console.log(`[create-payment-intent] Creating+confirming PI — amount: ${amountInt} ${currency}`);
+    console.log(`[rapid-endpoint] Creating PaymentIntent — amount: ${amountInt} ${currency}`);
 
     const stripeResponse = await fetch("https://api.stripe.com/v1/payment_intents", {
       method: "POST",
@@ -93,13 +73,17 @@ serve(async (req: Request) => {
     const stripeData = await stripeResponse.json();
 
     if (!stripeResponse.ok) {
-      console.error("[create-payment-intent] Stripe error:", JSON.stringify(stripeData));
+      console.error("[rapid-endpoint] Stripe error:", JSON.stringify(stripeData));
       return json({
-        error: stripeData.error?.message ?? "Failed to create/confirm payment intent",
-      }, stripeResponse.status);
+        error: stripeData.error?.message ?? "Failed to create payment intent",
+        stripeStatus: stripeResponse.status,
+        stripeCode: stripeData.error?.code ?? null,
+        stripeDeclineCode: stripeData.error?.decline_code ?? null,
+        stripeType: stripeData.error?.type ?? null,
+      }, 200);
     }
 
-    console.log(`[create-payment-intent] ✅ PaymentIntent: ${stripeData.id} status=${stripeData.status}`);
+    console.log(`[rapid-endpoint] ✅ PaymentIntent created: ${stripeData.id} status=${stripeData.status}`);
 
     return json({
       clientSecret: stripeData.client_secret,
@@ -109,7 +93,7 @@ serve(async (req: Request) => {
       currency,
     });
   } catch (err) {
-    console.error("[create-payment-intent] Unexpected error:", err);
+    console.error("[rapid-endpoint] Unexpected error:", err);
     return json({ error: String(err) }, 500);
   }
 });
