@@ -1028,7 +1028,8 @@ struct ManagerCreateStaffSheet: View {
 
     @State private var firstName = ""
     @State private var lastName = ""
-    @State private var email = ""
+    @State private var corporateEmail = ""
+    @State private var personalEmail = ""
     @State private var phone = ""
     @State private var password = ""
     @State private var selectedRole: UserRole = .salesAssociate
@@ -1071,7 +1072,10 @@ struct ManagerCreateStaffSheet: View {
                                         LuxuryTextField(placeholder: "Last Name", text: $lastName, icon: "person")
                                     }
 
-                                    LuxuryTextField(placeholder: "Email", text: $email, icon: "envelope")
+                                    LuxuryTextField(placeholder: "Corporate Email (@maisonluxe.me)", text: $corporateEmail, icon: "building.2")
+                                        .keyboardType(.emailAddress)
+
+                                    LuxuryTextField(placeholder: "Personal Email (Gmail, etc.)", text: $personalEmail, icon: "envelope")
                                         .keyboardType(.emailAddress)
 
                                     LuxuryTextField(placeholder: "Phone", text: $phone, icon: "phone")
@@ -1189,10 +1193,13 @@ struct ManagerCreateStaffSheet: View {
         let trimmedLastName = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
         let fullName = "\(trimmedFirstName) \(trimmedLastName)"
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trimmedCorporateEmail = corporateEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trimmedPersonalEmail  = personalEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
-        guard !trimmedFirstName.isEmpty, !trimmedLastName.isEmpty, !trimmedEmail.isEmpty, password.count >= 8 else {
-            errorMessage = "First name, last name, email, and an 8+ character password are required."
+        guard !trimmedFirstName.isEmpty, !trimmedLastName.isEmpty,
+              !trimmedCorporateEmail.isEmpty, !trimmedPersonalEmail.isEmpty,
+              password.count >= 8 else {
+            errorMessage = "First name, last name, both emails, and an 8+ character password are required."
             showError = true
             return
         }
@@ -1203,11 +1210,13 @@ struct ManagerCreateStaffSheet: View {
         do {
             _ = try await StaffSyncService.shared.createStaffWithAuth(
                 name: fullName,
-                email: trimmedEmail,
+                email: trimmedCorporateEmail,
                 phone: phone.trimmingCharacters(in: .whitespacesAndNewlines),
                 password: password,
                 role: selectedRole,
-                storeId: storeId
+                storeId: storeId,
+                corporateEmail: trimmedCorporateEmail,
+                personalEmail: trimmedPersonalEmail
             )
 
             try await StaffSyncService.shared.syncStaff(modelContext: modelContext)
@@ -1249,7 +1258,8 @@ struct ManagerCreateStaffSheet: View {
     private var hasUnsavedChanges: Bool {
         !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
         !lastName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !corporateEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !personalEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
         !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
         !password.isEmpty
     }

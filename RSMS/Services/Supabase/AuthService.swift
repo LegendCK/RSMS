@@ -186,7 +186,8 @@ final class AuthService {
             gdprConsent: false,
             marketingOptIn: false,
             createdBy: nil,
-            isActive: true
+            isActive: true,
+            mustResetPassword: false
         )
 
         let profile: ClientDTO
@@ -220,6 +221,86 @@ final class AuthService {
     /// Sends a password reset email via Supabase Auth.
     func resetPassword(email: String) async throws {
         try await client.auth.resetPasswordForEmail(email)
+    }
+
+    // MARK: - Password Management
+
+    /// Updates the currently authenticated user's password.
+    func updatePassword(_ newPassword: String) async throws {
+        try await client.auth.update(user: UserAttributes(password: newPassword))
+    }
+
+    /// Clears the must_reset_password flag after the user has set their new password.
+    func clearMustResetFlag() async throws {
+        struct MustResetPatch: Encodable {
+            let must_reset_password: Bool
+        }
+
+        let uid = try await client.auth.session.user.id
+        let uidString = uid.uuidString.lowercased()
+        let patch = MustResetPatch(must_reset_password: false)
+
+        // Try staff table first
+        do {
+            try await client
+                .from("users")
+                .update(patch)
+                .eq("id", value: uidString)
+                .execute()
+        } catch {
+            // If staff table fails, try clients table
+            try await client
+                .from("clients")
+                .update(patch)
+                .eq("id", value: uidString)
+                .execute()
+        }
+    }
+
+    /// Custom password reset that routes through our edge function
+    /// to send the reset link to the user's personal email.
+    func requestCustomPasswordReset(email: String) async throws {
+        struct Payload: Encodable {
+            let email: String
+        }
+
+        let _: Data = try await client.functions.invoke(
+            "custom-password-reset",
+            options: FunctionInvokeOptions(body: Payload(email: email.lowercased()))
+        )
+    }
+
+    // MARK: - Email OTP
+
+    /// Sends a 6-digit OTP to the customer's email via the send-otp edge function.
+    func sendOTP(email: String) async throws {
+        struct Payload: Encodable {
+            let email: String
+        }
+
+        let _: Data = try await client.functions.invoke(
+            "send-otp",
+            options: FunctionInvokeOptions(body: Payload(email: email.lowercased()))
+        )
+    }
+
+    /// Verifies a 6-digit OTP code. Returns `true` if valid, `false` otherwise.
+    func verifyOTP(email: String, code: String) async throws -> Bool {
+        struct Payload: Encodable {
+            let email: String
+            let code: String
+        }
+
+        struct OTPResponse: Decodable {
+            let verified: Bool
+        }
+
+        let response: OTPResponse = try await client.functions.invoke(
+            "verify-otp",
+            options: FunctionInvokeOptions(body: Payload(email: email.lowercased(), code: code))
+        )
+
+        return response.verified
     }
 
     // MARK: - Restore Session
