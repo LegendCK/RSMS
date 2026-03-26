@@ -270,6 +270,39 @@ final class AuthService {
         )
     }
 
+    // MARK: - Email OTP
+
+    /// Sends a 6-digit OTP to the customer's email via the send-otp edge function.
+    func sendOTP(email: String) async throws {
+        struct Payload: Encodable {
+            let email: String
+        }
+
+        let _: Data = try await client.functions.invoke(
+            "send-otp",
+            options: FunctionInvokeOptions(body: Payload(email: email.lowercased()))
+        )
+    }
+
+    /// Verifies a 6-digit OTP code. Returns `true` if valid, `false` otherwise.
+    func verifyOTP(email: String, code: String) async throws -> Bool {
+        struct Payload: Encodable {
+            let email: String
+            let code: String
+        }
+
+        struct OTPResponse: Decodable {
+            let verified: Bool
+        }
+
+        let response: OTPResponse = try await client.functions.invoke(
+            "verify-otp",
+            options: FunctionInvokeOptions(body: Payload(email: email.lowercased(), code: code))
+        )
+
+        return response.verified
+    }
+
     // MARK: - Restore Session
 
     /// Checks for an existing valid session on app launch.

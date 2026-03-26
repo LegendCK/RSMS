@@ -29,6 +29,10 @@ struct RootView: View {
                 ForcePasswordResetView()
                     .transition(.opacity)
 
+            case .emailOTPVerification:
+                EmailOTPVerificationView(email: appState.currentUserEmail)
+                    .transition(.opacity)
+
             case .main:
                 MainTabView()
                     .transition(.opacity)

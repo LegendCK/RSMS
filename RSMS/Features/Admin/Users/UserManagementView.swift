@@ -259,6 +259,7 @@ struct UserManagementView: View {
 struct CreateUserSheet: View {
     let modelContext: ModelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \StoreLocation.name) private var allStores: [StoreLocation]
 
     @State private var name = ""
     @State private var corporateEmail = ""
@@ -266,6 +267,7 @@ struct CreateUserSheet: View {
     @State private var phone = ""
     @State private var password = ""
     @State private var selectedRole: UserRole = .boutiqueManager
+    @State private var selectedStoreId: UUID?
     @State private var isCreating = false
     @State private var showError = false
     @State private var errorMessage = ""
@@ -371,6 +373,27 @@ struct CreateUserSheet: View {
                             }
                         }
 
+                        // Boutique Assignment
+                        formSection {
+                            fieldRow(label: "Boutique", icon: "building.2") {
+                                Menu {
+                                    Button("None") { selectedStoreId = nil }
+                                    ForEach(boutiqueStores) { store in
+                                        Button(store.name) { selectedStoreId = store.id }
+                                    }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Text(selectedStoreName)
+                                            .font(.system(size: 15))
+                                            .foregroundColor(selectedStoreId == nil ? .secondary : .primary)
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+
                         if !corporateEmail.isEmpty && !corporateEmail.lowercased().hasSuffix("@maisonluxe.me") {
                             HStack(spacing: 6) {
                                 Image(systemName: "exclamationmark.triangle.fill")
@@ -470,6 +493,17 @@ struct CreateUserSheet: View {
         .padding(.vertical, 14)
     }
 
+    private var boutiqueStores: [StoreLocation] {
+        allStores.filter { $0.type == .boutique }.sorted { $0.name < $1.name }
+    }
+
+    private var selectedStoreName: String {
+        if let id = selectedStoreId, let store = allStores.first(where: { $0.id == id }) {
+            return store.name
+        }
+        return "Select Boutique"
+    }
+
     @MainActor
     private func createUser() async {
         let trimmedName           = name.trimmingCharacters(in: .whitespaces)
@@ -496,6 +530,7 @@ struct CreateUserSheet: View {
                 phone: trimmedPhone,
                 password: password,
                 role: selectedRole,
+                storeId: selectedStoreId,
                 corporateEmail: trimmedCorporateEmail,
                 personalEmail: trimmedPersonalEmail
             )
