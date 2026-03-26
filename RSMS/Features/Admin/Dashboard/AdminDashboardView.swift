@@ -45,6 +45,14 @@ private enum SharpCorners {
     static let badge: CGFloat = 5
 }
 
+private struct AdminActivityPreviewItem: Identifiable {
+    let id: String
+    let action: String
+    let detail: String
+    let by: String
+    let time: String
+}
+
 // MARK: - Main Dashboard View
 
 /// AdminDashboardView is the primary interface for corporate administrators.
@@ -78,6 +86,7 @@ struct AdminDashboardView: View {
     @State private var lowStockAlerts: [LowStockAlert] = []
     @State private var isLoadingAlerts = false
     @State private var hasFetchedAlerts = false
+    @State private var alertCarouselIndex = 0
 
     // Insights + Export
   @State private var selectedReportScope: AdminReportScope = .all
@@ -133,6 +142,18 @@ struct AdminDashboardView: View {
         return allOrders.reduce(0) { $0 + $1.total }
     }
     private var totalSalesText: String { formatCurrency(totalSales) }
+
+    private var adminAIInsights: [AIInsightsEngine.DashboardInsight] {
+        AIInsightsEngine.shared.generateAdminInsights(
+            totalRevenue: totalSales,
+            totalOrders: remoteOrders?.count ?? allOrders.count,
+            totalProducts: allProducts.count,
+            lowStockCount: lowStockAlerts.count,
+            activeStaff: activeStaffCount,
+            totalClients: remoteClients?.count ?? allClients.count,
+            storeCount: activeStoreCount
+        )
+    }
     private var totalUnitsSold: Int {
         if let remoteOrderItems {
             return remoteOrderItems.reduce(0) { $0 + $1.quantity }
@@ -175,9 +196,14 @@ struct AdminDashboardView: View {
             .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 24) {
+                VStack(spacing: 16) {
                     welcomeHeader
                     metricsGrid
+
+                    // AI Insights
+                    AIInsightsCard(insights: adminAIInsights)
+                        .padding(.horizontal, 16)
+
                     systemHealthBar
                     lowStockSection
                     alertsSection
@@ -186,7 +212,7 @@ struct AdminDashboardView: View {
                     Spacer().frame(height: 40)
                 }
             }
-            .padding(.top, 6)
+            .padding(.top, 2)
             .refreshable {
                 await fetchLowStock()
             }
@@ -195,6 +221,7 @@ struct AdminDashboardView: View {
         .animation(.easeInOut(duration: 0.25), value: lowStockAlerts.count)
         .animation(.easeInOut(duration: 0.25), value: activeSheet?.id)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarRole(.editor)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("MAISON LUXE")
@@ -203,16 +230,10 @@ struct AdminDashboardView: View {
                     .foregroundColor(.primary)
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 14) {
-                    Button(action: { activeSheet = .clientActivity }) {
-                        Image(systemName: "bell.badge")
-                            .font(.system(size: 16, weight: .light))
-                            .foregroundColor(.primary)
-                            .frame(width: 32, height: 32)
-                        Text(adminInitials)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(AppColors.accent)
-                    }
+                Button(action: { activeSheet = .clientActivity }) {
+                    Image(systemName: "bell.badge")
+                        .font(.system(size: 16, weight: .light))
+                        .foregroundColor(.primary)
                 }
             }
         }
@@ -306,12 +327,12 @@ struct AdminDashboardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
-        .padding(.vertical, 20)
+        .padding(.vertical, 14)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 2)
         .padding(.horizontal, 20)
-        .padding(.top, 8)
+        .padding(.top, 2)
     }
 
     private var greeting: String {
@@ -436,11 +457,11 @@ struct AdminDashboardView: View {
     // MARK: - Metrics Grid
 
     private var metricsGrid: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             sectionHeader("KEY METRICS")
             LazyVGrid(
                 columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
-                spacing: 12
+                spacing: 10
             ) {
                 metricCard(
                     icon: "chart.line.uptrend.xyaxis",
@@ -624,7 +645,7 @@ struct AdminDashboardView: View {
     // MARK: - Low Stock Section
     
     private var lowStockSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             HStack {
                 sectionHeader("LOW STOCK ALERTS")
                 Spacer()
@@ -645,7 +666,7 @@ struct AdminDashboardView: View {
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 18)
+                .padding(.vertical, 14)
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .padding(.horizontal, 20)
@@ -695,7 +716,7 @@ struct AdminDashboardView: View {
     // MARK: - Alerts
 
     private var alertsSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             HStack {
                 sectionHeader("ALERTS")
                 Spacer()
@@ -709,19 +730,35 @@ struct AdminDashboardView: View {
                     .padding(.trailing, 20)
             }
 
-            VStack(spacing: 10) {
-                alertRow(icon: "exclamationmark.triangle.fill", color: AppColors.error,
-                         title: "Critical: Heritage Bag", detail: "Stock at 1 unit — reorder required", time: "12m")
-                alertRow(icon: "arrow.triangle.2.circlepath", color: AppColors.warning,
-                         title: "Sync Delay", detail: "Paris boutique inventory 3h behind", time: "3h")
-                alertRow(icon: "person.badge.plus", color: AppColors.info,
-                         title: "Access Request", detail: "Sophia Laurent requests catalog edit", time: "5h")
+            TabView(selection: $alertCarouselIndex) {
+                ForEach(Array(alertItems.enumerated()), id: \.offset) { index, item in
+                    alertCard(icon: item.icon, color: item.color, title: item.title, detail: item.detail, time: item.time)
+                        .padding(.horizontal, 20)
+                        .tag(index)
+                }
             }
-            .padding(.horizontal, 20)
+            .frame(height: 102)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+
+            HStack(spacing: 6) {
+                ForEach(alertItems.indices, id: \.self) { index in
+                    Capsule()
+                        .fill(index == alertCarouselIndex ? AppColors.accent : AppColors.neutral300.opacity(0.6))
+                        .frame(width: index == alertCarouselIndex ? 16 : 6, height: 6)
+                }
+            }
         }
     }
 
-    private func alertRow(icon: String, color: Color, title: String, detail: String, time: String) -> some View {
+    private var alertItems: [(icon: String, color: Color, title: String, detail: String, time: String)] {
+        [
+            ("exclamationmark.triangle.fill", AppColors.error, "Critical: Heritage Bag", "Stock at 1 unit — reorder required", "12m"),
+            ("arrow.triangle.2.circlepath", AppColors.warning, "Sync Delay", "Paris boutique inventory 3h behind", "3h"),
+            ("person.badge.plus", AppColors.info, "Access Request", "Sophia Laurent requests catalog edit", "5h")
+        ]
+    }
+
+    private func alertCard(icon: String, color: Color, title: String, detail: String, time: String) -> some View {
         HStack(spacing: 12) {
             // Icon badge
             ZStack {
@@ -748,7 +785,7 @@ struct AdminDashboardView: View {
                 .foregroundColor(.secondary)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 13)
+        .padding(.vertical, 10)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
@@ -757,11 +794,11 @@ struct AdminDashboardView: View {
     // MARK: - Quick Actions
 
     private var quickActionsGrid: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             sectionHeader("QUICK ACTIONS")
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
-                      spacing: 12) {
+                      spacing: 10) {
                 actionTile(icon: "plus.square.fill", label: "Add SKU", color: AppColors.accent) {
                     impact.impactOccurred(); activeSheet = .addSKU
                 }
@@ -809,7 +846,7 @@ struct AdminDashboardView: View {
                     .lineLimit(2)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 96)
+            .frame(height: 88)
             .padding(.horizontal, 8)
             .background(Color(uiColor: .secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -839,19 +876,91 @@ struct AdminDashboardView: View {
             }
 
             VStack(spacing: 0) {
-                activityItem(action: "SKU Created", detail: "Artisan Timepiece — Limited Edition", by: "V. Sterling", time: "10m")
-                Divider().padding(.leading, 52)
-                activityItem(action: "Price Override", detail: "Diamond Pendant — $15,800 → $16,200", by: "V. Sterling", time: "1h")
-                Divider().padding(.leading, 52)
-                activityItem(action: "Staff Provisioned", detail: "Isabella Moreau → Sales Associate", by: "J. Beaumont", time: "3h")
-                Divider().padding(.leading, 52)
-                activityItem(action: "Stock Transfer", detail: "Classic Flap Bag — NYC → Paris (2 units)", by: "D. Park", time: "6h")
+                if activityPreviewItems.isEmpty {
+                    HStack(spacing: AppSpacing.sm) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppColors.neutral500)
+                        Text("No recent activity yet")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                        Spacer()
+                    }
+                    .padding(.horizontal, AppSpacing.md)
+                    .padding(.vertical, AppSpacing.md)
+                } else {
+                    ForEach(Array(activityPreviewItems.enumerated()), id: \.element.id) { index, item in
+                        activityItem(action: item.action, detail: item.detail, by: item.by, time: item.time)
+                        if index < activityPreviewItems.count - 1 {
+                            Divider().padding(.leading, 52)
+                        }
+                    }
+                }
             }
             .background(Color(uiColor: .secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 2)
             .padding(.horizontal, 20)
         }
+    }
+
+    private var activityPreviewItems: [AdminActivityPreviewItem] {
+        if let remoteOrders {
+            let remoteClientsById = Dictionary(uniqueKeysWithValues: (remoteClients ?? []).map { ($0.id, $0) })
+            return remoteOrders
+                .sorted { $0.updatedAt > $1.updatedAt }
+                .prefix(4)
+                .map { order in
+                    let actorName = order.clientId.flatMap { remoteClientsById[$0]?.fullName } ?? "System"
+                    return AdminActivityPreviewItem(
+                        id: order.id.uuidString,
+                        action: activityAction(for: order.status),
+                        detail: "\(order.orderNumber ?? "Order") — \(channelSummary(for: order.channel)) • \(formatCurrency(order.grandTotal))",
+                        by: actorName,
+                        time: relativeTimeString(from: order.updatedAt)
+                    )
+                }
+        }
+
+        return allOrders
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .prefix(4)
+            .map { order in
+                AdminActivityPreviewItem(
+                    id: order.id.uuidString,
+                    action: activityAction(for: order.statusRaw),
+                    detail: "\(order.orderNumber) — \(order.fulfillmentType.rawValue) • \(order.formattedTotal)",
+                    by: order.customerEmail.isEmpty ? "System" : order.customerEmail,
+                    time: relativeTimeString(from: order.updatedAt)
+                )
+            }
+    }
+
+    private func activityAction(for statusRaw: String) -> String {
+        switch statusRaw.lowercased() {
+        case "completed", "delivered": return "Order Completed"
+        case "shipped": return "Order Shipped"
+        case "processing": return "Order Processing"
+        case "confirmed", "pending": return "Order Updated"
+        case "cancelled", "canceled": return "Order Cancelled"
+        default: return "Order Activity"
+        }
+    }
+
+    private func channelSummary(for channel: String) -> String {
+        switch channel.lowercased() {
+        case "online": return "Online"
+        case "bopis": return "BOPIS"
+        case "ship_from_store": return "Ship From Store"
+        case "in_store": return "In-Store"
+        default: return channel.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    private func relativeTimeString(from date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private func activityItem(action: String, detail: String, by: String, time: String) -> some View {
@@ -950,6 +1059,14 @@ struct AdminDashboardView: View {
                 showExportError = true
                 return
             }
+
+            await AdminAuditService.shared.logActivity(
+                action: "Exported Report",
+                details: [
+                    "scope": selectedReportScope.rawValue,
+                    "format": selectedReportFormat.rawValue
+                ]
+            )
 
             // Avoid sheet collision (export picker + share sheet).
             activeSheet = nil
@@ -1816,7 +1933,7 @@ private struct DashboardInventoryInsightsSheet: View {
     private var filteredInventoryUnits: Int {
         guard let snapshot else { return 0 }
         return snapshot.inventory
-            .filter { selectedStoreId == nil || $0.storeId == selectedStoreId }
+            .filter { selectedStoreId == nil || $0.locationId == selectedStoreId }
             .reduce(0) { $0 + $1.quantity }
     }
 
@@ -2764,7 +2881,7 @@ struct CreateStoreSheet: View {
             // 2 — Assign the selected manager to this store
             if let manager = selectedManager {
                 struct StoreAssignPatch: Encodable { let store_id: UUID }
-                try? await SupabaseManager.shared.client
+                _ = try? await SupabaseManager.shared.client
                     .from("users")
                     .update(StoreAssignPatch(store_id: newId))
                     .eq("id", value: manager.id.uuidString.lowercased())

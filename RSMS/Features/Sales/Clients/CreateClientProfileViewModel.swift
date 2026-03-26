@@ -190,7 +190,8 @@ final class CreateClientProfileViewModel {
             gdprConsent: gdprConsent,
             marketingOptIn: marketingOptIn,
             createdBy: creatorId,
-            isActive: true
+            isActive: true,
+            mustResetPassword: true
         )
 
         do {

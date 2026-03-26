@@ -57,7 +57,7 @@ final class ServiceTicketPartsService: ServiceTicketPartsServiceProtocol, @unche
             .from("inventory")
             .select("product_id, quantity")
             .eq("product_id", value: productId.uuidString)
-            .eq("store_id", value: storeId.uuidString)
+            .eq("location_id", value: storeId.uuidString)
             .limit(1)
             .execute()
             .value

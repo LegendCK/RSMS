@@ -21,7 +21,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		296424382F75AF36002E82A1 /* Exceptions for "RSMS" folder in "RSMS" target */ = {
+		066BAB452F750F7000FAFC91 /* Exceptions for "RSMS" folder in "RSMS" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -34,7 +34,7 @@
 		76C91C462F62C05600C4F325 /* RSMS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				296424382F75AF36002E82A1 /* Exceptions for "RSMS" folder in "RSMS" target */,
+				066BAB452F750F7000FAFC91 /* Exceptions for "RSMS" folder in "RSMS" target */,
 			);
 			path = RSMS;
 			sourceTree = "<group>";
@@ -300,7 +300,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3DXUA7RP32;
+				DEVELOPMENT_TEAM = GBFBBK9G3K;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RSMS/Info.plist;
@@ -335,7 +335,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3DXUA7RP32;
+				DEVELOPMENT_TEAM = GBFBBK9G3K;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RSMS/Info.plist;

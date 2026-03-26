@@ -20,8 +20,9 @@ struct SecondaryButton: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: AppSpacing.touchTarget + 4)
                 .foregroundColor(AppColors.accent)
+                .clipShape(Capsule())
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    Capsule()
                         .strokeBorder(AppColors.accent, lineWidth: 1.5)
                 )
         }

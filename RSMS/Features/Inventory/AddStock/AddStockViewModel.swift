@@ -96,7 +96,7 @@ final class AddStockViewModel {
             let rows: [InvRow] = try await client
                 .from("inventory")
                 .select("quantity, reorder_point")
-                .eq("store_id",   value: storeId.uuidString.lowercased())
+                .eq("location_id",   value: storeId.uuidString.lowercased())
                 .eq("product_id", value: productId.uuidString.lowercased())
                 .execute()
                 .value
@@ -107,14 +107,14 @@ final class AddStockViewModel {
 
             // Upsert using the existing Codable DTO — same pattern as InventorySyncService
             let payload = InventoryUpsertDTO(
-                storeId:      storeId,
+                locationId:   storeId,
                 productId:    productId,
                 quantity:     newQty,
                 reorderPoint: reorderPoint
             )
             try await client
                 .from("inventory")
-                .upsert(payload, onConflict: "store_id,product_id")
+                .upsert(payload, onConflict: "location_id,product_id")
                 .execute()
 
             print("[AddStockVM] inventory updated: \(productId) qty \(currentQty) → \(newQty)")

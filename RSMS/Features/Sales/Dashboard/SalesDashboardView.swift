@@ -10,13 +10,9 @@ import SwiftData
 
 struct SalesDashboardView: View {
     @Environment(AppState.self) private var appState
-    @State private var showAfterSales = false
-    @State private var showShippingDocs = false
-    @State private var showInventory = false
     @State private var vm = SalesDashboardViewModel()
     @State private var activeSheet: ActiveSalesSheet? = nil
-    @State private var showCreateTicket = false
-    @State private var showTicketList = false
+    @State private var showLooksList = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -72,36 +68,25 @@ struct SalesDashboardView: View {
                             quickAction(title: "New Client", icon: "person.badge.plus", color: AppColors.accent)
                         }
                         .buttonStyle(.plain)
+
                         Button {
                             activeSheet = .bookAppointment
                         } label: {
                             quickAction(title: "Book Appointment", icon: "calendar.badge.plus", color: AppColors.secondary)
                         }
                         .buttonStyle(.plain)
+
                         Button {
-                            showCreateTicket = true
+                            activeSheet = .allTickets
                         } label: {
-                            quickAction(title: "New Ticket", icon: "doc.badge.plus", color: AppColors.info)
-                        }
-                        .buttonStyle(.plain)
-                        Button {
-                            showTicketList = true
-                        } label: {
-                            quickAction(title: "All Tickets", icon: "wrench.and.screwdriver", color: AppColors.neutral500)
+                            quickAction(title: "Service Tickets", icon: "wrench.and.screwdriver", color: AppColors.info)
                         }
                         .buttonStyle(.plain)
 
                         Button {
-                            showShippingDocs = true
+                            showLooksList = true
                         } label: {
-                            quickAction(title: "Shipping Docs", icon: "doc.text.fill", color: AppColors.info)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            showInventory = true
-                        } label: {
-                            quickAction(title: "Inventory", icon: "shippingbox.fill", color: AppColors.success)
+                            quickAction(title: "Curated Looks", icon: "sparkles.rectangle.stack.fill", color: AppColors.primary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -150,6 +135,7 @@ struct SalesDashboardView: View {
         .task { await vm.load(storeId: appState.currentStoreId) }
         .refreshable { await vm.load(storeId: appState.currentStoreId) }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarRole(.editor)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("MAISON LUXE")
@@ -166,25 +152,14 @@ struct SalesDashboardView: View {
                 }
             case .bookAppointment:
                 CreateAppointmentView()
-            case .startSale:
-                SACatalogView()
-            case .serviceTicket:
-                SalesAfterSalesView()
+            case .allTickets:
+                NavigationStack {
+                    ServiceTicketListView()
+                }
             }
         }
-        .sheet(isPresented: $showCreateTicket) {
-            NavigationStack {
-                CreateServiceTicketView()
-            }
-        }
-        .navigationDestination(isPresented: $showTicketList) {
-            ServiceTicketListView()
-        }
-        .navigationDestination(isPresented: $showShippingDocs) {
-            ShippingDocumentsListView()
-        }
-        .navigationDestination(isPresented: $showInventory) {
-            InventoryOverviewView()
+        .navigationDestination(isPresented: $showLooksList) {
+            LooksListView()
         }
     }
 
@@ -308,8 +283,7 @@ struct SalesDashboardView: View {
 private enum ActiveSalesSheet: String, Identifiable {
     case newClient
     case bookAppointment
-    case startSale
-    case serviceTicket
+    case allTickets
 
     var id: String { rawValue }
 }

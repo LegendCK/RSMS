@@ -36,7 +36,37 @@
       "Bash(xcodebuild -project RSMS.xcodeproj -scheme RSMS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build)",
       "Bash(grep -l \"service_tickets\" /Users/ekanshjindal/Internship/Infosys/RSMS-3/supabase/migrations/*.sql)",
       "Bash(ls /Users/ekanshjindal/Internship/Infosys/RSMS-3/supabase/migrations/*.sql)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(grep -l \"orders\\\\|tax_rate\\\\|tax_categor\" /Users/ekanshjindal/Internship/Infosys/RSMS-3/supabase/migrations/*.sql)",
+      "Bash(grep -r 'CREATE TABLE.*tax' /Users/ekanshjindal/Internship/Infosys/RSMS-3/supabase/migrations/*.sql)",
+      "Bash(grep -n \"CREATE TABLE\" /Users/ekanshjindal/Internship/Infosys/RSMS-3/supabase/migrations/*.sql)",
+      "Bash(ls -lS /Users/ekanshjindal/Internship/Infosys/RSMS-3/supabase/migrations/*.sql)",
+      "Bash(grep -l \"CREATE TABLE.*orders\\\\|CREATE TABLE.*products\" /Users/ekanshjindal/Internship/Infosys/RSMS-3/supabase/migrations/*.sql)",
+      "Bash(grep -E \"\\\\.swift$\")",
+      "Bash(python3:*)",
+      "mcp__273c6a24-6e97-47d4-a398-ca6fa25e45e6__list_tables",
+      "mcp__273c6a24-6e97-47d4-a398-ca6fa25e45e6__list_edge_functions",
+      "mcp__273c6a24-6e97-47d4-a398-ca6fa25e45e6__get_logs",
+      "mcp__273c6a24-6e97-47d4-a398-ca6fa25e45e6__get_project_url",
+      "Bash(claude mcp:*)",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__get_logs",
+      "Bash(find /Users/ekanshjindal/Internship/Infosys/RSMS-3 -name \"*.sql\" -exec grep -l \"orders\" {})",
+      "Bash(grep -E \"\\\\.\\(swift|swift\\)$\")",
+      "Bash(xcodebuild -project RSMS.xcodeproj -scheme RSMS -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build)",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__list_edge_functions",
+      "mcp__supabase__get_edge_function",
+      "mcp__supabase__deploy_edge_function",
+      "Bash(xcodebuild -scheme RSMS -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build)",
+      "Bash(xcodebuild -scheme RSMS -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build)",
+      "Bash(git merge:*)",
+      "Bash(xcodebuild -scheme RSMS -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' clean)",
+      "mcp__supabase__list_tables"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }

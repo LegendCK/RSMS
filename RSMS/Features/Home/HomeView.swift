@@ -16,22 +16,25 @@ enum GenderFilter: String, CaseIterable {
     case kids      = "Kids"
     case lifestyle = "Lifestyle"
 
-    /// Keywords matched against product `categoryName` (case-insensitive).
+    /// Keywords matched against product `categoryName` + `name` using word-boundary regex.
     var keywords: [String] {
         switch self {
         case .all:       return []
-        case .men:       return ["men", "male", "gentleman", "groom"]
-        case .women:     return ["women", "female", "lady", "ladies", "bridal"]
+        case .men:       return ["men", "male", "gentleman", "groom", "suit", "aviator", "blazer", "cufflink"]
+        case .women:     return ["women", "female", "lady", "ladies", "bridal", "gown", "dress", "necklace",
+                                 "choker", "bracelet", "engagement", "handbag", "wedding"]
         case .kids:      return ["kid", "kids", "child", "children", "baby", "infant", "junior"]
-        case .lifestyle: return ["lifestyle", "home", "décor", "decor", "fragrance", "candle", "wellness", "beauty", "gift"]
+        case .lifestyle: return ["lifestyle", "home", "decor", "fragrance", "candle", "wellness", "beauty", "gift"]
         }
     }
 
+    /// Uses word-boundary matching so "men" does not match inside "women".
     func matches(_ product: Product) -> Bool {
         guard self != .all else { return true }
-        let cat = product.categoryName.lowercased()
-        let name = product.name.lowercased()
-        return keywords.contains(where: { cat.contains($0) || name.contains($0) })
+        let text = "\(product.categoryName) \(product.name)".lowercased()
+        return keywords.contains { keyword in
+            text.range(of: "\\b\(keyword)\\b", options: .regularExpression) != nil
+        }
     }
 }
 
@@ -58,6 +61,7 @@ struct HomeView: View {
     @State private var showAllArrivals = false
     @State private var showNotifications = false
     @State private var unreadCount = 0
+    @State private var selectedProduct: Product? = nil
 
     private let banners: [BannerData] = [
         BannerData(label: "NEW SEASON", title: "Spring\n2026", subtitle: "Curated luxury for the modern connoisseur.", buttonText: "Shop Now"),
@@ -101,6 +105,7 @@ struct HomeView: View {
                     genderFilterSection
                     categorySection
                     featuredSection
+                    RecommendedForYouSection()
                     newArrivalsSection
                     Spacer().frame(height: 48)
                 }
@@ -119,21 +124,9 @@ struct HomeView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(alignment: .center, spacing: 20) {
                     Button { showNotifications = true } label: {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: unreadCount > 0 ? "bell.badge" : "bell")
-                                .font(.system(size: 17, weight: .light))
-                                .foregroundStyle(.primary)
-                            if unreadCount > 0 {
-                                Text(unreadCount > 9 ? "9+" : "\(unreadCount)")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 2)
-                                    .background(AppColors.accent)
-                                    .clipShape(Capsule())
-                                    .offset(x: 8, y: -6)
-                            }
-                        }
+                        Image(systemName: unreadCount > 0 ? "bell.badge" : "bell")
+                            .font(.system(size: 17, weight: .light))
+                            .foregroundStyle(.primary)
                     }
                     CartShortcutButton()
                 }
@@ -147,6 +140,10 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showNotifications, onDismiss: { Task { await refreshUnreadCount() } }) {
             NotificationCenterView()
+                .environment(appState)
+        }
+        .sheet(item: $selectedProduct) { product in
+            ProductDetailView(product: product, isSheet: true)
                 .environment(appState)
         }
         .task {
@@ -309,7 +306,7 @@ struct HomeView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(genderFilteredFeatured) { product in
-                            NavigationLink(destination: ProductDetailView(product: product)) {
+                            Button { selectedProduct = product } label: {
                                 featuredCard(product)
                             }
                             .buttonStyle(PlainButtonStyle())
@@ -367,13 +364,6 @@ struct HomeView: View {
                     }
                 }
 
-                Image(systemName: "bookmark")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white)
-                    .padding(7)
-                    .background(Color.black.opacity(0.25))
-                    .clipShape(Circle())
-                    .padding(8)
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -416,7 +406,7 @@ struct HomeView: View {
                     spacing: 12
                 ) {
                     ForEach(filteredProducts.prefix(6)) { product in
-                        NavigationLink(destination: ProductDetailView(product: product)) {
+                        Button { selectedProduct = product } label: {
                             productCard(product)
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -474,13 +464,6 @@ struct HomeView: View {
                     }
                 }
 
-                Image(systemName: "bookmark")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white)
-                    .padding(7)
-                    .background(Color.black.opacity(0.25))
-                    .clipShape(Circle())
-                    .padding(8)
             }
 
             VStack(alignment: .leading, spacing: 3) {

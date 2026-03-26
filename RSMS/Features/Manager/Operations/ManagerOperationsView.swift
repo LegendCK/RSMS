@@ -46,18 +46,43 @@ struct ManagerOperationsView: View {
             AppColors.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: AppSpacing.xs) {
-                        segmentButton("Fulfillment", tag: 5)
-                        segmentButton("Sales", tag: 0)
-                        segmentButton("BOPIS", tag: 1)
-                        segmentButton("Discrepancies", tag: 2)
-                        segmentButton("VIP Events", tag: 3)
-                        segmentButton("Activity", tag: 4)
+                // Dropdown Card selector with background blur
+                Menu {
+                    Button(action: { selectedSection = 5 }) { Label("Fulfillment", systemImage: selectedSection == 5 ? "checkmark" : "") }
+                    Button(action: { selectedSection = 0 }) { Label("Sales", systemImage: selectedSection == 0 ? "checkmark" : "") }
+                    Button(action: { selectedSection = 1 }) { Label("BOPIS", systemImage: selectedSection == 1 ? "checkmark" : "") }
+                    Button(action: { selectedSection = 2 }) { Label("Discrepancies", systemImage: selectedSection == 2 ? "checkmark" : "") }
+                    Button(action: { selectedSection = 3 }) { Label("VIP Events", systemImage: selectedSection == 3 ? "checkmark" : "") }
+                    Button(action: { selectedSection = 4 }) { Label("Activity", systemImage: selectedSection == 4 ? "checkmark" : "") }
+                } label: {
+                    HStack {
+                        Text(
+                            selectedSection == 0 ? "Sales" :
+                            selectedSection == 1 ? "BOPIS" :
+                            selectedSection == 2 ? "Discrepancies" :
+                            selectedSection == 3 ? "VIP Events" :
+                            selectedSection == 4 ? "Activity" : "Fulfillment"
+                        )
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(.primary)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
                     }
-                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(AppSpacing.md)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
+                    )
                 }
-                .padding(.top, AppSpacing.sm).padding(.bottom, AppSpacing.sm)
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.md)
+                .padding(.bottom, AppSpacing.sm)
 
                 switch selectedSection {
                 case 0: salesSection
@@ -358,18 +383,26 @@ struct ManagerOperationsView: View {
     private func segmentButton(_ title: String, tag: Int) -> some View {
         let isSelected = selectedSection == tag
         return Button {
-            withAnimation(.easeInOut(duration: 0.15)) { selectedSection = tag }
+            withAnimation(.easeInOut(duration: 0.2)) { selectedSection = tag }
         } label: {
             Text(title)
                 .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                .tracking(0.1)
+                .tracking(0.3)
                 .foregroundColor(isSelected ? .white : AppColors.textPrimaryDark)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
                 .background(
                     Capsule()
-                        .fill(isSelected ? AppColors.accent : Color(uiColor: .secondarySystemFill))
+                        .fill(isSelected ? AppColors.accent : AppColors.backgroundSecondary.opacity(0.85))
                 )
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            isSelected ? Color.clear : Color.white.opacity(0.12),
+                            lineWidth: 0.75
+                        )
+                )
+                .shadow(color: isSelected ? AppColors.accent.opacity(0.3) : Color.clear, radius: 6, x: 0, y: 3)
         }
         .buttonStyle(.plain)
     }
@@ -485,10 +518,10 @@ struct ManagerOperationsView: View {
                         Text("Review")
                             .font(AppTypography.nano)
                             .foregroundColor(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 5)
                             .background(AppColors.accent)
-                            .cornerRadius(6)
+                            .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -725,20 +758,31 @@ struct ManagerOperationsView: View {
     // MARK: - Helpers
 
     private func miniStat(value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundColor(color)
             Text(label)
                 .font(.system(size: 11, weight: .medium))
                 .tracking(0.4)
-                .foregroundColor(Color(uiColor: .secondaryLabel))
+                .foregroundColor(AppColors.textSecondaryDark)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, AppSpacing.sm)
-        .background(Color(uiColor: .systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 1)
+        .background(AppColors.backgroundSecondary.opacity(0.85))
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.15), Color.white.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.75
+                )
+        )
+        .shadow(color: Color.black.opacity(0.06), radius: 4, x: 0, y: 2)
     }
 
     private func sLabel(_ t: String) -> some View {

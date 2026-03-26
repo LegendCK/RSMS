@@ -12,60 +12,74 @@ struct WishlistView: View {
     @Query(filter: #Predicate<Product> { $0.isWishlisted == true })
     private var wishlistProducts: [Product]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
+    @State private var selectedProduct: Product?
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppColors.backgroundPrimary
-                    .ignoresSafeArea()
+        ZStack {
+            AppColors.backgroundPrimary
+                .ignoresSafeArea()
 
-                if wishlistProducts.isEmpty {
-                    emptyState
-                } else {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: AppSpacing.md) {
-                            // Header
-                            HStack {
-                                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                                    Text("YOUR WISHLIST")
-                                        .font(AppTypography.overline)
-                                        .tracking(3)
-                                        .foregroundColor(AppColors.accent)
+            if wishlistProducts.isEmpty {
+                emptyState
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: AppSpacing.md) {
+                        // Header
+                        HStack {
+                            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                                Text("YOUR WISHLIST")
+                                    .font(AppTypography.overline)
+                                    .tracking(3)
+                                    .foregroundColor(AppColors.accent)
 
-                                    Text("\(wishlistProducts.count) \(wishlistProducts.count == 1 ? "item" : "items")")
-                                        .font(AppTypography.bodySmall)
-                                        .foregroundColor(AppColors.textSecondaryDark)
-                                }
-                                Spacer()
+                                Text("\(wishlistProducts.count) \(wishlistProducts.count == 1 ? "item" : "items")")
+                                    .font(AppTypography.bodySmall)
+                                    .foregroundColor(AppColors.textSecondaryDark)
                             }
-                            .padding(.horizontal, AppSpacing.screenHorizontal)
-                            .padding(.top, AppSpacing.md)
-
-                            // Wishlist items
-                            ForEach(wishlistProducts) { product in
-                                NavigationLink(destination: ProductDetailView(product: product)) {
-                                    wishlistRow(product)
-                                }
-                            }
-                            .padding(.horizontal, AppSpacing.screenHorizontal)
+                            Spacer()
                         }
-                        .padding(.bottom, AppSpacing.xxxl)
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
+                        .padding(.top, AppSpacing.md)
+
+                        // Wishlist items
+                        ForEach(wishlistProducts) { product in
+                            wishlistRow(product)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    selectedProduct = product
+                                }
+                        }
+                        .padding(.horizontal, AppSpacing.screenHorizontal)
                     }
+                    .padding(.bottom, AppSpacing.xxxl)
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Wishlist")
-                        .font(AppTypography.navTitle)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(AppColors.textPrimaryDark)
                 }
+                .accessibilityLabel("Back")
             }
-            .task {
-                await hydrateFromBackend()
+            ToolbarItem(placement: .principal) {
+                Text("Wishlist")
+                    .font(AppTypography.navTitle)
+                    .foregroundColor(AppColors.textPrimaryDark)
             }
+        }
+        .task {
+            await hydrateFromBackend()
+        }
+        .navigationDestination(item: $selectedProduct) { product in
+            ProductDetailView(product: product)
         }
     }
 
@@ -145,7 +159,13 @@ struct WishlistView: View {
                 Image(systemName: "heart.fill")
                     .font(AppTypography.heartIcon)
                     .foregroundColor(AppColors.error)
+                    .frame(width: 36, height: 36)
             }
+            .buttonStyle(.plain)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(AppColors.textSecondaryDark.opacity(0.7))
         }
         .padding(AppSpacing.cardPadding)
         .background(AppColors.backgroundSecondary)
@@ -173,6 +193,10 @@ struct WishlistView: View {
             do {
                 try await WishlistService.shared.remove(productId: product.id)
             } catch {
+                if case WishlistService.SyncCapabilityError.missingWishlistTable = error {
+                    print("[WishlistView] Wishlist table not available yet; kept local remove state for \(product.id)")
+                    return
+                }
                 product.isWishlisted = true
                 try? modelContext.save()
                 print("[WishlistView] Remove sync failed for \(product.id): \(error)")

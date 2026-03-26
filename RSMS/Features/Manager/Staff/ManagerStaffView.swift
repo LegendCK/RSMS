@@ -185,7 +185,7 @@ struct StaffRosterSubview: View {
             Spacer()
         }
         .padding(AppSpacing.sm)
-        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
+        .managerStaffCardSurface(cornerRadius: AppSpacing.radiusMedium)
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 
@@ -209,7 +209,7 @@ struct StaffRosterSubview: View {
             Text(label).font(AppTypography.micro).foregroundColor(AppColors.textSecondaryDark)
         }
         .frame(maxWidth: .infinity).padding(.vertical, AppSpacing.sm)
-        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
+        .managerStaffCardSurface(cornerRadius: AppSpacing.radiusMedium)
     }
 
     private func syncStaff() async {
@@ -239,6 +239,7 @@ struct StaffShiftsSubview: View {
 
     @State private var selectedDate = Date()
     @State private var showCreateShift = false
+    @State private var showAutoAssign = false
     @State private var editingShift: StaffShift?
     @State private var syncMessage = ""
     @State private var showSyncMessage = false
@@ -273,14 +274,67 @@ struct StaffShiftsSubview: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: AppSpacing.md) {
-                DatePicker(
-                    "",
-                    selection: $selectedDate,
-                    displayedComponents: [.date]
-                )
-                .datePickerStyle(.graphical)
+                VStack(spacing: AppSpacing.xs) {
+                    HStack {
+                        Text("Schedule Date")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                        Spacer()
+                        DatePicker(
+                            "",
+                            selection: $selectedDate,
+                            displayedComponents: [.date]
+                        )
+                        .datePickerStyle(.compact)
+                        .labelsHidden()
+                        .tint(AppColors.accent)
+                    }
+
+                    HStack(spacing: AppSpacing.sm) {
+                        Button {
+                            shiftDay(by: -1)
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(AppTypography.iconSmall)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                                .frame(width: 32, height: 32)
+                                .background(AppColors.backgroundSecondary)
+                                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusSmall))
+                        }
+                        .buttonStyle(.plain)
+
+                        Text(selectedDate.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).year()))
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                            .frame(maxWidth: .infinity)
+
+                        Button {
+                            shiftDay(by: 1)
+                        } label: {
+                            Image(systemName: "chevron.right")
+                                .font(AppTypography.iconSmall)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                                .frame(width: 32, height: 32)
+                                .background(AppColors.backgroundSecondary)
+                                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusSmall))
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            selectedDate = Date()
+                        } label: {
+                            Text("Today")
+                                .font(AppTypography.micro)
+                                .foregroundColor(AppColors.textPrimaryDark)
+                                .padding(.horizontal, AppSpacing.xs)
+                                .padding(.vertical, 7)
+                                .glassPill()
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
                 .padding(AppSpacing.sm)
-                .managerCardSurface(cornerRadius: AppSpacing.radiusLarge)
+                .managerStaffCardSurface(cornerRadius: AppSpacing.radiusMedium)
                 .padding(.horizontal, AppSpacing.screenHorizontal)
 
                 HStack {
@@ -288,11 +342,30 @@ struct StaffShiftsSubview: View {
                         Text("Shifts on \(selectedDate.formatted(.dateTime.day().month().year()))")
                             .font(AppTypography.label)
                             .foregroundColor(AppColors.textPrimaryDark)
-                        Text("Tap any shift to edit")
+                        Text("Auto-assign or tap any shift to edit manually")
                             .font(AppTypography.caption)
                             .foregroundColor(AppColors.textSecondaryDark)
                     }
                     Spacer()
+                    Button {
+                        showAutoAssign = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "wand.and.stars")
+                                .font(AppTypography.iconSmall)
+                            Text("AUTO ASSIGN")
+                                .font(AppTypography.actionSmall)
+                                .tracking(0.6)
+                        }
+                        .foregroundColor(AppColors.textPrimaryDark)
+                        .padding(.horizontal, AppSpacing.sm)
+                        .padding(.vertical, AppSpacing.xs)
+                        .glassPill()
+                        .liquidShadow(LiquidShadow.subtle)
+                    }
+                    .disabled(storeId == nil || storeStaff.isEmpty)
+                    .opacity((storeId == nil || storeStaff.isEmpty) ? 0.5 : 1)
+
                     Button {
                         showCreateShift = true
                     } label: {
@@ -350,6 +423,16 @@ struct StaffShiftsSubview: View {
                     staffMembers: storeStaff,
                     existingShifts: storeShifts,
                     shiftToEdit: nil
+                )
+            }
+        }
+        .sheet(isPresented: $showAutoAssign) {
+            if let storeId {
+                AutoAssignShiftsSheet(
+                    storeId: storeId,
+                    anchorDate: selectedDate,
+                    staffMembers: storeStaff,
+                    existingShifts: storeShifts
                 )
             }
         }
@@ -430,8 +513,310 @@ struct StaffShiftsSubview: View {
                 .font(AppTypography.iconSmall)
         }
         .padding(AppSpacing.sm)
-        .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
+        .managerStaffCardSurface(cornerRadius: AppSpacing.radiusMedium)
         .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+
+    private func shiftDay(by offset: Int) {
+        if let next = Calendar.current.date(byAdding: .day, value: offset, to: selectedDate) {
+            selectedDate = next
+        }
+    }
+}
+
+private enum AutoAssignShiftTemplate: String, CaseIterable, Identifiable {
+    case fullDay = "Full Day"
+    case splitDay = "Split Day"
+
+    var id: String { rawValue }
+}
+
+private struct AutoAssignedShiftDraft: Identifiable {
+    let id = UUID()
+    let staffUserId: UUID
+    let startAt: Date
+    let endAt: Date
+    let notes: String
+}
+
+struct AutoAssignShiftsSheet: View {
+    let storeId: UUID
+    let anchorDate: Date
+    let staffMembers: [User]
+    let existingShifts: [StaffShift]
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    @State private var windowDays: Int = 14
+    @State private var template: AutoAssignShiftTemplate = .fullDay
+    @State private var drafts: [AutoAssignedShiftDraft] = []
+    @State private var isGenerating = false
+    @State private var isApplying = false
+    @State private var errorMessage = ""
+    @State private var showError = false
+
+    private var activeStaff: [User] {
+        let active = staffMembers.filter { $0.isActive }
+        return active.isEmpty ? staffMembers : active
+    }
+
+    private var availableRoles: Set<UserRole> {
+        Set(activeStaff.map(\.role))
+    }
+
+    private var requiredCoverageRoles: [UserRole] {
+        var roles: [UserRole] = []
+        if availableRoles.contains(.salesAssociate) { roles.append(.salesAssociate) }
+        if availableRoles.contains(.inventoryController) { roles.append(.inventoryController) }
+        if availableRoles.contains(.serviceTechnician) { roles.append(.serviceTechnician) }
+        return roles
+    }
+
+    private var daySlots: [(startHour: Int, startMinute: Int, endHour: Int, endMinute: Int)] {
+        switch template {
+        case .fullDay:
+            return [(10, 0, 18, 0)]
+        case .splitDay:
+            return [(10, 0, 14, 0), (14, 0, 18, 0)]
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Auto Assign Setup") {
+                    Picker("Range", selection: $windowDays) {
+                        Text("7 days").tag(7)
+                        Text("14 days").tag(14)
+                        Text("30 days").tag(30)
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker("Shift Pattern", selection: $template) {
+                        ForEach(AutoAssignShiftTemplate.allCases) { value in
+                            Text(value.rawValue).tag(value)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text("Hybrid mode: role-aware baseline coverage with balanced distribution across staff.")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+
+                Section {
+                    Button {
+                        Task { await generateDrafts() }
+                    } label: {
+                        HStack {
+                            if isGenerating {
+                                ProgressView()
+                            }
+                            Text(isGenerating ? "Generating..." : "Generate Auto-Assign Plan")
+                        }
+                    }
+                    .disabled(isGenerating || isApplying || activeStaff.isEmpty)
+                }
+
+                Section("Preview (\(drafts.count) Shifts)") {
+                    if drafts.isEmpty {
+                        Text("Generate a plan to preview assignments before applying.")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    } else {
+                        ForEach(drafts.prefix(40)) { draft in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(staffName(for: draft.staffUserId))
+                                    .font(AppTypography.bodySmall)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Text("\(draft.startAt.formatted(date: .abbreviated, time: .shortened)) - \(draft.endAt.formatted(date: .omitted, time: .shortened))")
+                                    .font(AppTypography.caption)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                                Text(draft.notes)
+                                    .font(AppTypography.micro)
+                                    .foregroundColor(AppColors.textSecondaryDark)
+                            }
+                        }
+
+                        if drafts.count > 40 {
+                            Text("+\(drafts.count - 40) more shifts")
+                                .font(AppTypography.caption)
+                                .foregroundColor(AppColors.textSecondaryDark)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Auto Assign Shifts")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task { await applyDrafts() }
+                    } label: {
+                        if isApplying {
+                            ProgressView()
+                        } else {
+                            Text("Apply")
+                        }
+                    }
+                    .disabled(drafts.isEmpty || isApplying || isGenerating)
+                }
+            }
+            .alert("Auto Assign", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
+        }
+    }
+
+    @MainActor
+    private func generateDrafts() async {
+        guard !activeStaff.isEmpty else {
+            errorMessage = "No staff available for auto-assignment."
+            showError = true
+            return
+        }
+
+        isGenerating = true
+        defer { isGenerating = false }
+
+        let calendar = Calendar.current
+        let startDay = calendar.startOfDay(for: anchorDate)
+
+        var generated: [AutoAssignedShiftDraft] = []
+        var loadByStaff: [UUID: Int] = [:]
+        var slotLoadByStaff: [UUID: [Int: Int]] = [:]
+
+        for staff in activeStaff {
+            loadByStaff[staff.id] = existingShifts.filter { $0.staffUserId == staff.id }.count
+            slotLoadByStaff[staff.id] = [:]
+        }
+
+        for offset in 0..<windowDays {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: startDay) else { continue }
+            var assignedToday = Set<UUID>()
+
+            for role in requiredCoverageRoles {
+                let candidates = activeStaff.filter { $0.role == role && !assignedToday.contains($0.id) }
+                guard let selected = pickCandidate(candidates: candidates, loadByStaff: loadByStaff) else { continue }
+
+                let slotIndex = pickSlotIndex(for: selected.id, slotLoadByStaff: slotLoadByStaff)
+                let slot = daySlots[min(slotIndex, daySlots.count - 1)]
+                guard let startAt = calendar.date(bySettingHour: slot.startHour, minute: slot.startMinute, second: 0, of: day),
+                      let endAt = calendar.date(bySettingHour: slot.endHour, minute: slot.endMinute, second: 0, of: day)
+                else { continue }
+
+                if hasConflict(staffId: selected.id, startAt: startAt, endAt: endAt, generated: generated) {
+                    continue
+                }
+
+                generated.append(AutoAssignedShiftDraft(
+                    staffUserId: selected.id,
+                    startAt: startAt,
+                    endAt: endAt,
+                    notes: "Auto-assigned: role coverage"
+                ))
+
+                assignedToday.insert(selected.id)
+                loadByStaff[selected.id, default: 0] += 1
+                var slotLoads = slotLoadByStaff[selected.id, default: [:]]
+                slotLoads[slotIndex, default: 0] += 1
+                slotLoadByStaff[selected.id] = slotLoads
+            }
+
+            let extraCandidates = activeStaff.filter { !assignedToday.contains($0.id) }
+            if let extra = pickCandidate(candidates: extraCandidates, loadByStaff: loadByStaff) {
+                let slotIndex = pickSlotIndex(for: extra.id, slotLoadByStaff: slotLoadByStaff)
+                let slot = daySlots[min(slotIndex, daySlots.count - 1)]
+                if let startAt = calendar.date(bySettingHour: slot.startHour, minute: slot.startMinute, second: 0, of: day),
+                   let endAt = calendar.date(bySettingHour: slot.endHour, minute: slot.endMinute, second: 0, of: day),
+                   !hasConflict(staffId: extra.id, startAt: startAt, endAt: endAt, generated: generated) {
+                    generated.append(AutoAssignedShiftDraft(
+                        staffUserId: extra.id,
+                        startAt: startAt,
+                        endAt: endAt,
+                        notes: "Auto-assigned: balanced distribution"
+                    ))
+
+                    loadByStaff[extra.id, default: 0] += 1
+                    var slotLoads = slotLoadByStaff[extra.id, default: [:]]
+                    slotLoads[slotIndex, default: 0] += 1
+                    slotLoadByStaff[extra.id] = slotLoads
+                }
+            }
+        }
+
+        if generated.isEmpty {
+            errorMessage = "No shifts were generated. Try a different pattern or date range."
+            showError = true
+        }
+
+        drafts = generated.sorted { $0.startAt < $1.startAt }
+    }
+
+    @MainActor
+    private func applyDrafts() async {
+        guard !drafts.isEmpty else { return }
+
+        isApplying = true
+        defer { isApplying = false }
+
+        do {
+            for draft in drafts {
+                let dto = try await StaffShiftSyncService.shared.createShift(
+                    storeId: storeId,
+                    staffUserId: draft.staffUserId,
+                    startAt: draft.startAt,
+                    endAt: draft.endAt,
+                    notes: draft.notes
+                )
+                StaffShiftSyncService.shared.applyToLocal(dto, modelContext: modelContext)
+            }
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    private func pickCandidate(candidates: [User], loadByStaff: [UUID: Int]) -> User? {
+        candidates.sorted {
+            let lhsLoad = loadByStaff[$0.id, default: 0]
+            let rhsLoad = loadByStaff[$1.id, default: 0]
+            if lhsLoad != rhsLoad { return lhsLoad < rhsLoad }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }.first
+    }
+
+    private func pickSlotIndex(for staffId: UUID, slotLoadByStaff: [UUID: [Int: Int]]) -> Int {
+        let loads = slotLoadByStaff[staffId, default: [:]]
+        return daySlots.indices.min { loads[$0, default: 0] < loads[$1, default: 0] } ?? 0
+    }
+
+    private func hasConflict(
+        staffId: UUID,
+        startAt: Date,
+        endAt: Date,
+        generated: [AutoAssignedShiftDraft]
+    ) -> Bool {
+        let existingConflict = existingShifts
+            .filter { $0.staffUserId == staffId }
+            .contains { startAt < $0.endAt && endAt > $0.startAt }
+
+        if existingConflict { return true }
+
+        return generated
+            .filter { $0.staffUserId == staffId }
+            .contains { startAt < $0.endAt && endAt > $0.startAt }
+    }
+
+    private func staffName(for id: UUID) -> String {
+        staffMembers.first(where: { $0.id == id })?.name ?? "Unknown"
     }
 }
 
@@ -455,6 +840,19 @@ struct StaffPerformanceSubview: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+}
+
+private extension View {
+    func managerStaffCardSurface(cornerRadius: CGFloat = AppSpacing.radiusMedium) -> some View {
+        self
+            .background(AppColors.backgroundSecondary.opacity(0.9))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(AppColors.border.opacity(0.2), lineWidth: 0.8)
+            }
+            .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
     }
 }
 
@@ -630,7 +1028,8 @@ struct ManagerCreateStaffSheet: View {
 
     @State private var firstName = ""
     @State private var lastName = ""
-    @State private var email = ""
+    @State private var corporateEmail = ""
+    @State private var personalEmail = ""
     @State private var phone = ""
     @State private var password = ""
     @State private var selectedRole: UserRole = .salesAssociate
@@ -673,7 +1072,10 @@ struct ManagerCreateStaffSheet: View {
                                         LuxuryTextField(placeholder: "Last Name", text: $lastName, icon: "person")
                                     }
 
-                                    LuxuryTextField(placeholder: "Email", text: $email, icon: "envelope")
+                                    LuxuryTextField(placeholder: "Corporate Email (@maisonluxe.me)", text: $corporateEmail, icon: "building.2")
+                                        .keyboardType(.emailAddress)
+
+                                    LuxuryTextField(placeholder: "Personal Email (Gmail, etc.)", text: $personalEmail, icon: "envelope")
                                         .keyboardType(.emailAddress)
 
                                     LuxuryTextField(placeholder: "Phone", text: $phone, icon: "phone")
@@ -791,10 +1193,13 @@ struct ManagerCreateStaffSheet: View {
         let trimmedLastName = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
         let fullName = "\(trimmedFirstName) \(trimmedLastName)"
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trimmedCorporateEmail = corporateEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trimmedPersonalEmail  = personalEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
-        guard !trimmedFirstName.isEmpty, !trimmedLastName.isEmpty, !trimmedEmail.isEmpty, password.count >= 8 else {
-            errorMessage = "First name, last name, email, and an 8+ character password are required."
+        guard !trimmedFirstName.isEmpty, !trimmedLastName.isEmpty,
+              !trimmedCorporateEmail.isEmpty, !trimmedPersonalEmail.isEmpty,
+              password.count >= 8 else {
+            errorMessage = "First name, last name, both emails, and an 8+ character password are required."
             showError = true
             return
         }
@@ -805,11 +1210,13 @@ struct ManagerCreateStaffSheet: View {
         do {
             _ = try await StaffSyncService.shared.createStaffWithAuth(
                 name: fullName,
-                email: trimmedEmail,
+                email: trimmedCorporateEmail,
                 phone: phone.trimmingCharacters(in: .whitespacesAndNewlines),
                 password: password,
                 role: selectedRole,
-                storeId: storeId
+                storeId: storeId,
+                corporateEmail: trimmedCorporateEmail,
+                personalEmail: trimmedPersonalEmail
             )
 
             try await StaffSyncService.shared.syncStaff(modelContext: modelContext)
@@ -851,7 +1258,8 @@ struct ManagerCreateStaffSheet: View {
     private var hasUnsavedChanges: Bool {
         !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
         !lastName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !corporateEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !personalEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
         !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
         !password.isEmpty
     }

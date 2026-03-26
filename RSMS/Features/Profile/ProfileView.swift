@@ -12,6 +12,7 @@ struct ProfileView: View {
     @Environment(AppState.self) var appState
     @Environment(\.modelContext) private var modelContext
     @State private var showLogoutConfirmation = false
+    @State private var showSignIn = false
 
     var body: some View {
         NavigationStack {
@@ -32,16 +33,22 @@ struct ProfileView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(appState.currentUserName.isEmpty ? "Guest" : appState.currentUserName)
+                            Text(appState.isGuest ? "Guest" : appState.currentUserName)
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundColor(.black)
-                            Text(appState.currentUserEmail)
-                                .font(.system(size: 13, weight: .light))
-                                .foregroundColor(.secondary)
-                            Text(appState.currentUserRole.rawValue.uppercased())
+                            if appState.isGuest {
+                                Text("Browsing as guest")
+                                    .font(.system(size: 13, weight: .light))
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Text(appState.currentUserEmail)
+                                    .font(.system(size: 13, weight: .light))
+                                    .foregroundColor(.secondary)
+                            }
+                            Text(appState.isGuest ? "GUEST" : appState.currentUserRole.rawValue.uppercased())
                                 .font(.system(size: 9, weight: .semibold))
                                 .tracking(2)
-                                .foregroundColor(AppColors.accent)
+                                .foregroundColor(appState.isGuest ? .secondary : AppColors.accent)
                         }
 
                         Spacer()
@@ -76,13 +83,15 @@ struct ProfileView: View {
                     }
                 }
 
-                // Boutique section
-                Section("Boutique") {
-                    NavigationLink(destination: MyReservationsView()) {
-                        Label("My Reservations", systemImage: "clock.arrow.circlepath")
-                    }
-                    NavigationLink(destination: CustomerBookAppointmentView()) {
-                        Label("Book an Appointment", systemImage: "calendar")
+                // Boutique section — hidden for guests
+                if !appState.isGuest {
+                    Section("Boutique") {
+                        NavigationLink(destination: MyReservationsView()) {
+                            Label("My Reservations", systemImage: "clock.arrow.circlepath")
+                        }
+                        NavigationLink(destination: CustomerBookAppointmentView()) {
+                            Label("Book an Appointment", systemImage: "calendar")
+                        }
                     }
                 }
 
@@ -101,23 +110,32 @@ struct ProfileView: View {
 
                 // Support
                 Section("Support") {
-                    NavigationLink(destination: ProfileInfoView(
-                        title: "Help & Support",
-                        message: "Get help with orders, account questions, and support contact guidance."
-                    )) {
+                    NavigationLink(destination: HelpSupportView()) {
                         Label("Help & Support", systemImage: "questionmark.circle")
                     }
                 }
 
-                // Sign out
+                // Sign in / Sign out
                 Section {
-                    Button(action: { showLogoutConfirmation = true }) {
-                        HStack {
-                            Spacer()
-                            Text("Sign Out")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(AppColors.error)
-                            Spacer()
+                    if appState.isGuest {
+                        Button(action: { showSignIn = true }) {
+                            HStack {
+                                Spacer()
+                                Text("Sign In / Create Account")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(AppColors.accent)
+                                Spacer()
+                            }
+                        }
+                    } else {
+                        Button(action: { showLogoutConfirmation = true }) {
+                            HStack {
+                                Spacer()
+                                Text("Sign Out")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(AppColors.error)
+                                Spacer()
+                            }
                         }
                     }
                 }
@@ -146,6 +164,9 @@ struct ProfileView: View {
                 Button("Sign Out", role: .destructive) { appState.logout() }
             } message: {
                 Text("Are you sure you want to sign out?")
+            }
+            .sheet(isPresented: $showSignIn) {
+                GuestAuthGateView(pendingAction: "access your account")
             }
             .task {
                 await syncWishlistFromBackend()
@@ -196,6 +217,143 @@ private struct ProfileInfoView: View {
                     .foregroundColor(AppColors.accent)
             }
         }
+    }
+}
+
+// MARK: - Help & Support
+
+private struct HelpSupportView: View {
+    var body: some View {
+        List {
+            // Contact section
+            Section("Contact Us") {
+                HStack(spacing: 14) {
+                    Image(systemName: "envelope")
+                        .foregroundColor(AppColors.accent)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Email Support")
+                            .font(.system(size: 15, weight: .medium))
+                        Text("support@maisonluxe.me")
+                            .font(.system(size: 13, weight: .light))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+
+                HStack(spacing: 14) {
+                    Image(systemName: "phone")
+                        .foregroundColor(AppColors.accent)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Client Concierge")
+                            .font(.system(size: 15, weight: .medium))
+                        Text("+91 98765 43210")
+                            .font(.system(size: 13, weight: .light))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+
+                HStack(spacing: 14) {
+                    Image(systemName: "clock")
+                        .foregroundColor(AppColors.accent)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Support Hours")
+                            .font(.system(size: 15, weight: .medium))
+                        Text("Mon – Sat, 10:00 AM – 7:00 PM IST")
+                            .font(.system(size: 13, weight: .light))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            // Orders & Returns
+            Section("Orders & Returns") {
+                faqRow(
+                    question: "How do I track my order?",
+                    answer: "Go to Profile → My Orders to view real-time status updates for all your orders."
+                )
+                faqRow(
+                    question: "What is your return policy?",
+                    answer: "Items in original condition may be returned within 14 days of delivery. Visit any Maison Luxe boutique or raise a Service Ticket in the app."
+                )
+                faqRow(
+                    question: "Can I exchange a product?",
+                    answer: "Yes. Raise an exchange request under Profile → My Exchange Requests and a concierge will assist you."
+                )
+                faqRow(
+                    question: "How long does delivery take?",
+                    answer: "Standard delivery takes 3–5 business days. Express delivery (1–2 days) is available at checkout for select pin codes."
+                )
+            }
+
+            // Appointments & Reservations
+            Section("Boutique & Reservations") {
+                faqRow(
+                    question: "How do I book an in-store appointment?",
+                    answer: "Use Profile → Book an Appointment or the shortcut on your home dashboard to schedule a private viewing."
+                )
+                faqRow(
+                    question: "Can I reserve a product before buying?",
+                    answer: "Yes. Open any product detail page and tap 'Reserve In Boutique' to hold it for up to 48 hours at your nearest location."
+                )
+                faqRow(
+                    question: "What are boutique hours?",
+                    answer: "Most Maison Luxe boutiques are open Monday to Saturday, 10:00 AM – 8:00 PM. Hours may vary by location."
+                )
+            }
+
+            // Account
+            Section("Account & Security") {
+                faqRow(
+                    question: "How do I update my personal details?",
+                    answer: "Go to Profile → Edit Profile to update your name, email, phone, and address."
+                )
+                faqRow(
+                    question: "How do I reset my password?",
+                    answer: "On the login screen, tap 'Forgot Password'. A reset link will be sent to your registered email address."
+                )
+                faqRow(
+                    question: "Is my payment information secure?",
+                    answer: "All payment data is encrypted and processed through PCI-DSS certified gateways. Maison Luxe does not store card numbers on its servers."
+                )
+            }
+
+            // Footer
+            Section {
+                Text("For urgent assistance, email support@maisonluxe.me and a client advisor will respond within 2 business hours.")
+                    .font(.system(size: 12, weight: .light))
+                    .foregroundColor(.secondary)
+                    .padding(.vertical, 4)
+            }
+            .listRowBackground(Color.clear)
+        }
+        .listStyle(.insetGrouped)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("HELP & SUPPORT")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+            }
+        }
+    }
+
+    private func faqRow(question: String, answer: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(question)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary)
+            Text(answer)
+                .font(.system(size: 13, weight: .light))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 6)
     }
 }
 

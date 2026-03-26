@@ -1415,51 +1415,35 @@ struct CatalogPromotionsSubview: View {
     }
 
     private var promotionsHeroCard: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            // Top row: overline label + New Offer button
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("OFFERS STUDIO")
-                        .font(.system(size: 10, weight: .semibold))
-                        .tracking(2.5)
-                        .foregroundColor(AppColors.accent)
-                    Text("Luxury promotions,\nlive at every checkout.")
-                        .font(.system(size: 19, weight: .semibold, design: .serif))
+        VStack(alignment: .leading, spacing: AppSpacing.lg) {
+            HStack(alignment: .top, spacing: AppSpacing.md) {
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                    Text("Promotions")
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
                         .foregroundColor(AppColors.textPrimaryDark)
-                        .lineSpacing(2)
+                    Text("Create and manage checkout offers")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(AppColors.textSecondaryDark)
                 }
-                Spacer()
+                Spacer(minLength: 0)
                 Button(action: { showCreateSheet = true }) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("New Offer")
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(AppColors.accent)
-                    .clipShape(Capsule())
+                    Label("New Offer", systemImage: "plus")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, AppSpacing.md)
+                        .padding(.vertical, 10)
+                        .background(AppColors.accent)
+                        .clipShape(Capsule())
                 }
-                .padding(.top, 2)
             }
 
-            // Thin accent rule
-            Rectangle()
-                .fill(AppColors.accent.opacity(0.20))
-                .frame(height: 0.5)
-
-            // Metrics row
-            HStack(spacing: 0) {
-                heroMetric(value: activeCount,    label: "LIVE",      valueColor: AppColors.success)
-                heroMetricDivider()
-                heroMetric(value: scheduledCount, label: "SCHEDULED", valueColor: AppColors.textSecondaryDark)
-                heroMetricDivider()
-                heroMetric(value: expiredCount,   label: "ARCHIVE",   valueColor: AppColors.textSecondaryDark)
+            HStack(spacing: AppSpacing.sm) {
+                heroStatTile(value: activeCount, label: "Live", tint: AppColors.success)
+                heroStatTile(value: scheduledCount, label: "Scheduled", tint: AppColors.info)
+                heroStatTile(value: expiredCount, label: "Archived", tint: AppColors.neutral500)
             }
         }
-        .padding(AppSpacing.cardPadding)
+        .padding(AppSpacing.lg)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
         .overlay(
@@ -1469,24 +1453,19 @@ struct CatalogPromotionsSubview: View {
         .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
     }
 
-    private func heroMetric(value: Int, label: String, valueColor: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    private func heroStatTile(value: Int, label: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             Text("\(value)")
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundColor(value > 0 ? valueColor : AppColors.neutral500)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundColor(value > 0 ? tint : AppColors.neutral500)
             Text(label)
-                .font(.system(size: 9, weight: .medium))
-                .tracking(1.5)
+                .font(.system(size: 12, weight: .medium))
                 .foregroundColor(AppColors.textSecondaryDark)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func heroMetricDivider() -> some View {
-        Rectangle()
-            .fill(AppColors.border)
-            .frame(width: 0.5, height: 32)
-            .padding(.horizontal, AppSpacing.sm)
+        .padding(AppSpacing.md)
+        .background(tint.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
     }
 
     private var activeCount: Int {
@@ -1530,84 +1509,94 @@ struct CatalogPromotionsSubview: View {
 
     private func promotionCard(_ promotion: PromotionDTO) -> some View {
         let status = displayStatus(for: promotion)
-        return HStack(spacing: 0) {
-            // Left status stripe
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(status.color)
-                .frame(width: 3)
-                .padding(.vertical, AppSpacing.sm)
-                .padding(.leading, AppSpacing.sm)
-
-            VStack(alignment: .leading, spacing: 10) {
-                // Header row
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(promotion.name)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(AppColors.textPrimaryDark)
-                        // Scope chip
-                        Text(targetDescription(for: promotion).uppercased())
-                            .font(.system(size: 9, weight: .medium))
-                            .tracking(1.2)
-                            .foregroundColor(AppColors.textSecondaryDark)
-                    }
-                    Spacer()
-                    // Status pill
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(status.color)
-                            .frame(width: 6, height: 6)
-                        Text(status.label)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(status.color)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(status.color.opacity(0.10))
-                    .clipShape(Capsule())
+        let offerSummary = offerSummary(for: promotion)
+        return VStack(alignment: .leading, spacing: AppSpacing.md) {
+            HStack(alignment: .top, spacing: AppSpacing.sm) {
+                Text(targetDescription(for: promotion).uppercased())
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1.1)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(status.color)
+                        .frame(width: 6, height: 6)
+                    Text(status.label)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(status.color)
                 }
-
-                // Discount hero number
-                Text(discountDescription(for: promotion))
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(AppColors.accent)
-
-                // Note (if any)
-                if let details = promotion.details, !details.isEmpty {
-                    Text(details)
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.textSecondaryDark)
-                        .lineLimit(2)
-                }
-
-                // Date range
-                HStack(spacing: 6) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 11))
-                        .foregroundColor(AppColors.neutral500)
-                    Text("\(shortDate(promotion.startsAt)) – \(shortDate(promotion.endsAt))")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(AppColors.neutral500)
-                }
-
-                // Divider + action
-                Divider()
-                Button(action: { togglePromotionState(promotion) }) {
-                    HStack(spacing: 5) {
-                        Image(systemName: promotion.isActive ? "pause.circle" : "play.circle")
-                            .font(.system(size: 13))
-                        Text(promotion.isActive ? "Pause Offer" : "Resume Offer")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(promotion.isActive ? AppColors.neutral500 : AppColors.success)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
+                .padding(.horizontal, AppSpacing.xs)
+                .padding(.vertical, AppSpacing.xxs)
+                .background(status.color.opacity(0.12))
+                .clipShape(Capsule())
             }
-            .padding(AppSpacing.md)
+
+            Text(promotion.name)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundColor(AppColors.accent)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+
+            HStack(alignment: .center, spacing: AppSpacing.sm) {
+                Image(systemName: offerSummary.icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(AppColors.accent)
+                    .frame(width: 28, height: 28)
+                    .background(AppColors.accent.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(offerSummary.title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(offerSummary.subtitle)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(AppSpacing.sm)
+            .background(AppColors.accent.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
+
+            if let details = promotion.details, !details.isEmpty {
+                Text(details)
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.textSecondaryDark)
+                    .lineLimit(2)
+            }
+
+            HStack(spacing: AppSpacing.xs) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppColors.neutral500)
+                Text("\(shortDate(promotion.startsAt)) – \(shortDate(promotion.endsAt))")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(AppColors.neutral500)
+            }
+
+            Divider()
+
+            Button(action: { togglePromotionState(promotion) }) {
+                HStack(spacing: 6) {
+                    Image(systemName: promotion.isActive ? "pause.circle.fill" : "play.circle.fill")
+                        .font(.system(size: 14))
+                    Text(promotion.isActive ? "Pause Offer" : "Resume Offer")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundColor(promotion.isActive ? AppColors.neutral600 : AppColors.success)
+                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
         }
+        .padding(AppSpacing.md)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
+                .stroke(status.color.opacity(0.18), lineWidth: 1)
+        )
         .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 3)
         .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
     }
@@ -1627,14 +1616,17 @@ struct CatalogPromotionsSubview: View {
         .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
     }
 
-    private func discountDescription(for promotion: PromotionDTO) -> String {
+    private func offerSummary(for promotion: PromotionDTO) -> (title: String, subtitle: String, icon: String) {
         switch PromotionDiscountType(rawValue: promotion.promotionDiscountType) {
         case .percentage:
-            return "\(promotion.discountValue.formatted(.number.precision(.fractionLength(0...1))))% off"
+            let percentage = promotion.discountValue.formatted(.number.precision(.fractionLength(0...1)))
+            return ("\(percentage)% OFF", "Applied at checkout", "percent")
         case .fixedAmount:
-            return formatCurrency(promotion.discountValue) + " off"
-        case .bogo, .none:
-            return "Special Offer"
+            return (formatCurrency(promotion.discountValue) + " OFF", "Flat amount discount", "indianrupeesign.circle")
+        case .bogo:
+            return ("Buy One, Get One", "Eligible items only", "gift")
+        case .none:
+            return ("Special Offer", "Custom promotion rules", "sparkles")
         }
     }
 

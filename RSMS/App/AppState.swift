@@ -11,10 +11,12 @@ enum AppFlow: Equatable {
     case splash
     case onboarding
     case authentication
-    case main              // Customer-facing tab bar
-    case adminDashboard    // Corporate Admin enterprise panel
-    case managerDashboard  // Boutique Manager & Inventory Controller panel
-    case salesDashboard    // Sales Associate & Service Technician panel
+    case forcePasswordReset        // Shown when must_reset_password is true
+    case emailOTPVerification      // Customer email OTP before accessing main app
+    case main                      // Customer-facing tab bar
+    case adminDashboard            // Corporate Admin enterprise panel
+    case managerDashboard          // Boutique Manager & Inventory Controller panel
+    case salesDashboard            // Sales Associate & Service Technician panel
 }
 
 @Observable
@@ -30,6 +32,7 @@ class AppState {
     // MARK: - Navigation
     var homeNavigationPath: NavigationPath = NavigationPath()
     var showCart: Bool = false  // Programmatic cart navigation
+    var customerSelectedTab: Int = 0   // 0=Home, 1=Categories, 2=Appointments, 3=Profile, 4=Search
 
     /// Set to true by navigateToHome(); CartView and BuyNowSheetView observe this
     /// to dismiss themselves before the path is cleared.
@@ -42,6 +45,7 @@ class AppState {
         print("[AppState] Current homeNavigationPath count: \(homeNavigationPath.count)")
         shouldNavigateHome   = true
         showCart            = false  // Reset cart navigation
+        customerSelectedTab = 0      // Ensure customer flow returns to Home tab
         homeNavigationPath   = NavigationPath()
         print("[AppState] homeNavigationPath cleared, new count: \(homeNavigationPath.count)")
         
@@ -104,7 +108,9 @@ class AppState {
 
     // MARK: - Login (called after Supabase Auth succeeds)
 
-    func login(profile: UserDTO) {
+    /// - Parameter isFreshLogin: `true` when the user just entered their password (triggers OTP).
+    ///   `false` when restoring a saved session (skips OTP).
+    func login(profile: UserDTO, isFreshLogin: Bool = false) {
         isGuest            = false
         currentUserProfile = profile
         currentUserName    = profile.fullName
@@ -115,7 +121,36 @@ class AppState {
         currentClientProfile = nil
 
         withAnimation(.easeInOut(duration: 0.5)) {
-            switch profile.userRole {
+            if profile.mustResetPassword {
+                currentFlow = .forcePasswordReset
+            } else if isFreshLogin && profile.userRole == .customer && FeatureFlags.isCustomerOTPEnabled {
+                currentFlow = .emailOTPVerification
+            } else {
+                switch profile.userRole {
+                case .corporateAdmin:
+                    currentFlow = .adminDashboard
+                case .boutiqueManager, .inventoryController:
+                    currentFlow = .managerDashboard
+                case .salesAssociate, .serviceTechnician:
+                    currentFlow = .salesDashboard
+                case .customer:
+                    currentFlow = .main
+                }
+            }
+        }
+    }
+
+    /// Called after the customer successfully verifies their email OTP.
+    func completeOTPVerification() {
+        withAnimation(.easeInOut(duration: 0.5)) {
+            currentFlow = .main
+        }
+    }
+
+    /// Called after the user successfully resets their password on the force-reset screen.
+    func completePasswordReset() {
+        withAnimation(.easeInOut(duration: 0.5)) {
+            switch currentUserRole {
             case .corporateAdmin:
                 currentFlow = .adminDashboard
             case .boutiqueManager, .inventoryController:

@@ -50,28 +50,36 @@ struct CustomerServiceTicketsView: View {
     @State private var vm = CustomerServiceTicketsViewModel()
 
     var body: some View {
-        Group {
-            if vm.isLoading && vm.tickets.isEmpty {
-                VStack(spacing: AppSpacing.md) {
-                    ProgressView().tint(AppColors.accent)
-                    Text("Loading your tickets...")
-                        .font(AppTypography.bodySmall)
-                        .foregroundColor(.secondary)
+        ZStack {
+            LinearGradient(
+                colors: [AppColors.backgroundPrimary, AppColors.backgroundSecondary.opacity(0.45)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            Group {
+                if vm.isLoading && vm.tickets.isEmpty {
+                    VStack(spacing: AppSpacing.md) {
+                        ProgressView().tint(AppColors.accent)
+                        Text("Loading your tickets...")
+                            .font(AppTypography.bodySmall)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if vm.tickets.isEmpty {
+                    emptyState
+                } else {
+                    ticketList
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if vm.tickets.isEmpty {
-                emptyState
-            } else {
-                ticketList
             }
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("My Service Tickets")
                     .font(AppTypography.navTitle)
-                    .foregroundColor(.primary)
+                    .foregroundColor(AppColors.textPrimaryDark)
             }
         }
         .task {
@@ -93,13 +101,13 @@ private extension CustomerServiceTicketsView {
         VStack(spacing: AppSpacing.md) {
             Image(systemName: "wrench.and.screwdriver")
                 .font(AppTypography.emptyStateIcon)
-                .foregroundColor(.secondary.opacity(0.4))
+                .foregroundColor(AppColors.textSecondaryDark.opacity(0.5))
             Text("No Service Tickets")
                 .font(AppTypography.heading3)
-                .foregroundColor(.primary)
+                .foregroundColor(AppColors.textPrimaryDark)
             Text("You don't have any service tickets yet. Service tickets are created when you bring a product in for repair, authentication, or other services.")
                 .font(AppTypography.bodySmall)
-                .foregroundColor(.secondary)
+                .foregroundColor(AppColors.textSecondaryDark)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, AppSpacing.screenHorizontal)
 
@@ -133,6 +141,7 @@ private extension CustomerServiceTicketsView {
                     )
                 }
                 .padding(.bottom, AppSpacing.xs)
+                .padding(.top, 2)
 
                 ForEach(vm.tickets) { ticket in
                     NavigationLink(destination: ServiceTicketDetailView(ticket: ticket, isCustomerView: true)) {
@@ -149,18 +158,18 @@ private extension CustomerServiceTicketsView {
     }
 
     func summaryBadge(count: Int, label: String, color: Color) -> some View {
-        HStack(spacing: AppSpacing.xs) {
+        VStack(spacing: 2) {
             Text("\(count)")
-                .font(.system(size: 18, weight: .bold))
+                .font(.system(size: 20, weight: .bold))
                 .foregroundColor(color)
-            Text(label)
-                .font(AppTypography.caption)
-                .foregroundColor(.secondary)
+            Text(label.uppercased())
+                .font(AppTypography.nano)
+                .tracking(0.8)
+                .foregroundColor(AppColors.textSecondaryDark)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, AppSpacing.sm)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
+        .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundSecondary, cornerRadius: AppSpacing.radiusMedium)
     }
 
     func customerTicketCard(_ ticket: ServiceTicketDTO) -> some View {
@@ -169,14 +178,17 @@ private extension CustomerServiceTicketsView {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(ticket.displayTicketNumber)
                         .font(AppTypography.label)
-                        .foregroundColor(.primary)
+                        .foregroundColor(AppColors.textPrimaryDark)
                     HStack(spacing: AppSpacing.xs) {
                         Image(systemName: ticket.ticketType.icon)
                             .font(AppTypography.iconSmall)
                             .foregroundColor(AppColors.accent)
                         Text(ticket.ticketType.displayName)
                             .font(AppTypography.bodySmall)
-                            .foregroundColor(.primary)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        if ticket.hasRepairEstimate {
+                            approvalPill(ticket.clientApprovalStatus)
+                        }
                     }
                 }
                 Spacer()
@@ -189,7 +201,7 @@ private extension CustomerServiceTicketsView {
             if let condition = ticket.conditionNotes, !condition.isEmpty {
                 Text(condition)
                     .font(AppTypography.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.textSecondaryDark)
                     .lineLimit(2)
             }
 
@@ -202,13 +214,12 @@ private extension CustomerServiceTicketsView {
                 Spacer()
                 Text(ticket.createdAt.formatted(date: .abbreviated, time: .omitted))
                     .font(AppTypography.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.textSecondaryDark)
             }
         }
         .padding(AppSpacing.cardPadding)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium))
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+        .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: AppSpacing.radiusMedium)
+        .liquidShadow(LiquidShadow.subtle)
     }
 
     func progressBar(for status: RepairStatus) -> some View {
@@ -226,7 +237,7 @@ private extension CustomerServiceTicketsView {
         return GeometryReader { geo in
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(Color(.systemGray5))
+                    .fill(AppColors.border.opacity(0.35))
                     .frame(height: 6)
                 RoundedRectangle(cornerRadius: 3)
                     .fill(status == .cancelled ? AppColors.error : status.statusColor)
@@ -243,6 +254,15 @@ private extension CustomerServiceTicketsView {
             .foregroundColor(status.statusColor)
             .padding(.horizontal, AppSpacing.xs)
             .padding(.vertical, 3)
-            .background(Capsule().fill(status.statusColor.opacity(0.14)))
+                .background(Capsule().fill(status.statusColor.opacity(0.2)))
+    }
+
+    func approvalPill(_ status: ClientApprovalStatus) -> some View {
+        Text("Estimate \(status.displayName)")
+            .font(AppTypography.nano)
+            .foregroundColor(status.color)
+            .padding(.horizontal, AppSpacing.xs)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(status.color.opacity(0.2)))
     }
 }

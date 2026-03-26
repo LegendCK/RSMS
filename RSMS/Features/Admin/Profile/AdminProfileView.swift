@@ -434,23 +434,7 @@ private struct AdminAccessLogsView: View {
     }
 }
 
-private struct AdminAuditTrailView: View {
-    @Environment(AppState.self) private var appState
 
-    var body: some View {
-        AdminSettingsScaffold(
-            title: "Audit Trail",
-            icon: "doc.text.magnifyingglass",
-            subtitle: "Track recent system changes across the admin console."
-        ) {
-            AdminSettingCard(title: "LATEST EVENTS") {
-                settingsLine(label: "Catalog", value: "SKU and pricing updates synced from corporate controls")
-                settingsLine(label: "Operations", value: "Order and return status changes reflected from store systems")
-                settingsLine(label: "Actor", value: appState.currentUserName.isEmpty ? "Corporate Admin" : appState.currentUserName)
-            }
-        }
-    }
-}
 
 private struct AdminSecurityPoliciesView: View {
     @State private var requireMFA = true

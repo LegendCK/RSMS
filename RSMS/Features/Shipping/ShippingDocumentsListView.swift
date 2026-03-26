@@ -94,9 +94,15 @@ struct ShippingDocumentsListView: View {
                 }
             }
         }
-        .navigationTitle("Shipping Documents")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "Search orders…")
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Shipping Documents")
+                    .font(AppTypography.navTitle)
+                    .foregroundColor(AppColors.textPrimaryDark)
+            }
+        }
         .sheet(item: $selectedDocument) { doc in
             ShippingDocumentView(document: doc, onDownload: { downloadPDF(for: doc) })
         }

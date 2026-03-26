@@ -66,7 +66,7 @@ class AuthViewModel {
             defer { isLoading = false }
             do {
                 let profile = try await AuthService.shared.signIn(email: email, password: password)
-                appState.login(profile: profile)
+                appState.login(profile: profile, isFreshLogin: true)
             } catch {
                 showErrorMessage(friendlyError(error))
             }
@@ -118,7 +118,7 @@ class AuthViewModel {
         Task { @MainActor in
             defer { isLoading = false }
             do {
-                try await AuthService.shared.resetPassword(email: email)
+                try await AuthService.shared.requestCustomPasswordReset(email: email)
                 showResetSuccess = true
             } catch {
                 showErrorMessage(friendlyError(error))
