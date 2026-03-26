@@ -11,6 +11,7 @@ enum AppFlow: Equatable {
     case splash
     case onboarding
     case authentication
+    case forcePasswordReset    // Shown when must_reset_password is true
     case main              // Customer-facing tab bar
     case adminDashboard    // Corporate Admin enterprise panel
     case managerDashboard  // Boutique Manager & Inventory Controller panel
@@ -117,7 +118,27 @@ class AppState {
         currentClientProfile = nil
 
         withAnimation(.easeInOut(duration: 0.5)) {
-            switch profile.userRole {
+            if profile.mustResetPassword {
+                currentFlow = .forcePasswordReset
+            } else {
+                switch profile.userRole {
+                case .corporateAdmin:
+                    currentFlow = .adminDashboard
+                case .boutiqueManager, .inventoryController:
+                    currentFlow = .managerDashboard
+                case .salesAssociate, .serviceTechnician:
+                    currentFlow = .salesDashboard
+                case .customer:
+                    currentFlow = .main
+                }
+            }
+        }
+    }
+
+    /// Called after the user successfully resets their password on the force-reset screen.
+    func completePasswordReset() {
+        withAnimation(.easeInOut(duration: 0.5)) {
+            switch currentUserRole {
             case .corporateAdmin:
                 currentFlow = .adminDashboard
             case .boutiqueManager, .inventoryController:

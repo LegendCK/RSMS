@@ -25,6 +25,10 @@ struct RootView: View {
                 LoginView()
                     .transition(.opacity)
 
+            case .forcePasswordReset:
+                ForcePasswordResetView()
+                    .transition(.opacity)
+
             case .main:
                 MainTabView()
                     .transition(.opacity)
