@@ -89,14 +89,17 @@ struct RepairIntakeView: View {
                     errorBanner(err)
                 }
 
-                submitButton
-
-                Spacer(minLength: AppSpacing.xxxl)
+                    submitButton
+    
+                    Spacer(minLength: AppSpacing.xxxl)
+                }
+                .padding(.horizontal, AppSpacing.screenHorizontal)
+                .padding(.top, AppSpacing.md)
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
-            .padding(.top, AppSpacing.md)
+            .onTapGesture {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
         }
-    }
 
     // MARK: - Product Summary Card
 
