@@ -143,7 +143,7 @@ struct CSVPreviewView: View {
                 .font(.caption2)
                 .fontWeight(.bold)
                 .foregroundColor(.secondary)
-            Text("\\(count)")
+            Text("\(count)")
                 .font(.title2)
                 .fontWeight(.heavy)
                 .foregroundColor(color)
@@ -184,7 +184,7 @@ struct CSVPreviewView: View {
             }
         } catch {
             isUploading = false
-            uploadFailedError = "Database rejected batch: \\(error.localizedDescription). Check for SKU collisions."
+            uploadFailedError = "Database rejected batch: \(error.localizedDescription). Check for SKU collisions."
         }
     }
 }
@@ -210,7 +210,7 @@ fileprivate struct CSVRowCell: View {
             }
             
             HStack {
-                Text("SKU: \\(row.sku)")
+                Text("SKU: \(row.sku)")
                 Spacer()
                 Text(row.priceStr)
             }
