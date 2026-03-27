@@ -1,5 +1,5 @@
 {
-  "originHash" : "a97e496bc8ca5778bd07ef501cb2b1872337687887dec94e94970d0d80f66a07",
+  "originHash" : "6baee3818afebb927dd52ad1df3ae51c9cfb5b2421ebaf8979b819d489ffdc35",
   "pins" : [
     {
       "identity" : "stripe-ios-spm",

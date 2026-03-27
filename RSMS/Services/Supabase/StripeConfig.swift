@@ -15,9 +15,19 @@
 import Foundation
 
 enum StripeConfig {
+    private static var secrets: [String: String]? {
+        guard let path = Bundle.main.path(forResource: "StripeSecrets", ofType: "plist"),
+              let dict = NSDictionary(contentsOfFile: path) as? [String: String] else {
+            print("⚠️ Error: StripeSecrets.plist not found in bundle. Check RSMS/Config/StripeSecrets.plist.")
+            return nil
+        }
+        return dict
+    }
+
     /// Stripe **publishable** key — safe to embed in client apps.
-    /// Replace this placeholder with your actual pk_test_... or pk_live_... key.
-    static let publishableKey = "pk_test_51TF6PDH7VOyOxIMCW9Djs4I00HMWRs4yReLBAz2MhJTftVXfEvoo7wefZyuodA5jlD3AOC565NM2rJyupqFd9yO400nHf5WdRL"
+    static let publishableKey: String = {
+        return secrets?["STRIPE_PUBLISHABLE_KEY"] ?? "pk_test_placeholder"
+    }()
 
     /// Stripe API base URL (used for direct REST calls)
     static let apiBaseURL = "https://api.stripe.com/v1"
