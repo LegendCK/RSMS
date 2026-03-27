@@ -7,33 +7,33 @@ import SwiftUI
 import SwiftData
 
 struct LooksListView: View {
-    @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
-    
-    @Query(sort: \Look.createdAt, order: .reverse) private var allLooks: [Look]
     @Query private var products: [Product] // Need products to compute totals
-    
+
+    @State private var looks: [SalesLookDTO] = []
     @State private var showCreateLook = false
     @State private var filter: LookFilter = .all
-    
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
     enum LookFilter {
         case all, myLooks
     }
-    
-    var filteredLooks: [Look] {
+
+    var filteredLooks: [SalesLookDTO] {
         let currentId = appState.currentUserProfile?.id ?? UUID()
         switch filter {
         case .all:
-            return allLooks.filter { $0.isShared || $0.creatorId == currentId }
+            return looks.filter { $0.isShared || $0.creatorId == currentId }
         case .myLooks:
-            return allLooks.filter { $0.creatorId == currentId }
+            return looks.filter { $0.creatorId == currentId }
         }
     }
-    
+
     var body: some View {
         ZStack {
             AppColors.backgroundPrimary.ignoresSafeArea()
-            
+
             VStack(spacing: 0) {
                 // Segmented Control
                 Picker("Filter", selection: $filter) {
@@ -42,8 +42,11 @@ struct LooksListView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding()
-                
-                if filteredLooks.isEmpty {
+
+                if isLoading {
+                    ProgressView("Loading looks...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                } else if filteredLooks.isEmpty {
                     emptyState
                 } else {
                     ScrollView {
@@ -66,6 +69,8 @@ struct LooksListView: View {
                 }
             }
         }
+        .task { await loadLooks() }
+        .refreshable { await loadLooks() }
         .navigationTitle("Curated Looks")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -80,11 +85,22 @@ struct LooksListView: View {
         }
         .sheet(isPresented: $showCreateLook) {
             NavigationStack {
-                CreateLookView()
+                CreateLookView {
+                    Task { await loadLooks() }
+                }
             }
         }
+        .alert("Could Not Load Looks", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+            Button("Retry") { Task { await loadLooks() } }
+        } message: {
+            Text(errorMessage ?? "Unknown error")
+        }
     }
-    
+
     private var emptyState: some View {
         VStack(spacing: 16) {
             Spacer()
@@ -127,5 +143,24 @@ struct LooksListView: View {
         formatter.numberStyle = .currency
         formatter.currencyCode = "INR"
         return formatter.string(from: NSNumber(value: total)) ?? "INR \(total)"
+    }
+
+    @MainActor
+    private func loadLooks() async {
+        guard let storeId = appState.currentStoreId else {
+            looks = []
+            errorMessage = "No store is linked to this account."
+            return
+        }
+
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            looks = try await SalesLooksService.shared.fetchLooks(storeId: storeId)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }

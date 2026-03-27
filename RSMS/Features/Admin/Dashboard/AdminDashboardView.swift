@@ -3,7 +3,7 @@
 //  RSMS
 //
 //  Corporate Admin enterprise command center.
-//  Maroon gradient header, KPI metrics, system health, alerts, quick actions, activity feed.
+//  Maroon gradient header, KPI metrics, alerts, quick actions, activity feed.
 //
 
 import SwiftUI
@@ -58,8 +58,8 @@ private struct AdminActivityPreviewItem: Identifiable {
 /// AdminDashboardView is the primary interface for corporate administrators.
 ///
 /// Key Features:
-/// - Real-time KPI metrics and system health monitoring
-/// - Low stock alerts and inventory management
+/// - Real-time KPI metrics and business monitoring
+/// - Inventory management insights
 /// - Staff performance insights and analytics
 /// - Report generation and data export (PDF, CSV)
 /// - Live data synchronization from Supabase
@@ -204,8 +204,6 @@ struct AdminDashboardView: View {
                     AIInsightsCard(insights: adminAIInsights)
                         .padding(.horizontal, 16)
 
-                    systemHealthBar
-                    lowStockSection
                     alertsSection
                     quickActionsGrid
                     activityFeed
@@ -217,7 +215,6 @@ struct AdminDashboardView: View {
                 await fetchLowStock()
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: isSyncingLiveData)
         .animation(.easeInOut(duration: 0.25), value: lowStockAlerts.count)
         .animation(.easeInOut(duration: 0.25), value: activeSheet?.id)
         .navigationBarTitleDisplayMode(.inline)
@@ -567,150 +564,6 @@ struct AdminDashboardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 2)
         .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
-    }
-
-    // MARK: - System Health
-
-    private var systemHealthBar: some View {
-        VStack(spacing: 10) {
-            HStack {
-                Text("SYSTEM HEALTH")
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(3)
-                    .foregroundColor(.primary.opacity(0.45))
-                Spacer()
-                Button(action: { Task { await refreshLiveInsights() } }) {
-                    HStack(spacing: 4) {
-                        if isSyncingLiveData {
-                            ProgressView()
-                                .scaleEffect(0.65)
-                                .tint(AppColors.accent)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 11, weight: .medium))
-                        }
-                        Text(isSyncingLiveData ? "Syncing…" : "Sync Now")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(AppColors.accent)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(AppColors.accent.opacity(0.08))
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 20)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    healthPill(icon: "checkmark.circle.fill", text: "API", color: AppColors.success)
-                    healthPill(icon: "checkmark.circle.fill", text: "Database", color: AppColors.success)
-                    healthPill(icon: "checkmark.circle.fill", text: "Payments", color: AppColors.success)
-                    healthPill(
-                        icon: isSyncingLiveData ? "arrow.triangle.2.circlepath.circle.fill" : (liveSyncErrorMessage == nil ? "checkmark.circle.fill" : "exclamationmark.circle.fill"),
-                        text: syncPillLabel,
-                        color: isSyncingLiveData ? AppColors.info : (liveSyncErrorMessage == nil ? AppColors.success : AppColors.warning)
-                    )
-                }
-                .padding(.horizontal, 20)
-            }
-        }
-    }
-
-    private var syncPillLabel: String {
-        if isSyncingLiveData { return "Syncing" }
-        if liveSyncErrorMessage != nil { return "Sync Delayed" }
-        guard let lastSyncedAt else { return "Sync Pending" }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return "Live \(formatter.localizedString(for: lastSyncedAt, relativeTo: Date()))"
-    }
-
-    private func healthPill(icon: String, text: String, color: Color) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(color)
-            Text(text)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.primary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(Capsule())
-        .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 1)
-    }
-
-    // MARK: - Low Stock Section
-    
-    private var lowStockSection: some View {
-        VStack(spacing: 8) {
-            HStack {
-                sectionHeader("LOW STOCK ALERTS")
-                Spacer()
-                if isLoadingAlerts {
-                    ProgressView()
-                        .scaleEffect(0.6)
-                        .padding(.trailing, 20)
-                }
-            }
-            
-            if lowStockAlerts.isEmpty && !isLoadingAlerts {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 15))
-                        .foregroundColor(AppColors.success)
-                    Text("No low stock items")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 14)
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .padding(.horizontal, 20)
-            } else {
-                LazyVStack(spacing: 10) {
-                    ForEach(lowStockAlerts) { alert in
-                        lowStockRow(for: alert)
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-        }
-    }
-    
-    private func lowStockRow(for alert: LowStockAlert) -> some View {
-        let isCritical = alert.alertLevel == .critical
-        let badgeColor = isCritical ? AppColors.error : AppColors.warning
-        
-        return HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(badgeColor)
-                .frame(width: 3, height: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(alert.productName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.primary)
-                Text(alert.brand)
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-            }
-            Spacer()
-            Text("\(alert.stockCount) left")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(badgeColor)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(badgeColor.opacity(0.10))
-                .clipShape(Capsule())
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
     }
 
     // MARK: - Alerts

@@ -107,10 +107,10 @@ struct GuestAuthGateView: View {
         .onChange(of: appState.isGuest) { _, newValue in
             if !newValue { dismiss() }
         }
-        .sheet(isPresented: $showSignIn) {
+        .fullScreenCover(isPresented: $showSignIn) {
             LoginView()
         }
-        .sheet(isPresented: $showSignUp) {
+        .fullScreenCover(isPresented: $showSignUp) {
             CustomerSignUpView()
         }
     }

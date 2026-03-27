@@ -31,12 +31,12 @@ struct AddProductsView: View {
                     toggleSelection(of: product)
                 } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: product.imageName.isEmpty ? "bag.fill" : product.imageName)
-                            .font(.system(size: 30))
-                            .foregroundColor(.secondary)
-                            .frame(width: 50, height: 50)
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        ProductArtworkView(
+                            imageSource: product.imageList.first ?? product.imageName,
+                            fallbackSymbol: "bag.fill",
+                            cornerRadius: 10
+                        )
+                        .frame(width: 50, height: 50)
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text(product.name)

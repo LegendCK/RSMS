@@ -47,16 +47,13 @@ private struct BannerData {
 
 struct HomeView: View {
     @Environment(AppState.self) var appState
+    @Environment(\.modelContext) private var modelContext
     @Query(filter: #Predicate<Product> { $0.isFeatured == true })
     private var featuredProducts: [Product]
-    @Query(sort: \Category.displayOrder)
-    private var categories: [Category]
     @Query private var allProducts: [Product]
 
-    @State private var selectedCategoryName: String? = nil
     @State private var selectedGender: GenderFilter = .all
     @State private var currentBanner = 0
-    @State private var showAllCategories = false
     @State private var showAllFeatured = false
     @State private var showAllArrivals = false
     @State private var showNotifications = false
@@ -67,17 +64,13 @@ struct HomeView: View {
 
     private let banners: [BannerData] = [
         BannerData(label: "NEW SEASON", title: "Spring\n2026", subtitle: "Curated luxury for the modern connoisseur.", buttonText: "Shop Now"),
-        BannerData(label: "LIMITED EDITION", title: "Exclusive\nDrops", subtitle: "One-of-a-kind pieces from elite artisans.", buttonText: "Explore"),
-        BannerData(label: "PRIVATE ACCESS", title: "Members\nOnly", subtitle: "Unlock bespoke collections reserved for you.", buttonText: "Discover")
+        BannerData(label: "LIMITED EDITION", title: "Exclusive\nDrops", subtitle: "One-of-a-kind pieces from elite artisans.", buttonText: "Explore")
     ]
 
     private var filteredProducts: [Product] {
         var products = allProducts
         if selectedGender != .all {
             products = products.filter { selectedGender.matches($0) }
-        }
-        if let name = selectedCategoryName {
-            products = products.filter { $0.categoryName == name }
         }
         return products
     }
@@ -111,10 +104,9 @@ struct HomeView: View {
             .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
+                VStack(spacing: 8) {
                     bannerCarousel
                     genderFilterSection
-                    categorySection
                     featuredSection
                     RecommendedForYouSection()
                     newArrivalsSection
@@ -143,7 +135,6 @@ struct HomeView: View {
                 }
             }
         }
-        .navigationDestination(isPresented: $showAllCategories) { CategoriesView(showsTabBar: false) }
         .navigationDestination(isPresented: $showAllFeatured) { ProductListView(categoryFilter: nil, showsTabBar: false) }
         .navigationDestination(isPresented: $showAllArrivals) { ProductListView(categoryFilter: nil, showsTabBar: false) }
         .navigationDestination(isPresented: $state.showCart) {
@@ -155,7 +146,7 @@ struct HomeView: View {
                     .environment(appState)
             }
         }
-        .sheet(item: $selectedProduct) { product in
+        .fullScreenCover(item: $selectedProduct) { product in
             ProductDetailView(product: product, isSheet: true)
                 .environment(appState)
         }
@@ -219,7 +210,7 @@ struct HomeView: View {
             }
         }
         .padding(.top, 16)
-        .padding(.bottom, 4)
+        .padding(.bottom, 8)
     }
 
     private func bannerCard(_ data: BannerData) -> some View {
@@ -284,60 +275,6 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Category Filter Pills
-
-    private var categorySection: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Categories")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(.primary)
-                Spacer()
-                Button(action: { showAllCategories = true }) {
-                    Text("View All")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(AppColors.accent)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
-            .padding(.bottom, 12)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    categoryPill(name: "All", isSelected: selectedCategoryName == nil) {
-                        withAnimation(.easeInOut(duration: 0.2)) { selectedCategoryName = nil }
-                    }
-                    ForEach(categories) { category in
-                        categoryPill(name: category.name, isSelected: selectedCategoryName == category.name) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedCategoryName = selectedCategoryName == category.name ? nil : category.name
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-            .padding(.bottom, 24)
-        }
-    }
-
-    private func categoryPill(name: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(name)
-                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .white : .primary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-                .background(isSelected ? Color.primary : Color(.secondarySystemGroupedBackground))
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().strokeBorder(isSelected ? Color.clear : Color(.systemGray4), lineWidth: 1)
-                )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
     // MARK: - Featured Section
 
     private var featuredSection: some View {
@@ -350,18 +287,19 @@ struct HomeView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(genderFilteredFeatured) { product in
-                            Button { selectedProduct = product } label: {
-                                featuredCard(product)
-                            }
-                            .buttonStyle(PlainButtonStyle())
+                            featuredCard(product)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    selectedProduct = product
+                                }
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 10)
                 }
             }
         }
-        .padding(.bottom, 24)
+        .padding(.bottom, 28)
     }
 
     private func featuredCard(_ product: Product) -> some View {
@@ -407,10 +345,14 @@ struct HomeView: View {
                             .padding(6)
                     }
                 }
+                .overlay(alignment: .topTrailing) {
+                    wishlistButton(for: product)
+                        .padding(8)
+                }
 
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(product.brand.uppercased())
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(2)
@@ -418,13 +360,14 @@ struct HomeView: View {
                 Text(product.name)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(isOutOfStock ? .secondary : .primary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .frame(minHeight: 32, alignment: .topLeading)
                 Text(product.formattedPrice)
                     .font(.system(size: 13, weight: .light))
                     .foregroundColor(.secondary)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
             .frame(width: 150, alignment: .leading)
         }
         .frame(width: 150)
@@ -444,22 +387,24 @@ struct HomeView: View {
             } else {
                 LazyVGrid(
                     columns: [
-                        GridItem(.flexible(), spacing: 12),
-                        GridItem(.flexible(), spacing: 12)
+                        GridItem(.flexible(), spacing: 14),
+                        GridItem(.flexible(), spacing: 14)
                     ],
-                    spacing: 12
+                    spacing: 14
                 ) {
                     ForEach(filteredProducts.prefix(6)) { product in
-                        Button { selectedProduct = product } label: {
-                            productCard(product)
-                        }
-                        .buttonStyle(PlainButtonStyle())
+                        productCard(product)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectedProduct = product
+                            }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 10)
             }
         }
+        .padding(.bottom, 8)
     }
 
     private func productCard(_ product: Product) -> some View {
@@ -507,10 +452,14 @@ struct HomeView: View {
                             .padding(6)
                     }
                 }
+                .overlay(alignment: .topTrailing) {
+                    wishlistButton(for: product)
+                        .padding(8)
+                }
 
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(product.brand.uppercased())
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(2)
@@ -518,13 +467,14 @@ struct HomeView: View {
                 Text(product.name)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(isOutOfStock ? .secondary : .primary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .frame(minHeight: 32, alignment: .topLeading)
                 Text(product.formattedPrice)
                     .font(.system(size: 13, weight: .light))
                     .foregroundColor(.secondary)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
         }
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -545,14 +495,24 @@ struct HomeView: View {
                         Text(gender.rawValue.uppercased())
                             .font(.system(size: 11, weight: selectedGender == gender ? .bold : .medium))
                             .tracking(1.5)
-                            .foregroundColor(selectedGender == gender ? .white : .primary)
+                            .foregroundColor(
+                                selectedGender == gender
+                                    ? AppColors.textPrimaryLight
+                                    : AppColors.textPrimaryDark
+                            )
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(selectedGender == gender ? Color.black : Color.clear)
+                            .background(
+                                selectedGender == gender
+                                    ? AppColors.accent
+                                    : AppColors.backgroundSecondary
+                            )
                             .clipShape(Capsule())
                             .overlay(
                                 Capsule().strokeBorder(
-                                    selectedGender == gender ? Color.clear : Color(.systemGray4),
+                                    selectedGender == gender
+                                        ? AppColors.accent
+                                        : AppColors.border.opacity(0.6),
                                     lineWidth: 1
                                 )
                             )
@@ -571,9 +531,10 @@ struct HomeView: View {
     private func sectionHeader(title: String, action: @escaping () -> Void) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(3)
-                .foregroundColor(.primary.opacity(0.5))
+                .font(.system(size: 12, weight: .black))
+                .tracking(1.5)
+                .foregroundColor(AppColors.textPrimaryDark)
+                .shadow(color: AppColors.border.opacity(0.25), radius: 1, x: 0, y: 1)
             Spacer()
             Button(action: action) {
                 HStack(spacing: 3) {
@@ -587,6 +548,7 @@ struct HomeView: View {
             }
         }
         .padding(.horizontal, 20)
+        .padding(.top, 8)
         .padding(.bottom, 14)
     }
 
@@ -601,6 +563,48 @@ struct HomeView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)
         .padding(.horizontal, 20)
+    }
+
+    private func wishlistButton(for product: Product) -> some View {
+        Button {
+            toggleWishlist(product)
+        } label: {
+            Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(product.isWishlisted ? AppColors.accent : AppColors.textPrimaryLight)
+                .frame(width: 30, height: 30)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(
+                    Circle().stroke(AppColors.border.opacity(0.35), lineWidth: 0.8)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func toggleWishlist(_ product: Product) {
+        let targetState = !product.isWishlisted
+        product.isWishlisted = targetState
+        try? modelContext.save()
+
+        guard appState.isAuthenticated, !appState.isGuest else { return }
+
+        Task { @MainActor in
+            do {
+                try await WishlistService.shared.setWishlisted(productId: product.id, isWishlisted: targetState)
+            } catch {
+                if case WishlistService.SyncCapabilityError.missingWishlistTable = error {
+                    print("[HomeView] Wishlist table not available yet; kept local wishlist state for \(product.id)")
+                    return
+                }
+                if case WishlistService.SyncCapabilityError.wishlistForeignKeyMisconfigured = error {
+                    print("[HomeView] Wishlist FK misconfigured; kept local wishlist state for \(product.id)")
+                    return
+                }
+                product.isWishlisted = !targetState
+                try? modelContext.save()
+                print("[HomeView] Wishlist sync failed for \(product.id): \(error)")
+            }
+        }
     }
 }
 

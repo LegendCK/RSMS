@@ -298,7 +298,7 @@ struct OrderDetailView: View {
                 // In-store & Tax-free badges
                 HStack(spacing: 8) {
                     if order.fulfillmentType == .inStore {
-                        Label("In-Store Purchase", systemImage: "bag.fill.badge.checkmark")
+                        Label("In-Store Purchase", systemImage: "bag.fill")
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(AppColors.success)
                             .padding(.horizontal, 10)

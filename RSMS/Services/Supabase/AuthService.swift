@@ -59,14 +59,14 @@ final class AuthService {
         do {
             // Filter explicitly by auth UID — works with or without RLS SELECT policy.
             let uid = try await client.auth.session.user.id
-            let profile: UserDTO = try await client
+            let profiles: [UserDTO] = try await client
                 .from("users")
                 .select()
                 .eq("id", value: uid.uuidString.lowercased())
-                .single()
+                .limit(1)
                 .execute()
                 .value
-            return profile
+            return profiles.first
         } catch {
             print("[AuthService] fetchStaffProfile fallback failed: \(error.localizedDescription)")
             return nil

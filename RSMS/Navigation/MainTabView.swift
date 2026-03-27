@@ -119,6 +119,9 @@ struct MainTabView: View {
             syncErrorMessage = nil
             try await CustomerCatalogSyncService.shared.refreshLocalCatalog(modelContext: modelContext)
             try? await PromotionSyncService.shared.refreshLocalPromotions(modelContext: modelContext)
+            if appState.isAuthenticated && !appState.isGuest {
+                try? await WishlistService.shared.hydrateLocalWishlist(modelContext: modelContext)
+            }
             isPreparingCatalog = false
         } catch {
             // Safety: If sync fails but we have cached/seeded categories, allow the app to open.
@@ -126,6 +129,9 @@ struct MainTabView: View {
             let localCount = (try? modelContext.fetchCount(FetchDescriptor<Category>())) ?? 0
             if localCount > 0 {
                 print("[MainTabView] Sync failed but local data exists. Proceeding. Error: \(error.localizedDescription)")
+                if appState.isAuthenticated && !appState.isGuest {
+                    try? await WishlistService.shared.hydrateLocalWishlist(modelContext: modelContext)
+                }
                 self.isPreparingCatalog = false
             } else {
                 syncErrorMessage = error.localizedDescription

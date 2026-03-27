@@ -64,7 +64,7 @@ struct ManagerOrderDetailSheet: View {
                         detailCard {
                             row(label: "Customer", value: order.customerName)
                             Divider()
-                            row(label: "Customer Type", value: isGuestCustomer ? "Guest Checkout" : "Registered Customer")
+                            row(label: "Customer Type", value: customerTypeLabel)
                             Divider()
                             row(label: "Verification", value: customerVerificationLabel)
                             if let email = order.customerEmail {
@@ -186,13 +186,25 @@ struct ManagerOrderDetailSheet: View {
     }
 
     private var isGuestCustomer: Bool {
-        order.clientId == nil || order.customerName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "guest customer"
+        order.clientId == nil && order.channel == "in_store"
+    }
+
+    private var isUnlinkedCustomer: Bool {
+        order.clientId == nil && order.channel != "in_store"
     }
 
     private var customerVerificationLabel: String {
         let hasEmail = !(order.customerEmail?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         if hasEmail { return "Contact Verified" }
-        return isGuestCustomer ? "Guest Unverified" : "Verification Pending"
+        if isGuestCustomer { return "Walk-in Unverified" }
+        if isUnlinkedCustomer { return "Profile Link Missing" }
+        return "Verification Pending"
+    }
+
+    private var customerTypeLabel: String {
+        if isGuestCustomer { return "Walk-in" }
+        if isUnlinkedCustomer { return "Unlinked Account" }
+        return "Registered Customer"
     }
 
     @ViewBuilder

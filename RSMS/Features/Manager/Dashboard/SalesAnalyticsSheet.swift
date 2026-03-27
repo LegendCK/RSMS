@@ -23,6 +23,10 @@ struct SalesAnalyticsSheet: View {
     @State private var isLoading = true
     @State private var loadError: String? = nil
     @State private var selectedRange: AnalyticsRange = .thisMonth
+    @State private var chartAnimationProgress: Double = 0
+    @State private var monthlyTargetRevenue: Double
+    @State private var staffById: [UUID: UserDTO] = [:]
+    @State private var realtimeChannel: RealtimeChannelV2?
 
     // MARK: - Analytics Range
 
@@ -30,6 +34,13 @@ struct SalesAnalyticsSheet: View {
         case thisMonth = "This Month"
         case last30    = "Last 30 Days"
         case last7     = "Last 7 Days"
+    }
+
+    init(snapshot: ManagerDashboardSnapshot, storeId: UUID, storeName: String) {
+        self.snapshot = snapshot
+        self.storeId = storeId
+        self.storeName = storeName
+        _monthlyTargetRevenue = State(initialValue: snapshot.sales.targetRevenue)
     }
 
     // MARK: - Body
@@ -50,17 +61,9 @@ struct SalesAnalyticsSheet: View {
             }
             .navigationTitle("Sales Analytics")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(Color(.systemGroupedBackground), for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(storeName)
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.textPrimaryDark)
-                        Text(periodSubtitle)
-                            .font(AppTypography.nano)
-                            .foregroundColor(AppColors.textSecondaryDark)
-                    }
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         dismiss()
@@ -72,10 +75,14 @@ struct SalesAnalyticsSheet: View {
                 }
             }
             .task {
+                await subscribeToLiveOrders()
                 await loadOrders()
             }
             .onChange(of: selectedRange) { _, _ in
                 Task { await loadOrders() }
+            }
+            .onDisappear {
+                Task { await unsubscribeRealtime() }
             }
         }
     }
@@ -94,7 +101,7 @@ struct SalesAnalyticsSheet: View {
                 staffLeaderboardSection
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
-            .padding(.top, AppSpacing.md)
+            .padding(.top, AppSpacing.lg)
             .padding(.bottom, AppSpacing.xxxl)
         }
     }
@@ -184,6 +191,7 @@ struct SalesAnalyticsSheet: View {
         let actual = actualRevenue
         let target = targetRevenueForRange
         let progress = target > 0 ? min(actual / target, 1.0) : 0
+        let animatedProgress = progress * chartAnimationProgress
 
         return analyticsCard {
             VStack(spacing: AppSpacing.lg) {
@@ -200,7 +208,7 @@ struct SalesAnalyticsSheet: View {
 
                     // Progress arc
                     Circle()
-                        .trim(from: 0, to: CGFloat(progress))
+                        .trim(from: 0, to: CGFloat(animatedProgress))
                         .stroke(
                             LinearGradient(
                                 colors: [AppColors.accent, AppColors.accent.opacity(0.7)],
@@ -211,7 +219,7 @@ struct SalesAnalyticsSheet: View {
                         )
                         .frame(width: 200, height: 200)
                         .rotationEffect(.degrees(-90))
-                        .animation(.spring(response: 0.8, dampingFraction: 0.7), value: progress)
+                        .animation(.spring(response: 0.8, dampingFraction: 0.7), value: animatedProgress)
 
                     // Center text
                     VStack(spacing: 4) {
@@ -266,10 +274,16 @@ struct SalesAnalyticsSheet: View {
                     Chart {
                         ForEach(data, id: \.day) { item in
                             BarMark(
-                                x: .value("Day", item.label),
-                                y: .value("Revenue", item.revenue)
+                                x: .value("Day", item.day),
+                                y: .value("Revenue", item.revenue * chartAnimationProgress)
                             )
-                            .foregroundStyle(AppColors.accent)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [AppColors.accent.opacity(0.95), AppColors.accent.opacity(0.68)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
                             .cornerRadius(4)
                         }
 
@@ -294,8 +308,8 @@ struct SalesAnalyticsSheet: View {
                             AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
                                 .foregroundStyle(AppColors.dividerLight)
                             AxisValueLabel {
-                                if let label = value.as(String.self) {
-                                    Text(label)
+                                if let day = value.as(Int.self) {
+                                    Text(dailyLabel(for: day))
                                         .font(AppTypography.nano)
                                         .foregroundColor(AppColors.textSecondaryDark)
                                 }
@@ -316,7 +330,18 @@ struct SalesAnalyticsSheet: View {
                         }
                     }
                     .chartPlotStyle { plot in
-                        plot.background(Color.clear)
+                        plot
+                            .background(
+                                LinearGradient(
+                                    colors: [AppColors.accent.opacity(0.08), Color.clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(AppColors.accent.opacity(0.18), lineWidth: 1)
+                            )
                     }
                 }
             }
@@ -339,11 +364,11 @@ struct SalesAnalyticsSheet: View {
                         ForEach(data, id: \.day) { item in
                             AreaMark(
                                 x: .value("Day", item.day),
-                                y: .value("Revenue", item.cumulative)
+                                y: .value("Revenue", item.cumulative * chartAnimationProgress)
                             )
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [AppColors.accent.opacity(0.25), AppColors.accent.opacity(0.0)],
+                                    colors: [AppColors.accent.opacity(0.3), AppColors.accent.opacity(0.02)],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
@@ -352,9 +377,15 @@ struct SalesAnalyticsSheet: View {
 
                             LineMark(
                                 x: .value("Day", item.day),
-                                y: .value("Revenue", item.cumulative)
+                                y: .value("Revenue", item.cumulative * chartAnimationProgress)
                             )
-                            .foregroundStyle(AppColors.accent)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [AppColors.accent.opacity(1), AppColors.info.opacity(0.88)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
                             .lineStyle(StrokeStyle(lineWidth: 2))
                             .interpolationMethod(.monotone)
                         }
@@ -362,7 +393,7 @@ struct SalesAnalyticsSheet: View {
                         ForEach(data, id: \.day) { item in
                             LineMark(
                                 x: .value("Day", item.day),
-                                y: .value("Ideal", item.idealTarget)
+                                y: .value("Ideal", item.idealTarget * chartAnimationProgress)
                             )
                             .foregroundStyle(AppColors.secondary.opacity(0.6))
                             .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
@@ -396,7 +427,18 @@ struct SalesAnalyticsSheet: View {
                         }
                     }
                     .chartPlotStyle { plot in
-                        plot.background(Color.clear)
+                        plot
+                            .background(
+                                LinearGradient(
+                                    colors: [AppColors.info.opacity(0.06), Color.clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(AppColors.info.opacity(0.14), lineWidth: 1)
+                            )
                     }
 
                     // Legend
@@ -434,6 +476,7 @@ struct SalesAnalyticsSheet: View {
 
     private func channelRow(item: (channel: String, label: String, revenue: Double, color: Color), total: Double) -> some View {
         let fraction = total > 0 ? item.revenue / total : 0
+        let animatedFraction = fraction * chartAnimationProgress
 
         return VStack(alignment: .leading, spacing: AppSpacing.xxs) {
             HStack {
@@ -463,9 +506,16 @@ struct SalesAnalyticsSheet: View {
                         .frame(height: 6)
 
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(item.color)
-                        .frame(width: geo.size.width * CGFloat(fraction), height: 6)
-                        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: fraction)
+                        .fill(
+                            LinearGradient(
+                                colors: [item.color.opacity(0.95), item.color.opacity(0.62)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: geo.size.width * CGFloat(animatedFraction), height: 6)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animatedFraction)
+                        .shadow(color: item.color.opacity(0.35), radius: 4, x: 0, y: 0)
                 }
             }
             .frame(height: 6)
@@ -539,7 +589,7 @@ struct SalesAnalyticsSheet: View {
     // MARK: - Staff Leaderboard Section
 
     private var staffLeaderboardSection: some View {
-        let staff = Array(snapshot.staffRanking.prefix(5))
+        let staff = Array(liveStaffRanking.prefix(5))
         let maxRevenue = max(staff.first?.revenue ?? 0, 1)
         let chartHeight = max(120, staff.count * 36)
 
@@ -553,7 +603,7 @@ struct SalesAnalyticsSheet: View {
                     Chart {
                         ForEach(staff) { member in
                             BarMark(
-                                x: .value("Revenue", member.revenue),
+                                x: .value("Revenue", member.revenue * chartAnimationProgress),
                                 y: .value("Name", shortName(member.name))
                             )
                             .foregroundStyle(AppColors.secondary)
@@ -604,8 +654,18 @@ struct SalesAnalyticsSheet: View {
     private func analyticsCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         content()
             .padding(AppSpacing.md)
-            .background(Color(.secondarySystemGroupedBackground))
+            .background(
+                LinearGradient(
+                    colors: [Color(.secondarySystemGroupedBackground), Color(.secondarySystemGroupedBackground).opacity(0.92)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(AppColors.accent.opacity(0.12), lineWidth: 1)
+            )
             .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
     }
 
@@ -710,11 +770,11 @@ struct SalesAnalyticsSheet: View {
     var targetRevenueForRange: Double {
         switch selectedRange {
         case .thisMonth:
-            return snapshot.sales.targetRevenue
+            return monthlyTargetRevenue
         default:
             // Prorate monthly target
             let monthDays: Double = 30
-            let daily = snapshot.sales.targetRevenue / monthDays
+            let daily = monthlyTargetRevenue / monthDays
             return daily * Double(daysInPeriod)
         }
     }
@@ -737,6 +797,32 @@ struct SalesAnalyticsSheet: View {
         return actualRevenue / Double(count)
     }
 
+    private var liveStaffRanking: [ManagerDashboardStaffPerformance] {
+        let activeStaff = staffById.values.filter(\.isActive)
+        if activeStaff.isEmpty {
+            return snapshot.staffRanking
+        }
+
+        let ranked = activeStaff.map { user in
+            let userOrders = filteredOrders.filter { $0.associateId == user.id }
+            return ManagerDashboardStaffPerformance(
+                id: user.id,
+                name: user.fullName,
+                role: user.userRole.rawValue,
+                revenue: userOrders.reduce(0) { $0 + $1.grandTotal },
+                transactions: userOrders.count,
+                appointmentsHandled: 0,
+                conversionRate: 0
+            )
+        }
+
+        return ranked.sorted {
+            if $0.revenue != $1.revenue { return $0.revenue > $1.revenue }
+            if $0.transactions != $1.transactions { return $0.transactions > $1.transactions }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
     var dailyRevenueData: [(day: Int, label: String, revenue: Double, txCount: Int)] {
         let cal = Calendar.current
         let start = periodStart
@@ -754,7 +840,10 @@ struct SalesAnalyticsSheet: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMM"
 
-        return grouped.keys.sorted().map { dayNum in
+        let visibleDays = visibleDayCount
+        guard visibleDays > 0 else { return [] }
+
+        return (1...visibleDays).map { dayNum in
             let date = cal.date(byAdding: .day, value: dayNum - 1, to: start) ?? start
             let label = formatter.string(from: date)
             let vals = grouped[dayNum] ?? (0, 0)
@@ -767,13 +856,25 @@ struct SalesAnalyticsSheet: View {
         guard !daily.isEmpty else { return [] }
 
         let target = targetRevenueForRange
-        let days = daysInPeriod
+        let days = max(visibleDayCount, 1)
 
         var running: Double = 0
         return daily.map { item in
             running += item.revenue
             let ideal = target * (Double(item.day) / Double(days))
             return (day: item.day, cumulative: running, idealTarget: ideal)
+        }
+    }
+
+    private var visibleDayCount: Int {
+        let cal = Calendar.current
+        switch selectedRange {
+        case .thisMonth:
+            return max(1, cal.component(.day, from: Date()))
+        case .last30:
+            return 30
+        case .last7:
+            return 7
         }
     }
 
@@ -842,23 +943,29 @@ struct SalesAnalyticsSheet: View {
         return AppColors.error
     }
 
-    private var periodSubtitle: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return "\(formatter.string(from: periodStart)) – Today"
-    }
-
     private func shortName(_ fullName: String) -> String {
         let parts = fullName.split(separator: " ")
         guard parts.count >= 2 else { return fullName }
         return "\(parts[0]) \(parts[1].prefix(1))."
     }
 
+    private func dailyLabel(for day: Int) -> String {
+        let cal = Calendar.current
+        let date = cal.date(byAdding: .day, value: day - 1, to: periodStart) ?? periodStart
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM"
+        return formatter.string(from: date)
+    }
+
     // MARK: - Load Orders
 
-    func loadOrders() async {
-        isLoading = true
+    func loadOrders(showLoader: Bool = true) async {
+        withAnimation(.easeOut(duration: 0.18)) {
+            chartAnimationProgress = 0
+        }
+        if showLoader {
+            isLoading = true
+        }
         loadError = nil
 
         let formatter = ISO8601DateFormatter()
@@ -873,7 +980,7 @@ struct SalesAnalyticsSheet: View {
             }
 
             do {
-                let fetched: [OrderDTO] = try await SupabaseManager.shared.client
+                async let fetchedOrders: [OrderDTO] = SupabaseManager.shared.client
                     .from("orders")
                     .select()
                     .eq("store_id", value: storeId.uuidString.lowercased())
@@ -883,8 +990,35 @@ struct SalesAnalyticsSheet: View {
                     .execute()
                     .value
 
+                async let fetchedStaff: [UserDTO] = SupabaseManager.shared.client
+                    .from("users")
+                    .select()
+                    .eq("store_id", value: storeId.uuidString.lowercased())
+                    .eq("is_active", value: true)
+                    .execute()
+                    .value
+
+                async let fetchedStore: StoreDTO = SupabaseManager.shared.client
+                    .from("stores")
+                    .select()
+                    .eq("id", value: storeId.uuidString.lowercased())
+                    .single()
+                    .execute()
+                    .value
+
+                let fetched = try await fetchedOrders
                 orders = fetched
+                if let staff = try? await fetchedStaff {
+                    staffById = Dictionary(uniqueKeysWithValues: staff.map { ($0.id, $0) })
+                }
+                if let store = try? await fetchedStore {
+                    let target = store.monthlySalesTarget ?? 0
+                    monthlyTargetRevenue = target > 0 ? target : 300_000
+                }
                 isLoading = false
+                withAnimation(.easeOut(duration: 0.75)) {
+                    chartAnimationProgress = 1
+                }
                 return
             } catch {
                 lastError = error
@@ -907,7 +1041,29 @@ struct SalesAnalyticsSheet: View {
                             .value
 
                         orders = fetched
+                        if let staff: [UserDTO] = try? await SupabaseManager.shared.client
+                            .from("users")
+                            .select()
+                            .eq("store_id", value: storeId.uuidString.lowercased())
+                            .eq("is_active", value: true)
+                            .execute()
+                            .value {
+                            staffById = Dictionary(uniqueKeysWithValues: staff.map { ($0.id, $0) })
+                        }
+                        if let store: StoreDTO = try? await SupabaseManager.shared.client
+                            .from("stores")
+                            .select()
+                            .eq("id", value: storeId.uuidString.lowercased())
+                            .single()
+                            .execute()
+                            .value {
+                            let target = store.monthlySalesTarget ?? 0
+                            monthlyTargetRevenue = target > 0 ? target : 300_000
+                        }
                         isLoading = false
+                        withAnimation(.easeOut(duration: 0.75)) {
+                            chartAnimationProgress = 1
+                        }
                         return
                     } catch {
                         lastError = error
@@ -918,6 +1074,64 @@ struct SalesAnalyticsSheet: View {
 
         isLoading = false
         loadError = lastError?.localizedDescription ?? "Failed to load orders. Please try again."
+    }
+
+    private func subscribeToLiveOrders() async {
+        await unsubscribeRealtime()
+
+        let channel = SupabaseManager.shared.client
+            .realtimeV2
+            .channel("manager-sales-analytics:\(storeId.uuidString.lowercased())")
+
+        let insertions = channel.postgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "orders",
+            filter: .eq("store_id", value: storeId.uuidString.lowercased())
+        )
+        let updates = channel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "orders",
+            filter: .eq("store_id", value: storeId.uuidString.lowercased())
+        )
+        let deletions = channel.postgresChange(
+            DeleteAction.self,
+            schema: "public",
+            table: "orders",
+            filter: .eq("store_id", value: storeId.uuidString.lowercased())
+        )
+
+        do {
+            try await channel.subscribeWithError()
+            realtimeChannel = channel
+        } catch {
+            print("[SalesAnalyticsSheet] Realtime subscribe failed: \(error)")
+            return
+        }
+
+        Task { @MainActor in
+            for await _ in insertions {
+                await loadOrders(showLoader: false)
+            }
+        }
+        Task { @MainActor in
+            for await _ in updates {
+                await loadOrders(showLoader: false)
+            }
+        }
+        Task { @MainActor in
+            for await _ in deletions {
+                await loadOrders(showLoader: false)
+            }
+        }
+    }
+
+    private func unsubscribeRealtime() async {
+        if let channel = realtimeChannel {
+            await channel.unsubscribe()
+            realtimeChannel = nil
+        }
     }
 }
 

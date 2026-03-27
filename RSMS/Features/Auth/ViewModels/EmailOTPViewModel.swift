@@ -8,6 +8,7 @@
 
 import SwiftUI
 
+@MainActor
 @Observable
 class EmailOTPViewModel {
 
@@ -23,14 +24,10 @@ class EmailOTPViewModel {
     var resendCooldown: Int = 0   // seconds remaining before resend is allowed
     var codeSent: Bool = false
 
-    private var cooldownTimer: Timer?
+    private var cooldownTask: Task<Void, Never>?
 
     init(email: String) {
         self.email = email
-    }
-
-    deinit {
-        cooldownTimer?.invalidate()
     }
 
     // MARK: - Validation
@@ -91,16 +88,19 @@ class EmailOTPViewModel {
     // MARK: - Cooldown Timer
 
     private func startCooldown() {
+        cooldownTask?.cancel()
         resendCooldown = 60
-        cooldownTimer?.invalidate()
-        cooldownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
-            Task { @MainActor in
-                guard let self else { timer.invalidate(); return }
-                if self.resendCooldown > 0 {
-                    self.resendCooldown -= 1
-                } else {
-                    timer.invalidate()
+        cooldownTask = Task { [weak self] in
+            for remaining in stride(from: 60, through: 1, by: -1) {
+                if Task.isCancelled { return }
+                await MainActor.run {
+                    self?.resendCooldown = remaining
                 }
+                try? await Task.sleep(for: .seconds(1))
+                if self == nil { return }
+            }
+            await MainActor.run {
+                self?.resendCooldown = 0
             }
         }
     }
