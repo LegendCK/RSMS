@@ -106,14 +106,14 @@ struct ProductListView: View {
                                     Text(gender.rawValue.uppercased())
                                         .font(.system(size: 10, weight: selectedGender == gender ? .bold : .medium))
                                         .tracking(1.5)
-                                        .foregroundColor(selectedGender == gender ? .white : .black)
+                                        .foregroundColor(selectedGender == gender ? AppColors.textPrimaryLight : AppColors.textPrimaryDark)
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 7)
-                                        .background(selectedGender == gender ? Color.black : Color.clear)
+                                        .background(selectedGender == gender ? AppColors.accent : Color.clear)
                                         .clipShape(Capsule())
                                         .overlay(
                                             Capsule().strokeBorder(
-                                                selectedGender == gender ? Color.clear : Color(.systemGray4),
+                                                selectedGender == gender ? Color.clear : AppColors.border.opacity(0.7),
                                                 lineWidth: 1
                                             )
                                         )
@@ -135,7 +135,7 @@ struct ProductListView: View {
                         }
                     }
 
-                    Spacer().frame(height: 48)
+                    Spacer().frame(height: showsTabBar ? 120 : 48)
                 }
             }
         }
@@ -207,7 +207,6 @@ struct ProductListView: View {
                     .foregroundColor(isOutOfStock ? .secondary : AppColors.accent)
                 Text(product.name)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(isOutOfStock ? .secondary : .black)
                     .foregroundColor(AppColors.textPrimaryDark)
                     .lineLimit(1)
                 Text(product.formattedPrice)
