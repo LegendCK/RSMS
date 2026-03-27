@@ -12,11 +12,12 @@ import Foundation
 struct PaymentDTO: Codable, Identifiable {
     let id: UUID
     let orderId: UUID
-    let method: String              // "card" | "cash" | "bank_transfer" | "tax_free_voucher"
+    let method: String              // "card" | "cash" | "bank_transfer" | "tax_free_voucher" | "stripe"
     let amount: Double
     let currency: String            // ISO 4217, e.g. "USD"
     let status: String              // "pending" | "completed" | "failed" | "refunded"
     let paymentReference: String?
+    let stripePaymentIntentId: String? // Stripe PaymentIntent ID (pi_...)
     let processedBy: UUID?          // FK to users.id (the associate who processed)
     let createdAt: Date
     let updatedAt: Date
@@ -29,6 +30,7 @@ struct PaymentDTO: Codable, Identifiable {
         case currency
         case status
         case paymentReference = "payment_reference"
+        case stripePaymentIntentId = "stripe_payment_intent_id"
         case processedBy      = "processed_by"
         case createdAt        = "created_at"
         case updatedAt        = "updated_at"
@@ -55,12 +57,14 @@ struct PaymentInsertDTO: Codable {
     let currency: String
     let status: String
     let paymentReference: String?
+    let stripePaymentIntentId: String?
     let processedBy: UUID?
 
     enum CodingKeys: String, CodingKey {
         case orderId          = "order_id"
         case method, amount, currency, status
         case paymentReference = "payment_reference"
+        case stripePaymentIntentId = "stripe_payment_intent_id"
         case processedBy      = "processed_by"
     }
 }

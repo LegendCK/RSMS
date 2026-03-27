@@ -122,7 +122,7 @@ struct CustomerAppointmentsView: View {
                 Text(vm.errorMessage)
             }
             // ── Guest sign-in gate ───────────────────────────────────────────
-            .sheet(isPresented: $showSignIn) {
+            .fullScreenCover(isPresented: $showSignIn) {
                 GuestAuthGateView(pendingAction: "manage your appointments")
             }
         }

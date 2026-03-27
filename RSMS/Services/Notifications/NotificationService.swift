@@ -62,6 +62,69 @@ final class NotificationService {
             .execute()
     }
 
+    // MARK: - Create
+
+    func createAppointmentBookedNotification(
+        clientId: UUID,
+        storeId: UUID?,
+        scheduledAt: Date,
+        appointmentType: String
+    ) async {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        formatter.locale = Locale.current
+
+        let typeLabel = appointmentType
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized
+
+        let payload = NotificationInsertDTO(
+            recipientClientId: clientId,
+            storeId: storeId,
+            title: "Appointment Confirmed",
+            message: "\(typeLabel) appointment booked for \(formatter.string(from: scheduledAt)).",
+            category: "appointment",
+            deepLink: "appointments"
+        )
+
+        do {
+            try await client
+                .from("notifications")
+                .insert(payload)
+                .execute()
+        } catch {
+            print("[NotificationService] Failed to insert appointment notification: \(error.localizedDescription)")
+        }
+    }
+
+    func createOrderLifecycleNotification(
+        clientId: UUID,
+        storeId: UUID?,
+        title: String,
+        message: String,
+        deepLink: String = "orders",
+        category: String = "order_status"
+    ) async {
+        let payload = NotificationInsertDTO(
+            recipientClientId: clientId,
+            storeId: storeId,
+            title: title,
+            message: message,
+            category: category,
+            deepLink: deepLink
+        )
+
+        do {
+            try await client
+                .from("notifications")
+                .insert(payload)
+                .execute()
+        } catch {
+            print("[NotificationService] Failed to insert order lifecycle notification: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Realtime Subscription
 
     /// Subscribe to new notification rows for this client.

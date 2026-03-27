@@ -47,8 +47,8 @@ struct SalesDashboardView: View {
                     .padding(.bottom, 28)
 
                     // KPI row
-                    HStack(spacing: 12) {
-                        kpiCard(value: vm.formattedTodaySales, label: "Today's Sales", icon: "dollarsign.circle")
+                    HStack(spacing: 10) {
+                        kpiCard(value: vm.compactTodaySales, label: "Today's Sales", icon: "dollarsign.circle")
                         kpiCard(value: "\(vm.clientCount)", label: "Clients", icon: "person.2")
                         kpiCard(value: "\(vm.todayBookingCount)", label: "Bookings", icon: "calendar")
                     }
@@ -135,13 +135,19 @@ struct SalesDashboardView: View {
         .task { await vm.load(storeId: appState.currentStoreId) }
         .refreshable { await vm.load(storeId: appState.currentStoreId) }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarRole(.editor)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("MAISON LUXE")
                     .font(.system(size: 12, weight: .black))
                     .tracking(4)
                     .foregroundColor(.primary)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink(destination: NotificationCenterView(showsCloseButton: false).toolbar(.hidden, for: .tabBar)) {
+                    Image(systemName: "bell")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundColor(AppColors.accent)
+                }
             }
         }
         .sheet(item: $activeSheet) { sheet in
@@ -188,14 +194,18 @@ struct SalesDashboardView: View {
                 .font(.system(size: 18, weight: .ultraLight))
                 .foregroundColor(AppColors.accent)
             Text(value)
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: 21, weight: .bold))
                 .foregroundColor(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+                .truncationMode(.tail)
+                .monospacedDigit()
             Text(label)
                 .font(.system(size: 10, weight: .light))
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
+        .padding(12)
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)

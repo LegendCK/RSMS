@@ -44,12 +44,15 @@ struct OnboardingView: View {
                         Button(action: { appState.completeOnboarding() }) {
                             Text("Skip")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.primary.opacity(0.5))
+                                .foregroundColor(AppColors.textPrimaryDark.opacity(0.75))
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
-                                .background(.ultraThinMaterial)
+                                .background(AppColors.backgroundSecondary)
                                 .clipShape(Capsule())
-                                .overlay(Capsule().stroke(Color.primary.opacity(0.15), lineWidth: 0.5))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(AppColors.border.opacity(0.6), lineWidth: 1)
+                                )
                         }
                         .padding(.trailing, 20)
                         .padding(.top, 16)
@@ -73,8 +76,17 @@ struct OnboardingView: View {
                     HStack(spacing: 6) {
                         ForEach(0..<pages.count, id: \.self) { index in
                             Capsule()
-                                .fill(index == currentPage ? AppColors.accent : Color.primary.opacity(0.2))
+                                .fill(index == currentPage ? AppColors.accent : AppColors.backgroundSecondary)
                                 .frame(width: index == currentPage ? 24 : 6, height: 6)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(
+                                            index == currentPage
+                                                ? AppColors.accent
+                                                : AppColors.border.opacity(0.75),
+                                            lineWidth: 1
+                                        )
+                                )
                                 .animation(.easeInOut(duration: 0.3), value: currentPage)
                         }
                     }
@@ -99,14 +111,14 @@ struct OnboardingView: View {
                             Text("CONTINUE")
                                 .font(.system(size: 14, weight: .semibold))
                                 .tracking(3)
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.textPrimaryDark)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
-                                .background(.ultraThinMaterial)
+                                .background(AppColors.backgroundSecondary)
                                 .clipShape(Capsule())
                                 .overlay(
                                     Capsule()
-                                        .strokeBorder(Color.primary.opacity(0.2), lineWidth: 1.5)
+                                        .strokeBorder(AppColors.border.opacity(0.75), lineWidth: 1.5)
                                 )
                         }
                         .padding(.horizontal, 28)
@@ -149,12 +161,12 @@ struct OnboardingView: View {
 
                 Text(data.title)
                     .font(.system(size: 32, weight: .black))
-                    .foregroundColor(.primary)
+                    .foregroundColor(AppColors.textPrimaryDark)
                     .lineSpacing(3)
 
                 Text(data.subtitle)
-                    .font(.system(size: 15, weight: .light))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(AppColors.textSecondaryDark)
                     .lineSpacing(5)
                     .padding(.top, 4)
             }

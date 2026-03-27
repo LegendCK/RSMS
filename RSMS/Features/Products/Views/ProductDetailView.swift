@@ -18,6 +18,8 @@ enum ProductDetailMode {
 struct ProductDetailView: View {
     @Bindable var product: Product
     let mode: ProductDetailMode
+    let isSheet: Bool
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Query private var allCartItems: [CartItem]
@@ -65,6 +67,11 @@ struct ProductDetailView: View {
     @State private var isCheckingWarranty = false
     @State private var warrantyResult: WarrantyLookupResult?
     @State private var warrantyError: String?
+    @State private var productFeedback: [ProductFeedbackDTO] = []
+    @State private var myFeedback: ProductFeedbackDTO?
+    @State private var isLoadingFeedback = false
+    @State private var feedbackError: String?
+    @State private var showFeedbackComposer = false
 
     // MARK: - Variant data
 
@@ -134,6 +141,10 @@ struct ProductDetailView: View {
             do {
                 try await WishlistService.shared.setWishlisted(productId: product.id, isWishlisted: targetState)
             } catch {
+                if case WishlistService.SyncCapabilityError.missingWishlistTable = error {
+                    print("[ProductDetailView] Wishlist table not available yet; kept local wishlist state for \(product.id)")
+                    return
+                }
                 product.isWishlisted = !targetState
                 try? modelContext.save()
                 print("[ProductDetailView] Wishlist sync failed for \(product.id): \(error)")
@@ -159,15 +170,16 @@ struct ProductDetailView: View {
         mode == .adminCatalog || appState.currentUserRole == .corporateAdmin
     }
 
-    init(product: Product, mode: ProductDetailMode = .storefront) {
+    init(product: Product, mode: ProductDetailMode = .storefront, isSheet: Bool = false) {
         self.product = product
         self.mode = mode
+        self.isSheet = isSheet
     }
 
     // MARK: - Body
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             LinearGradient(
                 colors: [AppColors.backgroundWarmWhite, AppColors.backgroundPrimary],
                 startPoint: .top,
@@ -194,6 +206,11 @@ struct ProductDetailView: View {
                         descriptionSection
                         sectionDivider
                         detailsSection
+
+                        if !isAdminMode {
+                            sectionDivider
+                            feedbackSection
+                        }
 
                         if !isAdminMode && appState.isAuthenticated && !appState.isGuest {
                             sectionDivider
@@ -227,8 +244,22 @@ struct ProductDetailView: View {
                     .padding(.horizontal, 12)
                 }
             }
+
+            // Floating close button — only when presented as a sheet
+            if isSheet {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(.black.opacity(0.40), in: Circle())
+                }
+                .padding(.top, 16)
+                .padding(.leading, 16)
+            }
         }
         .task {
+            await loadProductFeedback()
             guard canViewInventory else { return }
             await fetchInventoryItems()
         }
@@ -245,31 +276,12 @@ struct ProductDetailView: View {
                         .foregroundColor(AppColors.accent)
                     }
                 } else {
-                    HStack(spacing: 16) {
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3)) {
-                                toggleWishlist()
-                            }
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }) {
-                            Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
-                                .font(.system(size: 16, weight: .light))
-                                .foregroundColor(product.isWishlisted ? AppColors.accent : AppColors.textPrimaryDark)
-                                .frame(width: 34, height: 34)
-                                .background(.ultraThinMaterial, in: Circle())
-                        }
-                        CartShortcutButton()
-                    }
+                    CartShortcutButton()
                 }
             }
         }
         .if(!isAdminMode) { view in
             view.toolbar(.hidden, for: .tabBar)
-        }
-        .safeAreaInset(edge: .bottom) {
-            if isAdminMode {
-                adminManageBar
-            }
         }
         .navigationDestination(isPresented: $navigateToCart) {
             if !isAdminMode {
@@ -299,10 +311,21 @@ struct ProductDetailView: View {
             )
             .presentationDetents([.fraction(0.85), .large])
         }
-        .sheet(isPresented: $showGuestGate) {
+        .sheet(isPresented: $showFeedbackComposer) {
+            ProductFeedbackComposerSheet(
+                productName: product.name,
+                initialRating: myFeedback?.rating ?? 5,
+                initialTitle: myFeedback?.title ?? "",
+                initialComment: myFeedback?.comment ?? "",
+                onSubmit: { rating, title, comment in
+                    Task { await submitFeedback(rating: rating, title: title, comment: comment) }
+                }
+            )
+            .presentationDetents([.medium, .large])
+        }
+        .fullScreenCover(isPresented: $showGuestGate) {
             if !isAdminMode {
                 GuestAuthGateView(pendingAction: guestGateAction)
-                    .presentationDetents([.large])
             }
         }
         .sheet(isPresented: $showAdminManageSheet) {
@@ -400,7 +423,7 @@ struct ProductDetailView: View {
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 8)
                                             .stroke(
-                                                idx == currentImageIndex ? AppColors.accent : Color.white.opacity(0.35),
+                                                idx == currentImageIndex ? AppColors.accent : AppColors.border.opacity(0.7),
                                                 lineWidth: idx == currentImageIndex ? 2.5 : 1
                                             )
                                     )
@@ -436,6 +459,30 @@ struct ProductDetailView: View {
                 .padding(.top, 14)
                 .padding(.horizontal, AppSpacing.screenHorizontal)
                 Spacer()
+            }
+
+            // Wishlist action inside product view so it remains visible in sheet/fullscreen presentation.
+            if !isAdminMode {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3)) {
+                                toggleWishlist()
+                            }
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }) {
+                            Image(systemName: product.isWishlisted ? "heart.fill" : "heart")
+                                .font(.system(size: 16, weight: .light))
+                                .foregroundColor(product.isWishlisted ? AppColors.accent : .white)
+                                .frame(width: 36, height: 36)
+                                .background(.ultraThinMaterial, in: Circle())
+                        }
+                    }
+                    .padding(.top, 56)
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    Spacer()
+                }
             }
 
             // Expand icon (tap gesture area hint)
@@ -698,6 +745,124 @@ struct ProductDetailView: View {
         }
     }
 
+    // MARK: - Reviews
+
+    private var feedbackSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(alignment: .center) {
+                Text("REVIEWS")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+                Spacer()
+                if canWriteFeedback {
+                    Button(myFeedback == nil ? "Write Review" : "Edit Review") {
+                        showFeedbackComposer = true
+                    }
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.accent)
+                }
+            }
+
+            if isLoadingFeedback {
+                ProgressView().tint(AppColors.accent)
+            } else {
+                ratingSummaryRow
+
+                if let feedbackError, !feedbackError.isEmpty {
+                    Text(feedbackError)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.error)
+                }
+
+                if productFeedback.isEmpty {
+                    Text("No reviews yet. Be the first to share feedback.")
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                } else {
+                    LazyVStack(spacing: AppSpacing.sm) {
+                        ForEach(productFeedback.prefix(5)) { feedback in
+                            feedbackCard(feedback)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var canWriteFeedback: Bool {
+        !isAdminMode && appState.isAuthenticated && !appState.isGuest && appState.currentClientProfile != nil
+    }
+
+    private var averageFeedbackRating: Double {
+        guard !productFeedback.isEmpty else { return 0 }
+        let total = productFeedback.reduce(0) { $0 + $1.rating }
+        return Double(total) / Double(productFeedback.count)
+    }
+
+    private var ratingSummaryRow: some View {
+        HStack(spacing: AppSpacing.sm) {
+            HStack(spacing: 2) {
+                ForEach(0..<5, id: \.self) { idx in
+                    Image(systemName: idx < Int(round(averageFeedbackRating)) ? "star.fill" : "star")
+                        .font(.system(size: 12))
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+
+            Text(String(format: "%.1f", averageFeedbackRating))
+                .font(AppTypography.label)
+                .foregroundColor(AppColors.textPrimaryDark)
+
+            Text("(\(productFeedback.count) reviews)")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+
+            Spacer()
+        }
+    }
+
+    private func feedbackCard(_ feedback: ProductFeedbackDTO) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(feedback.customerName.isEmpty ? "Customer" : feedback.customerName)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                Spacer()
+                Text(feedback.createdAt.formatted(date: .abbreviated, time: .omitted))
+                    .font(AppTypography.micro)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+
+            HStack(spacing: 2) {
+                ForEach(0..<5, id: \.self) { idx in
+                    Image(systemName: idx < feedback.rating ? "star.fill" : "star")
+                        .font(.system(size: 10))
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+
+            if !feedback.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(feedback.title)
+                    .font(AppTypography.bodyMedium)
+                    .foregroundColor(AppColors.textPrimaryDark)
+            }
+            Text(feedback.comment)
+                .font(AppTypography.bodySmall)
+                .foregroundColor(AppColors.textSecondaryDark)
+                .lineLimit(4)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                .fill(AppColors.backgroundSecondary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                        .stroke(AppColors.border.opacity(0.35), lineWidth: 1)
+                )
+        )
+    }
+
     // MARK: - Inventory Items
 
     private var inventorySection: some View {
@@ -770,10 +935,10 @@ struct ProductDetailView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                .fill(Color.white.opacity(0.04))
+                .fill(AppColors.backgroundSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                        .stroke(Color.black.opacity(0.04), lineWidth: 1)
+                        .stroke(AppColors.border.opacity(0.4), lineWidth: 1)
                 )
         )
     }
@@ -813,32 +978,6 @@ struct ProductDetailView: View {
         }
 
         isCheckingWarranty = false
-    }
-
-    // MARK: - Bottom Action Bar
-
-    private var adminManageBar: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Button(action: { showAdminManageSheet = true }) {
-                    Label("Manage Product", systemImage: "slider.horizontal.3")
-                        .font(AppTypography.buttonPrimary)
-                        .foregroundColor(AppColors.textPrimaryLight)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(AppColors.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 12)
-        }
-        .background(
-            Color.white
-                .shadow(color: .black.opacity(0.06), radius: 12, y: -4)
-                .ignoresSafeArea(edges: .bottom)
-        )
     }
 
     private var bottomActionBar: some View {
@@ -919,7 +1058,7 @@ struct ProductDetailView: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.65), lineWidth: 1)
+                        .stroke(AppColors.border.opacity(0.45), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.1), radius: 14, y: 6)
         )
@@ -973,7 +1112,7 @@ struct ProductDetailView: View {
                         .foregroundColor((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3))
                         .frame(maxWidth: .infinity)
                         .frame(height: 42)
-                        .background(Color.white)
+                        .background(AppColors.backgroundPrimary)
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -1011,10 +1150,10 @@ struct ProductDetailView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white)
+                .fill(AppColors.backgroundSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(AppColors.accent.opacity(0.15), lineWidth: 1)
+                        .stroke(AppColors.border.opacity(0.45), lineWidth: 1)
                 )
         )
     }
@@ -1156,6 +1295,51 @@ struct ProductDetailView: View {
         }
     }
 
+    @MainActor
+    private func loadProductFeedback() async {
+        isLoadingFeedback = true
+        feedbackError = nil
+        defer { isLoadingFeedback = false }
+
+        do {
+            productFeedback = try await ProductFeedbackService.shared.fetchProductFeedback(productId: product.id)
+            if let customerId = appState.currentClientProfile?.id {
+                myFeedback = try await ProductFeedbackService.shared.fetchMyFeedback(
+                    productId: product.id,
+                    customerId: customerId
+                )
+            } else {
+                myFeedback = nil
+            }
+        } catch {
+            feedbackError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func submitFeedback(rating: Int, title: String, comment: String) async {
+        guard let client = appState.currentClientProfile else {
+            feedbackError = "Sign in as a customer to submit feedback."
+            return
+        }
+
+        do {
+            _ = try await ProductFeedbackService.shared.upsertFeedback(
+                productId: product.id,
+                storeId: appState.currentStoreId,
+                customerId: client.id,
+                customerName: client.fullName,
+                rating: rating,
+                title: title,
+                comment: comment
+            )
+            showFeedbackComposer = false
+            await loadProductFeedback()
+        } catch {
+            feedbackError = error.localizedDescription
+        }
+    }
+
     private func fetchInventoryItems() async {
         isFetchingItems = true
         defer { isFetchingItems = false }
@@ -1184,6 +1368,72 @@ struct ProductDetailView: View {
         if let output = url {
             exportAllPDFURL = output
             isExportingAll = true
+        }
+    }
+}
+
+private struct ProductFeedbackComposerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let productName: String
+    let initialRating: Int
+    let initialTitle: String
+    let initialComment: String
+    let onSubmit: (Int, String, String) -> Void
+
+    @State private var rating: Int = 5
+    @State private var title: String = ""
+    @State private var comment: String = ""
+
+    private var canSubmit: Bool {
+        !comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Rating") {
+                    HStack(spacing: 8) {
+                        ForEach(1...5, id: \.self) { index in
+                            Button {
+                                rating = index
+                            } label: {
+                                Image(systemName: index <= rating ? "star.fill" : "star")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(AppColors.accent)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                Section("Headline (Optional)") {
+                    TextField("Summarize your experience", text: $title)
+                }
+
+                Section("Review") {
+                    TextField("Share details about \(productName)", text: $comment, axis: .vertical)
+                        .lineLimit(4...8)
+                }
+            }
+            .navigationTitle("Product Review")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Submit") {
+                        onSubmit(rating, title, comment)
+                    }
+                    .disabled(!canSubmit)
+                }
+            }
+            .onAppear {
+                rating = max(1, min(5, initialRating))
+                title = initialTitle
+                comment = initialComment
+            }
         }
     }
 }

@@ -12,7 +12,7 @@ struct ClientEditView: View {
     @Bindable var vm: ClientDetailViewModel
     @Environment(\.dismiss) private var dismiss
 
-    private let segments = ["standard", "silver", "gold", "vip", "ultra_vip"]
+    private let segments = ["standard", "silver", "gold", "vip"]
     private let communicationOptions = ["Email", "Phone", "SMS", "WhatsApp"]
 
     var body: some View {

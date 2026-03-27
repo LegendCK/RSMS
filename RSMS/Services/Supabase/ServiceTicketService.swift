@@ -28,6 +28,7 @@ private struct SubmitCustomerExchangeRPCResponse: Decodable, Sendable {
 
 protocol ServiceTicketServiceProtocol: Sendable {
     func resolveOrderContext(orderNumber: String) async throws -> ServiceTicketOrderContext?
+    func fetchClientOrderItems(clientId: UUID, limit: Int) async throws -> [ServiceTicketOrderItem]
     func createTicket(_ payload: ServiceTicketInsertDTO) async throws -> ServiceTicketDTO
     /// Plain fire-and-forget insert — no SELECT-back. Use for staff roles where
     /// RLS may allow INSERT but block the subsequent SELECT (store-scoped policies).
@@ -107,6 +108,76 @@ final class ServiceTicketService: ServiceTicketServiceProtocol, @unchecked Senda
 
         guard let row = rows.first else { return nil }
         return ServiceTicketOrderContext(orderId: row.id, storeId: row.storeId, clientId: row.clientId)
+    }
+
+    func fetchClientOrderItems(clientId: UUID, limit: Int = 25) async throws -> [ServiceTicketOrderItem] {
+        struct OrderRow: Decodable {
+            let id: UUID
+            let orderNumber: String?
+            let createdAt: Date
+            let orderItems: [OrderItemRow]
+
+            enum CodingKeys: String, CodingKey {
+                case id
+                case orderNumber = "order_number"
+                case createdAt = "created_at"
+                case orderItems = "order_items"
+            }
+        }
+
+        struct OrderItemRow: Decodable {
+            let productId: UUID
+            let quantity: Int
+            let products: ProductRow?
+
+            enum CodingKeys: String, CodingKey {
+                case productId = "product_id"
+                case quantity
+                case products
+            }
+        }
+
+        struct ProductRow: Decodable {
+            let id: UUID
+            let name: String
+            let sku: String
+            let brand: String?
+            let imageUrls: [String]?
+
+            enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case sku
+                case brand
+                case imageUrls = "image_urls"
+            }
+        }
+
+        let rows: [OrderRow] = try await client
+            .from("orders")
+            .select("id, order_number, created_at, order_items(product_id, quantity, products(id, name, sku, brand, image_urls))")
+            .eq("client_id", value: clientId.uuidString.lowercased())
+            .order("created_at", ascending: false)
+            .limit(limit)
+            .execute()
+            .value
+
+        return rows.flatMap { order in
+            order.orderItems.compactMap { item in
+                guard let product = item.products else { return nil }
+                return ServiceTicketOrderItem(
+                    orderId: order.id,
+                    orderNumber: order.orderNumber ?? "Order",
+                    orderCreatedAt: order.createdAt,
+                    productId: product.id,
+                    productName: product.name,
+                    productSku: product.sku,
+                    productBrand: product.brand,
+                    quantity: item.quantity,
+                    productImageURL: product.imageUrls?.first
+                )
+            }
+        }
     }
 
     // MARK: - Create Ticket
@@ -345,6 +416,19 @@ final class ServiceTicketService: ServiceTicketServiceProtocol, @unchecked Senda
             .value
         return row.productId
     }
+}
+
+struct ServiceTicketOrderItem: Identifiable, Sendable {
+    let id = UUID()
+    let orderId: UUID
+    let orderNumber: String
+    let orderCreatedAt: Date
+    let productId: UUID
+    let productName: String
+    let productSku: String
+    let productBrand: String?
+    let quantity: Int
+    let productImageURL: String?
 }
 
 struct ServiceTicketOrderContext {

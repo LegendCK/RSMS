@@ -289,8 +289,13 @@ final class OrderFulfillmentService {
             orders[index].itemCount = summary?.itemCount ?? 0
             orders[index].totalQuantity = summary?.totalQuantity ?? 0
 
-            guard let clientId = orders[index].clientId,
-                  let client = clientById[clientId] else {
+            guard let clientId = orders[index].clientId else {
+                orders[index].customerName = orders[index].channel == "in_store" ? "Walk-in Customer" : "Unlinked Customer"
+                continue
+            }
+
+            guard let client = clientById[clientId] else {
+                orders[index].customerName = "Registered Customer"
                 continue
             }
 
@@ -299,11 +304,23 @@ final class OrderFulfillmentService {
                 .filter { !$0.isEmpty }
                 .joined(separator: " ")
 
-            orders[index].customerName = fullName.isEmpty ? "Guest Customer" : fullName
+            orders[index].customerName = fullName.isEmpty ? "Registered Customer" : fullName
             orders[index].customerEmail = client.email
         }
 
         return orders
+    }
+
+    /// Fetches a single order by its business order number.
+    func fetchOrderByNumber(_ orderNumber: String) async throws -> OrderDTO? {
+        let rows: [OrderDTO] = try await client
+            .from("orders")
+            .select("id, order_number, client_id, store_id, associate_id, channel, status, subtotal, tax_total, grand_total, currency, is_tax_free, notes, event_id, created_at, updated_at")
+            .eq("order_number", value: orderNumber)
+            .limit(1)
+            .execute()
+            .value
+        return rows.first
     }
 
     // MARK: - Fetch Audit Trail

@@ -12,6 +12,7 @@ struct OrderDetailView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
     @Query private var stores: [StoreLocation]
+    @Query private var allProducts: [Product]
     @Query private var pricingPolicies: [PricingPolicySettings]
     let order: Order
     @State private var showInvoiceSheet = false
@@ -27,6 +28,9 @@ struct OrderDetailView: View {
     @State private var isSubmittingExchangeRequest = false
     @State private var exchangeRequestTicketNumber: String?
     @State private var exchangeRequestError: String?
+    @State private var feedbackByItemId: [String: ProductFeedbackDTO] = [:]
+    @State private var selectedFeedbackItem: ParsedItem?
+    @State private var feedbackErrorMessage: String?
 
     private let statusFlow: [OrderStatus] = [
         .pending, .confirmed, .processing, .shipped, .delivered
@@ -248,12 +252,38 @@ struct OrderDetailView: View {
         } message: {
             Text(invoiceError)
         }
-        .task { await syncStatus() }
-        .refreshable { await syncStatus() }
+        .task {
+            await syncStatus()
+            await loadFeedbackForOrderItems()
+        }
+        .refreshable {
+            await syncStatus()
+            await loadFeedbackForOrderItems()
+        }
         .onAppear {
             if selectedExchangeItemId == nil {
                 selectedExchangeItemId = parsedItems.first?.id
             }
+        }
+        .sheet(item: $selectedFeedbackItem) { item in
+            ProductFeedbackComposerSheet(
+                productName: item.name,
+                initialRating: feedbackByItemId[item.id]?.rating ?? 5,
+                initialTitle: feedbackByItemId[item.id]?.title ?? "",
+                initialComment: feedbackByItemId[item.id]?.comment ?? "",
+                onSubmit: { rating, title, comment in
+                    Task { await submitProductFeedback(for: item, rating: rating, title: title, comment: comment) }
+                }
+            )
+            .presentationDetents([.medium, .large])
+        }
+        .alert("Feedback", isPresented: Binding(
+            get: { feedbackErrorMessage != nil },
+            set: { if !$0 { feedbackErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(feedbackErrorMessage ?? "")
         }
     }
 
@@ -298,7 +328,7 @@ struct OrderDetailView: View {
                 // In-store & Tax-free badges
                 HStack(spacing: 8) {
                     if order.fulfillmentType == .inStore {
-                        Label("In-Store Purchase", systemImage: "bag.fill.badge.checkmark")
+                        Label("In-Store Purchase", systemImage: "bag.fill")
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(AppColors.success)
                             .padding(.horizontal, 10)
@@ -448,6 +478,39 @@ struct OrderDetailView: View {
                 }
                 .disabled(checkingWarrantyItemId == item.id)
                 .buttonStyle(.plain)
+            }
+
+            if canLeaveFeedback {
+                HStack {
+                    if let existing = feedbackByItemId[item.id] {
+                        HStack(spacing: 2) {
+                            ForEach(0..<5, id: \.self) { idx in
+                                Image(systemName: idx < existing.rating ? "star.fill" : "star")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(AppColors.accent)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppColors.accent.opacity(0.12))
+                        .clipShape(Capsule())
+                    }
+
+                    Spacer()
+
+                    Button {
+                        if productIdForFeedback(item) != nil {
+                            selectedFeedbackItem = item
+                        } else {
+                            feedbackErrorMessage = "Feedback is unavailable for this legacy order item."
+                        }
+                    } label: {
+                        Label(existingFeedbackLabel(for: item), systemImage: "bubble.left.and.bubble.right")
+                            .font(.caption.weight(.medium))
+                            .foregroundColor(productIdForFeedback(item) != nil ? AppColors.accent : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
         .padding(.vertical, 2)
@@ -795,6 +858,26 @@ struct OrderDetailView: View {
             && !exchangeReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var canLeaveFeedback: Bool {
+        (order.status == .completed || order.status == .delivered)
+            && !appState.isGuest
+            && currentFeedbackCustomerId != nil
+            && appState.currentUserRole == .customer
+            && order.customerEmail.caseInsensitiveCompare(appState.currentUserEmail) == .orderedSame
+    }
+
+    private var currentFeedbackCustomerId: UUID? {
+        appState.currentClientProfile?.id ?? (appState.currentUserRole == .customer ? appState.currentUserProfile?.id : nil)
+    }
+
+    private var currentFeedbackCustomerName: String {
+        if let fullName = appState.currentClientProfile?.fullName,
+           !fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return fullName
+        }
+        return appState.currentUserName
+    }
+
     // MARK: - Helpers
 
     private func summaryRow(label: String, value: String) -> some View {
@@ -934,6 +1017,132 @@ struct OrderDetailView: View {
         case .valid: return AppColors.success
         case .expired: return AppColors.warning
         case .notFound: return AppColors.error
+        }
+    }
+
+    private func existingFeedbackLabel(for item: ParsedItem) -> String {
+        feedbackByItemId[item.id] == nil ? "Leave Feedback" : "Edit Feedback"
+    }
+
+    @MainActor
+    private func loadFeedbackForOrderItems() async {
+        guard canLeaveFeedback, let customerId = currentFeedbackCustomerId else {
+            feedbackByItemId = [:]
+            return
+        }
+
+        var map: [String: ProductFeedbackDTO] = [:]
+        for item in parsedItems {
+            guard let productId = productIdForFeedback(item) else { continue }
+            if let feedback = try? await ProductFeedbackService.shared.fetchMyFeedback(
+                productId: productId,
+                customerId: customerId
+            ) {
+                map[item.id] = feedback
+            }
+        }
+        feedbackByItemId = map
+    }
+
+    @MainActor
+    private func submitProductFeedback(for item: ParsedItem, rating: Int, title: String, comment: String) async {
+        guard canLeaveFeedback, let customerId = currentFeedbackCustomerId else {
+            feedbackErrorMessage = "Sign in as a customer to submit feedback."
+            return
+        }
+        guard let productId = productIdForFeedback(item) else {
+            feedbackErrorMessage = "This order item is missing product mapping."
+            return
+        }
+
+        do {
+            let saved = try await ProductFeedbackService.shared.upsertFeedback(
+                productId: productId,
+                storeId: matchedStore?.id ?? appState.currentStoreId,
+                customerId: customerId,
+                customerName: currentFeedbackCustomerName,
+                rating: rating,
+                title: title,
+                comment: comment
+            )
+            feedbackByItemId[item.id] = saved
+            selectedFeedbackItem = nil
+        } catch {
+            feedbackErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func productIdForFeedback(_ item: ParsedItem) -> UUID? {
+        if let direct = item.productUUID { return direct }
+        let normalizedItemName = item.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return allProducts.first {
+            $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedItemName
+        }?.id
+    }
+}
+
+private struct ProductFeedbackComposerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let productName: String
+    let initialRating: Int
+    let initialTitle: String
+    let initialComment: String
+    let onSubmit: (Int, String, String) -> Void
+
+    @State private var rating: Int = 5
+    @State private var title: String = ""
+    @State private var comment: String = ""
+
+    private var canSubmit: Bool {
+        !comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Rating") {
+                    HStack(spacing: 8) {
+                        ForEach(1...5, id: \.self) { index in
+                            Button {
+                                rating = index
+                            } label: {
+                                Image(systemName: index <= rating ? "star.fill" : "star")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(AppColors.accent)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                Section("Headline (Optional)") {
+                    TextField("Summarize your experience", text: $title)
+                }
+
+                Section("Review") {
+                    TextField("Share details about \(productName)", text: $comment, axis: .vertical)
+                        .lineLimit(4...8)
+                }
+            }
+            .navigationTitle("Product Feedback")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Submit") {
+                        onSubmit(rating, title, comment)
+                    }
+                    .disabled(!canSubmit)
+                }
+            }
+            .onAppear {
+                rating = max(1, min(5, initialRating))
+                title = initialTitle
+                comment = initialComment
+            }
         }
     }
 }

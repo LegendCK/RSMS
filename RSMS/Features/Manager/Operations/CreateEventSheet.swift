@@ -49,39 +49,88 @@ struct CreateEventSheet: View {
 
                         // ── Type ────────────────────────────────────────────
                         formField(label: "EVENT TYPE") {
-                            Picker("Event Type", selection: $eventType) {
-                                ForEach(EventType.allCases, id: \.self) { type in
-                                    Text(type.rawValue).tag(type)
+                            HStack {
+                                Text(eventType.rawValue)
+                                    .font(AppTypography.bodyMedium)
+                                    .foregroundColor(AppColors.textPrimaryDark)
+                                Spacer()
+                                Menu {
+                                    Picker("Event Type", selection: $eventType) {
+                                        ForEach(EventType.allCases, id: \.self) { type in
+                                            Text(type.rawValue).tag(type)
+                                        }
+                                    }
+                                } label: {
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(AppColors.textSecondaryDark)
                                 }
                             }
-                            .pickerStyle(.menu)
-                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(AppSpacing.sm)
-                            .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
+                            .background(AppColors.backgroundSecondary, in: RoundedRectangle(cornerRadius: AppSpacing.radiusSmall, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppSpacing.radiusSmall, style: .continuous)
+                                    .stroke(AppColors.border.opacity(0.35), lineWidth: 1)
+                            )
                         }
 
                         // ── Date & Time ─────────────────────────────────────
                         formField(label: "DATE & TIME") {
-                            DatePicker("", selection: $scheduledDate, in: Date()..., displayedComponents: [.date, .hourAndMinute])
+                            HStack(spacing: AppSpacing.sm) {
+                                DatePicker(
+                                    "Date",
+                                    selection: $scheduledDate,
+                                    in: Date()...,
+                                    displayedComponents: .date
+                                )
+                                .datePickerStyle(.compact)
                                 .labelsHidden()
-                                .padding(AppSpacing.sm)
+                                .padding(.horizontal, AppSpacing.sm)
+                                .frame(height: 42)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
+                                .background(AppColors.backgroundSecondary, in: RoundedRectangle(cornerRadius: AppSpacing.radiusSmall, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: AppSpacing.radiusSmall, style: .continuous)
+                                        .stroke(AppColors.border.opacity(0.35), lineWidth: 1)
+                                )
+
+                                DatePicker(
+                                    "Time",
+                                    selection: $scheduledDate,
+                                    displayedComponents: .hourAndMinute
+                                )
+                                .datePickerStyle(.compact)
+                                .labelsHidden()
+                                .padding(.horizontal, AppSpacing.sm)
+                                .frame(height: 42)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(AppColors.backgroundSecondary, in: RoundedRectangle(cornerRadius: AppSpacing.radiusSmall, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: AppSpacing.radiusSmall, style: .continuous)
+                                        .stroke(AppColors.border.opacity(0.35), lineWidth: 1)
+                                )
+                            }
                         }
 
                         // ── Duration & Capacity ─────────────────────────────
                         HStack(spacing: AppSpacing.sm) {
-                            formField(label: "DURATION (MIN)") {
-                                Stepper("\(durationMinutes) min", value: $durationMinutes, in: 30...480, step: 30)
-                                    .font(AppTypography.bodySmall)
-                                    .padding(AppSpacing.sm)
-                                    .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
+                            numericStepperField(
+                                label: "DURATION (MIN)",
+                                valueText: "\(durationMinutes)",
+                                suffixText: "minutes"
+                            ) {
+                                Stepper("", value: $durationMinutes, in: 30...480, step: 30)
+                                    .labelsHidden()
+                                    .tint(AppColors.accent)
                             }
-                            formField(label: "CAPACITY") {
-                                Stepper("\(capacity) guests", value: $capacity, in: 1...500, step: 5)
-                                    .font(AppTypography.bodySmall)
-                                    .padding(AppSpacing.sm)
-                                    .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
+                            numericStepperField(
+                                label: "CAPACITY",
+                                valueText: "\(capacity)",
+                                suffixText: "guests"
+                            ) {
+                                Stepper("", value: $capacity, in: 1...500, step: 5)
+                                    .labelsHidden()
+                                    .tint(AppColors.accent)
                             }
                         }
 
@@ -100,14 +149,24 @@ struct CreateEventSheet: View {
                                     ForEach(currencies, id: \.self) { Text($0).tag($0) }
                                 }
                                 .pickerStyle(.menu)
-                                .padding(AppSpacing.xs)
-                                .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
+                                .padding(.horizontal, AppSpacing.sm)
+                                .frame(height: 42)
+                                .background(AppColors.backgroundSecondary, in: RoundedRectangle(cornerRadius: AppSpacing.radiusSmall, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: AppSpacing.radiusSmall, style: .continuous)
+                                        .stroke(AppColors.border.opacity(0.35), lineWidth: 1)
+                                )
 
                                 TextField("0.00", text: $estimatedCost)
                                     .keyboardType(.decimalPad)
                                     .font(AppTypography.bodyMedium)
-                                    .padding(AppSpacing.sm)
-                                    .managerCardSurface(cornerRadius: AppSpacing.radiusSmall)
+                                    .padding(.horizontal, AppSpacing.sm)
+                                    .frame(height: 42)
+                                    .background(AppColors.backgroundSecondary, in: RoundedRectangle(cornerRadius: AppSpacing.radiusSmall, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: AppSpacing.radiusSmall, style: .continuous)
+                                            .stroke(AppColors.border.opacity(0.35), lineWidth: 1)
+                                    )
                             }
                             Text("Used to calculate ROI % in the sales report.")
                                 .font(AppTypography.micro)
@@ -166,7 +225,7 @@ struct CreateEventSheet: View {
                                 if isSubmitting {
                                     ProgressView().tint(.white)
                                 } else {
-                                    Label("Create Event", systemImage: "star.fill")
+                                    Label("Create Event", systemImage: "sparkles")
                                         .font(AppTypography.label)
                                         .foregroundColor(.white)
                                 }
@@ -181,19 +240,20 @@ struct CreateEventSheet: View {
                         Spacer().frame(height: AppSpacing.xl)
                     }
                     .padding(.horizontal, AppSpacing.screenHorizontal)
-                    .padding(.top, AppSpacing.md)
+                    .padding(.top, AppSpacing.sm)
+                    .padding(.bottom, AppSpacing.xxl)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("CREATE EVENT")
-                        .font(AppTypography.overline)
-                        .tracking(2)
-                        .foregroundColor(AppColors.accent)
+                    Text("Create Event")
+                        .font(AppTypography.navTitle)
+                        .foregroundColor(AppColors.textPrimaryDark)
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .font(.system(size: 16, weight: .regular))
                         .foregroundColor(AppColors.textPrimaryDark)
                 }
                 if !isSubmitting {
@@ -249,12 +309,47 @@ struct CreateEventSheet: View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
             Text(label)
                 .font(AppTypography.overline)
-                .tracking(2)
+                .tracking(1.6)
                 .foregroundColor(AppColors.accent)
             content()
         }
         .padding(AppSpacing.md)
         .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
+    }
+
+    @ViewBuilder
+    private func numericStepperField<Content: View>(
+        label: String,
+        valueText: String,
+        suffixText: String,
+        @ViewBuilder stepper: () -> Content
+    ) -> some View {
+        formField(label: label) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                HStack(alignment: .lastTextBaseline, spacing: 4) {
+                    Text(valueText)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundColor(AppColors.textPrimaryDark)
+                    Text(suffixText)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+                HStack {
+                    Spacer()
+                    stepper()
+                        .frame(width: 112, alignment: .trailing)
+                }
+            }
+            .padding(AppSpacing.sm)
+            .background(AppColors.backgroundSecondary, in: RoundedRectangle(cornerRadius: AppSpacing.radiusSmall, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.radiusSmall, style: .continuous)
+                    .stroke(AppColors.border.opacity(0.35), lineWidth: 1)
+            )
+        }
     }
 
     private func create() async {

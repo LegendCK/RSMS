@@ -15,6 +15,7 @@ struct SACartItem: Identifiable {
     let productBrand: String
     let unitPrice: Double
     let imageURL: URL?
+    let isInStockAtAdd: Bool
     let selectedColor: String?
     let selectedSize: String?
     var quantity: Int
@@ -36,6 +37,7 @@ struct SACartItem: Identifiable {
         productBrand: String,
         unitPrice: Double,
         imageURL: URL? = nil,
+        isInStockAtAdd: Bool = true,
         selectedColor: String? = nil,
         selectedSize: String? = nil,
         quantity: Int = 1
@@ -46,6 +48,7 @@ struct SACartItem: Identifiable {
         self.productBrand = productBrand
         self.unitPrice    = unitPrice
         self.imageURL     = imageURL
+        self.isInStockAtAdd = isInStockAtAdd
         self.selectedColor = selectedColor
         self.selectedSize  = selectedSize
         self.quantity     = quantity

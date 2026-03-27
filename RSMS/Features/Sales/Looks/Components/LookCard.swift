@@ -6,21 +6,18 @@
 import SwiftUI
 
 struct LookCard: View {
-    let look: Look
+    let look: SalesLookDTO
     let itemCount: Int
     let totalPrice: String
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Visual Collage Placeholder
-            ZStack {
-                Color(.systemGray5)
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 40, weight: .ultraLight))
-                    .foregroundColor(.secondary)
-            }
+            ProductArtworkView(
+                imageSource: look.thumbnailSource ?? "",
+                fallbackSymbol: "photo.on.rectangle.angled",
+                cornerRadius: 12
+            )
             .frame(height: 160)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(look.name)

@@ -151,6 +151,7 @@ enum BOPISOrderSeedData {
             return BOPISOrder(
                 id:             UUID(),
                 orderNumber:    r.number,
+                clientId:       nil,
                 channel:        r.channel,
                 status:         r.status,
                 clientEmail:    r.client,

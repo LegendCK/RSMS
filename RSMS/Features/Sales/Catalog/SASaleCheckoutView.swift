@@ -21,6 +21,7 @@ struct SASaleCheckoutView: View {
     @State private var splitPayments: [SplitPaymentDraft] = [
         SplitPaymentDraft(method: .cardReader, amountText: "")
     ]
+    @State private var isSplitPaymentEnabled = false
     @State private var notes: String = ""
     @State private var showError = false
 
@@ -67,7 +68,11 @@ struct SASaleCheckoutView: View {
     }
 
     private var parsedSplits: [(method: PaymentMethod, amount: Double)] {
-        splitPayments.compactMap { split in
+        if !isSplitPaymentEnabled {
+            let method = splitPayments.first?.method ?? .cardReader
+            return [(method: method, amount: round2(cart.total))]
+        }
+        return splitPayments.compactMap { split in
             guard let amount = amountValue(from: split.amountText), amount > 0 else { return nil }
             return (split.method, round2(amount))
         }
@@ -82,7 +87,8 @@ struct SASaleCheckoutView: View {
     }
 
     private var hasInvalidAmountInput: Bool {
-        splitPayments.contains { split in
+        if !isSplitPaymentEnabled { return false }
+        return splitPayments.contains { split in
             let trimmed = split.amountText.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { return false }
             guard let amount = amountValue(from: trimmed) else { return true }
@@ -91,7 +97,8 @@ struct SASaleCheckoutView: View {
     }
 
     private var hasMissingAmounts: Bool {
-        splitPayments.contains {
+        if !isSplitPaymentEnabled { return false }
+        return splitPayments.contains {
             $0.amountText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
@@ -163,8 +170,9 @@ struct SASaleCheckoutView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(step == 0 ? "PAYMENT" : "REVIEW ORDER")
-                        .font(AppTypography.navTitle)
-                        .foregroundColor(AppColors.textPrimaryDark)
+                        .font(AppTypography.overline)
+                        .tracking(2)
+                        .foregroundColor(AppColors.accent)
                 }
                 ToolbarItem(placement: .navigationBarLeading) {
                     if step == 0 {
@@ -188,7 +196,7 @@ struct SASaleCheckoutView: View {
                     }
                 }
             }
-            .overlay(alignment: .bottom) { bottomBar }
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -196,6 +204,9 @@ struct SASaleCheckoutView: View {
             }
             .onChange(of: cart.errorMessage) { _, newVal in
                 if newVal != nil { showError = true }
+            }
+            .onAppear {
+                applySinglePaymentDefault()
             }
         }
     }
@@ -247,26 +258,60 @@ struct SASaleCheckoutView: View {
             fulfillmentModeSection
 
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                sectionLabel("SPLIT PAYMENTS")
+                sectionLabel(isSplitPaymentEnabled ? "SPLIT PAYMENTS" : "PAYMENT METHOD")
                 VStack(spacing: 0) {
-                    ForEach($splitPayments) { $split in
-                        splitPaymentRow($split)
-                        if split.id != splitPayments.last?.id {
-                            Divider().padding(.leading, 60)
+                    if isSplitPaymentEnabled {
+                        ForEach($splitPayments) { $split in
+                            splitPaymentRow($split)
+                            if split.id != splitPayments.last?.id {
+                                Divider().padding(.leading, 60)
+                            }
                         }
+                    } else if let first = splitPayments.first {
+                        splitPaymentRow(singlePaymentBinding(first.id), showAmountInput: false)
                     }
                 }
                 .background(AppColors.backgroundSecondary)
                 .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous))
 
-                Button {
-                    addPaymentRow()
-                } label: {
-                    Label("Add Payment Method", systemImage: "plus.circle.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppColors.accent)
-                        .padding(.top, 8)
+                if isSplitPaymentEnabled {
+                    Button {
+                        addPaymentRow()
+                    } label: {
+                        Label("Add Payment Method", systemImage: "plus.circle.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppColors.accent)
+                            .padding(.top, 8)
+                    }
+                    Button {
+                        disableSplitPayment()
+                    } label: {
+                        Label("Use Single Payment", systemImage: "arrow.uturn.backward.circle")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(AppColors.textSecondaryDark)
+                    }
+                    .padding(.top, 2)
+                } else {
+                    Button {
+                        enableSplitPayment()
+                    } label: {
+                        Label("Enable Split Payment", systemImage: "rectangle.3.group.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppColors.accent)
+                            .padding(.top, 8)
+                    }
                 }
+            }
+
+            if !isSplitPaymentEnabled {
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(AppColors.info)
+                    Text("Single payment is active. Enable split only if needed.")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             paymentBalanceCard
@@ -290,11 +335,14 @@ struct SASaleCheckoutView: View {
 
     @ViewBuilder
     private var fulfillmentModeSection: some View {
+        let canHandoverNow = !cart.hasOutOfStockItems
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
             sectionLabel("FULFILLMENT")
             VStack(spacing: 0) {
                 // Hand Over Now (in stock)
-                Button { cart.isHandoverNow = true } label: {
+                Button {
+                    if canHandoverNow { cart.isHandoverNow = true }
+                } label: {
                     HStack(spacing: AppSpacing.md) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -302,14 +350,14 @@ struct SASaleCheckoutView: View {
                                       ? AppColors.success.opacity(0.12)
                                       : AppColors.backgroundTertiary)
                                 .frame(width: 40, height: 40)
-                            Image(systemName: "bag.fill.badge.checkmark")
+                            Image(systemName: "bag.fill")
                                 .font(.system(size: 16, weight: .light))
                                 .foregroundColor(cart.isHandoverNow ? AppColors.success : AppColors.neutral500)
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Hand Over Now")
                                 .font(AppTypography.label)
-                                .foregroundColor(AppColors.textPrimaryDark)
+                                .foregroundColor(canHandoverNow ? AppColors.textPrimaryDark : AppColors.textSecondaryDark)
                             Text("Item is in stock — give to customer directly")
                                 .font(AppTypography.caption)
                                 .foregroundColor(AppColors.textSecondaryDark)
@@ -323,6 +371,7 @@ struct SASaleCheckoutView: View {
                     .padding(.vertical, 12)
                 }
                 .buttonStyle(.plain)
+                .disabled(!canHandoverNow)
 
                 Divider().padding(.leading, 60)
 
@@ -363,10 +412,25 @@ struct SASaleCheckoutView: View {
                 RoundedRectangle(cornerRadius: AppSpacing.radiusLarge, style: .continuous)
                     .stroke(cart.isHandoverNow ? AppColors.success.opacity(0.3) : AppColors.accent.opacity(0.3), lineWidth: 1)
             )
+
+            if cart.hasOutOfStockItems {
+                HStack(spacing: 8) {
+                    Image(systemName: "shippingbox.fill")
+                        .foregroundColor(AppColors.warning)
+                    Text("Out-of-stock item in cart: fulfillment is set to Order for Delivery.")
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                }
+            }
+        }
+        .onAppear {
+            if cart.hasOutOfStockItems {
+                cart.isHandoverNow = false
+            }
         }
     }
 
-    private func splitPaymentRow(_ split: Binding<SplitPaymentDraft>) -> some View {
+    private func splitPaymentRow(_ split: Binding<SplitPaymentDraft>, showAmountInput: Bool = true) -> some View {
         HStack(spacing: AppSpacing.md) {
             Menu {
                 ForEach(PaymentMethod.allCases) { method in
@@ -393,14 +457,30 @@ struct SASaleCheckoutView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
 
-            TextField("Amount", text: split.amountText)
-                .keyboardType(.decimalPad)
-                .font(AppTypography.label)
-                .foregroundColor(AppColors.textPrimaryDark)
+            if showAmountInput {
+                TextField("Amount", text: split.amountText)
+                    .keyboardType(.decimalPad)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(AppColors.backgroundTertiary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            } else {
+                HStack {
+                    Text("Amount")
+                        .font(AppTypography.bodySmall)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                    Spacer()
+                    Text(formatCurrency(cart.total))
+                        .font(AppTypography.label)
+                        .foregroundColor(AppColors.textPrimaryDark)
+                }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .background(AppColors.backgroundTertiary)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
 
             if splitPayments.count > 1 {
                 Button {
@@ -789,7 +869,7 @@ struct SASaleCheckoutView: View {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 sectionLabel("FULFILLMENT")
                 HStack(spacing: AppSpacing.md) {
-                    Image(systemName: cart.isHandoverNow ? "bag.fill.badge.checkmark" : "shippingbox.fill")
+                    Image(systemName: cart.isHandoverNow ? "bag.fill" : "shippingbox.fill")
                         .font(.system(size: 18, weight: .light))
                         .foregroundColor(cart.isHandoverNow ? AppColors.success : AppColors.accent)
                         .frame(width: 24)
@@ -891,14 +971,13 @@ struct SASaleCheckoutView: View {
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) { step = 1 }
                     } label: {
-                        Text("Review Order")
+                        Label("Review Order", systemImage: "doc.text.magnifyingglass")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(AppColors.accent)
-                            .clipShape(Capsule())
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppColors.accent)
+                    .buttonBorderShape(.capsule)
                 } else {
                     if let message = paymentValidationMessage {
                         Text(message)
@@ -928,20 +1007,19 @@ struct SASaleCheckoutView: View {
                             }
                             Text(cart.isProcessing ? "Processing..." : "Complete Sale")
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(canCompleteSale ? AppColors.accent : AppColors.neutral500)
-                        .clipShape(Capsule())
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(canCompleteSale ? AppColors.accent : AppColors.neutral500)
+                    .buttonBorderShape(.capsule)
                     .disabled(!canCompleteSale)
                 }
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, 12)
             .padding(.bottom, 28)
-            .background(.ultraThinMaterial)
+            .background(AppColors.backgroundPrimary)
         }
     }
 
@@ -964,7 +1042,49 @@ struct SASaleCheckoutView: View {
         splitPayments.removeAll { $0.id == id }
         if splitPayments.isEmpty {
             splitPayments = [SplitPaymentDraft(method: .cardReader, amountText: "")]
+            isSplitPaymentEnabled = false
+        } else if splitPayments.count == 1 {
+            isSplitPaymentEnabled = false
         }
+    }
+
+    private func enableSplitPayment() {
+        isSplitPaymentEnabled = true
+        if splitPayments.count < 2 {
+            addPaymentRow()
+        }
+    }
+
+    private func disableSplitPayment() {
+        isSplitPaymentEnabled = false
+        if let first = splitPayments.first {
+            splitPayments = [first]
+        } else {
+            splitPayments = [SplitPaymentDraft(method: .cardReader, amountText: "")]
+        }
+    }
+
+    private func applySinglePaymentDefault() {
+        isSplitPaymentEnabled = false
+        let method = splitPayments.first?.method ?? .cardReader
+        splitPayments = [SplitPaymentDraft(method: method, amountText: "")]
+    }
+
+    private func singlePaymentBinding(_ id: UUID) -> Binding<SplitPaymentDraft> {
+        Binding(
+            get: {
+                splitPayments.first(where: { $0.id == id }) ?? SplitPaymentDraft(method: .cardReader, amountText: "")
+            },
+            set: { newValue in
+                if let index = splitPayments.firstIndex(where: { $0.id == id }) {
+                    splitPayments[index] = newValue
+                } else if splitPayments.isEmpty {
+                    splitPayments = [newValue]
+                } else {
+                    splitPayments[0] = newValue
+                }
+            }
+        )
     }
 
     private func amountValue(from input: String) -> Double? {

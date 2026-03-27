@@ -209,7 +209,7 @@ struct ManagerDashboardView: View {
                                 .font(AppTypography.displaySmall)
                                 .foregroundColor(AppColors.textPrimaryDark)
 
-                            ProgressView(value: min(max(snapshot.sales.targetProgress, 0), 1.25))
+                            ProgressView(value: clampedProgress(snapshot.sales.targetProgress))
                                 .tint(progressColor(progress: snapshot.sales.targetProgress))
 
                             HStack {
@@ -433,7 +433,7 @@ struct ManagerDashboardView: View {
                                     .foregroundColor(AppColors.textPrimaryDark)
 
                                 // Progress bar
-                                ProgressView(value: performer.revenue / topRevenue)
+                                ProgressView(value: clampedProgress(performer.revenue / topRevenue))
                                     .tint(index == 0 ? AppColors.accent : AppColors.secondary)
 
                                 // Stats
@@ -839,6 +839,11 @@ struct ManagerDashboardView: View {
         if progress >= 1 { return AppColors.success }
         if progress >= 0.85 { return AppColors.warning }
         return AppColors.error
+    }
+
+    private func clampedProgress(_ value: Double) -> Double {
+        guard value.isFinite else { return 0 }
+        return min(max(value, 0), 1)
     }
 
     private func monthLabel(from date: Date) -> String {

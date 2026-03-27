@@ -31,7 +31,7 @@ struct SalesProfileView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(displayName)
                                 .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             Text(appState.currentUserEmail)
                                 .font(.system(size: 13, weight: .light))
                                 .foregroundColor(.secondary)
@@ -48,13 +48,13 @@ struct SalesProfileView: View {
 
                 // Account section
                 Section("Account") {
-                    NavigationLink(destination: SalesSimpleInfoView(title: "My Performance", message: "Track daily targets, conversion, and revenue performance.").toolbar(.hidden, for: .tabBar)) {
+                    NavigationLink(destination: SalesPerformanceView().toolbar(.hidden, for: .tabBar)) {
                         Label("My Performance", systemImage: "chart.bar.fill")
                     }
-                    NavigationLink(destination: SalesSimpleInfoView(title: "Notifications", message: "Manage appointment alerts, follow-up reminders, and operational updates.").toolbar(.hidden, for: .tabBar)) {
+                    NavigationLink(destination: SalesNotificationSettingsView().toolbar(.hidden, for: .tabBar)) {
                         Label("Notifications", systemImage: "bell.fill")
                     }
-                    NavigationLink(destination: SalesSimpleInfoView(title: "Settings", message: "Configure app preferences and account behavior.").toolbar(.hidden, for: .tabBar)) {
+                    NavigationLink(destination: SalesAssociateSettingsView().toolbar(.hidden, for: .tabBar)) {
                         Label("Settings", systemImage: "gearshape.fill")
                     }
                 }
@@ -74,17 +74,14 @@ struct SalesProfileView: View {
 
                 // Preferences
                 Section("Preferences") {
-                    NavigationLink(destination: NotificationCenterView().toolbar(.hidden, for: .tabBar)) {
-                        Label("Notifications", systemImage: "bell")
-                    }
-                    NavigationLink(destination: SalesSimpleInfoView(title: "Privacy & Security", message: "Manage account protection settings, access controls, and secure usage practices.").toolbar(.hidden, for: .tabBar)) {
+                    NavigationLink(destination: SalesInfoView(title: "Privacy & Security", message: "Manage account protection settings, access controls, and secure usage practices.").toolbar(.hidden, for: .tabBar)) {
                         Label("Privacy & Security", systemImage: "lock.shield")
                     }
                 }
 
                 // Support
                 Section("Support") {
-                    NavigationLink(destination: SalesSimpleInfoView(title: "Help & Support", message: "Reach operations support, report app issues, and view support guidance for daily retail workflows.").toolbar(.hidden, for: .tabBar)) {
+                    NavigationLink(destination: SalesInfoView(title: "Help & Support", message: "Reach operations support, report app issues, and view support guidance for daily retail workflows.").toolbar(.hidden, for: .tabBar)) {
                         Label("Help & Support", systemImage: "questionmark.circle")
                     }
                 }
@@ -118,8 +115,11 @@ struct SalesProfileView: View {
                     Text("PROFILE")
                         .font(.system(size: 12, weight: .bold))
                         .tracking(3)
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
+            }
+            .safeAreaInset(edge: .bottom) {
+                Color.clear.frame(height: 8)
             }
             .alert("Sign Out", isPresented: $showLogoutConfirmation) {
                 Button("Cancel", role: .cancel) { }
@@ -144,7 +144,115 @@ struct SalesProfileView: View {
     }
 }
 
-private struct SalesSimpleInfoView: View {
+private struct SalesPerformanceView: View {
+    var body: some View {
+        List {
+            Section("Today") {
+                metricRow(icon: "indianrupeesign.circle.fill", title: "Sales Achieved", value: "₹2,45,000")
+                metricRow(icon: "bag.fill", title: "Orders Closed", value: "6")
+                metricRow(icon: "person.2.fill", title: "Clients Assisted", value: "14")
+            }
+
+            Section("Week To Date") {
+                metricRow(icon: "chart.line.uptrend.xyaxis", title: "Conversion Rate", value: "31%")
+                metricRow(icon: "calendar", title: "Appointments Completed", value: "18")
+                metricRow(icon: "arrow.clockwise.circle.fill", title: "Repeat Clients", value: "7")
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("MY PERFORMANCE")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func metricRow(icon: String, title: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(AppColors.accent)
+                .frame(width: 20)
+            Text(title)
+            Spacer()
+            Text(value)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+private struct SalesNotificationSettingsView: View {
+    @State private var appointmentAlerts = true
+    @State private var clientFollowUps = true
+    @State private var operationalUpdates = true
+    @State private var stockAlerts = false
+
+    var body: some View {
+        List {
+            Section("Alert Channels") {
+                Toggle("Appointment Alerts", isOn: $appointmentAlerts)
+                Toggle("Client Follow-Up Reminders", isOn: $clientFollowUps)
+                Toggle("Operational Updates", isOn: $operationalUpdates)
+                Toggle("Stock Alerts", isOn: $stockAlerts)
+            }
+
+            Section("Delivery") {
+                Label("In-app notifications are enabled", systemImage: "app.badge")
+                    .foregroundColor(.secondary)
+                Label("Push notifications are enabled", systemImage: "iphone.badge.checkmark")
+                    .foregroundColor(.secondary)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("NOTIFICATIONS")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+            }
+        }
+    }
+}
+
+private struct SalesAssociateSettingsView: View {
+    @State private var compactCatalogMode = false
+    @State private var showTaxHints = true
+    @State private var biometricLock = true
+
+    var body: some View {
+        List {
+            Section("Point of Sale") {
+                Toggle("Compact Catalog Grid", isOn: $compactCatalogMode)
+                Toggle("Show Tax-Free Guidance", isOn: $showTaxHints)
+            }
+
+            Section("Security") {
+                Toggle("Biometric App Lock", isOn: $biometricLock)
+                Label("Session expires after inactivity", systemImage: "lock.shield")
+                    .foregroundColor(.secondary)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("SETTINGS")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+            }
+        }
+    }
+}
+
+private struct SalesInfoView: View {
     let title: String
     let message: String
 

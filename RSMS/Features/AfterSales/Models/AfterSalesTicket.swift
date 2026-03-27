@@ -2,7 +2,7 @@
 //  AfterSalesTicket.swift
 //  infosys2
 //
-//  SwiftData model for after-sales service tickets (repairs, warranty, authentication, valuation).
+//  SwiftData model for after-sales service tickets (repairs, warranty, authentication).
 //
 
 import Foundation
@@ -13,7 +13,6 @@ enum TicketType: String, Codable, CaseIterable {
     case servicing = "Servicing"
     case warranty = "Warranty Claim"
     case authentication = "Authentication"
-    case valuation = "Valuation"
     case customization = "Customization"
     case exchange = "Exchange"
     case returnItem = "Return"

@@ -35,20 +35,20 @@ struct ProfileView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(appState.isGuest ? "Guest" : appState.currentUserName)
                                 .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.black)
+                                .foregroundColor(AppColors.textPrimaryDark)
                             if appState.isGuest {
                                 Text("Browsing as guest")
                                     .font(.system(size: 13, weight: .light))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(AppColors.textSecondaryDark)
                             } else {
                                 Text(appState.currentUserEmail)
                                     .font(.system(size: 13, weight: .light))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(AppColors.textSecondaryDark)
                             }
                             Text(appState.isGuest ? "GUEST" : appState.currentUserRole.rawValue.uppercased())
                                 .font(.system(size: 9, weight: .semibold))
                                 .tracking(2)
-                                .foregroundColor(appState.isGuest ? .secondary : AppColors.accent)
+                                .foregroundColor(appState.isGuest ? AppColors.textSecondaryDark : AppColors.accent)
                         }
 
                         Spacer()
@@ -97,7 +97,7 @@ struct ProfileView: View {
 
                 // Preferences
                 Section("Preferences") {
-                    NavigationLink(destination: NotificationCenterView()) {
+                    NavigationLink(destination: NotificationCenterView(showsCloseButton: false)) {
                         Label("Notifications", systemImage: "bell")
                     }
                     NavigationLink(destination: ProfileInfoView(
@@ -156,7 +156,7 @@ struct ProfileView: View {
                     Text("PROFILE")
                         .font(.system(size: 12, weight: .bold))
                         .tracking(3)
-                        .foregroundColor(.black)
+                        .foregroundColor(AppColors.textPrimaryDark)
                 }
             }
             .alert("Sign Out", isPresented: $showLogoutConfirmation) {
@@ -165,7 +165,7 @@ struct ProfileView: View {
             } message: {
                 Text("Are you sure you want to sign out?")
             }
-            .sheet(isPresented: $showSignIn) {
+            .fullScreenCover(isPresented: $showSignIn) {
                 GuestAuthGateView(pendingAction: "access your account")
             }
             .task {

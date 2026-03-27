@@ -8,6 +8,7 @@
 
 import SwiftUI
 import SwiftData
+import StripePaymentSheet
 
 struct BuyNowSheetView: View {
     let product: Product
@@ -49,12 +50,26 @@ struct BuyNowSheetView: View {
     @State private var cardExpiry  = ""
     @State private var cardCVV     = ""
 
+    // Stripe card details
+    @State private var stripeError: String? = nil
+    @State private var showStripeError  = false
+    @State private var stripePaymentSheet: PaymentSheet?
+    @State private var isPresentingStripePaymentSheet = false
+    @State private var pendingStripeCheckout: PendingStripeBuyNowContext? = nil
+
     // Order result
     @State private var placedOrder: Order? = nil
     @State private var showConfirmation    = false
     @State private var isPlacing           = false
     @State private var orderError: String? = nil
     @State private var showOrderError      = false
+
+    private struct PendingStripeBuyNowContext {
+        let order: Order
+        let paymentIntentId: String
+        let amount: Double
+        let processedBy: UUID?
+    }
 
     private var savedAddresses: [SavedAddress] {
         allAddresses
@@ -99,7 +114,7 @@ struct BuyNowSheetView: View {
     private var total: Double    { subtotal + tax }
 
     var body: some View {
-        NavigationStack {
+        let baseView = NavigationStack {
             ZStack {
                 AppColors.backgroundPrimary.ignoresSafeArea()
 
@@ -174,6 +189,11 @@ struct BuyNowSheetView: View {
             }, message: {
                 Text(orderError ?? "Something went wrong. Please try again.")
             })
+            .alert("Payment Error", isPresented: $showStripeError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(stripeError ?? "An unknown payment error occurred.")
+            }
             .onAppear {
                 Task { @MainActor in
                     if savedAddresses.isEmpty,
@@ -195,6 +215,17 @@ struct BuyNowSheetView: View {
                 dismiss()
             }
             .task { await refreshPromotions() }
+        }
+
+        if let sheet = stripePaymentSheet {
+            baseView.paymentSheet(
+                isPresented: $isPresentingStripePaymentSheet,
+                paymentSheet: sheet
+            ) { result in
+                handleStripePaymentResult(result)
+            }
+        } else {
+            baseView
         }
     }
 
@@ -508,6 +539,11 @@ struct BuyNowSheetView: View {
             if selectedPayment == .creditCard {
                 cardFieldsSection
             }
+
+            if selectedPayment == .stripe {
+                stripeCardFormSection
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
 
@@ -642,6 +678,7 @@ struct BuyNowSheetView: View {
         switch selectedPayment {
         case .applePay:    return "apple.logo"
         case .creditCard:  return "creditcard.fill"
+        case .stripe:      return "creditcard.and.123"
         case .payInStore:  return "banknote.fill"
         case .googlePay:   return "g.circle.fill"
         }
@@ -742,6 +779,9 @@ struct BuyNowSheetView: View {
         case 1:
             if selectedPayment == .creditCard {
                 return !cardNumber.isEmpty && !cardExpiry.isEmpty && !cardCVV.isEmpty
+            }
+            if selectedPayment == .stripe {
+                return true
             }
             return true
         default: return true
@@ -934,9 +974,90 @@ struct BuyNowSheetView: View {
             print("[BuyNowSheetView] No client UUID in AppState — skipping Supabase sync")
         }
 
-        // 3. Navigate to confirmation
+        // 3. If Stripe selected, process payment before navigating to confirmation
+        if selectedPayment == .stripe {
+            let amountInPaise = Int(total * 100)
+            let result = await StripePaymentService.shared.preparePaymentSheet(
+                amountInPaise: amountInPaise,
+                currency: "inr",
+                orderId: order.id
+            )
+
+            switch result {
+            case .success(let session):
+                pendingStripeCheckout = PendingStripeBuyNowContext(
+                    order: order,
+                    paymentIntentId: session.paymentIntentId,
+                    amount: total,
+                    processedBy: appState.currentUserProfile?.id
+                )
+                stripePaymentSheet = session.paymentSheet
+                isPlacing = false
+                DispatchQueue.main.async {
+                    isPresentingStripePaymentSheet = true
+                }
+                return
+            case .failure(let error):
+                print("[BuyNowSheetView] ❌ Stripe PaymentSheet preparation failed: \(error.localizedDescription)")
+                stripeError = error.localizedDescription
+                showStripeError = true
+                isPlacing = false
+                return
+            }
+        } else {
+            print("[BuyNowSheetView] Payment method: \(selectedPayment.title) (not Stripe, skipping payment processing)")
+        }
+
+        completeBuyNow(order: order)
+    }
+
+    @MainActor
+    private func handleStripePaymentResult(_ result: PaymentSheetResult) {
+        Task { @MainActor in
+            guard let pending = pendingStripeCheckout else {
+                isPlacing = false
+                return
+            }
+
+            switch result {
+            case .completed:
+                do {
+                    try await PaymentRecordService.shared.recordPayment(
+                        orderId: pending.order.id,
+                        method: "stripe",
+                        amount: pending.amount,
+                        currency: "INR",
+                        status: "completed",
+                        paymentReference: pending.paymentIntentId,
+                        stripePaymentIntentId: pending.paymentIntentId,
+                        processedBy: pending.processedBy
+                    )
+                } catch {
+                    print("[BuyNowSheetView] Payment record save failed (non-fatal): \(error)")
+                }
+                completeBuyNow(order: pending.order)
+
+            case .canceled:
+                stripeError = "Payment was cancelled."
+                showStripeError = true
+                isPlacing = false
+
+            case .failed(let error):
+                stripeError = error.localizedDescription
+                showStripeError = true
+                isPlacing = false
+            }
+
+            pendingStripeCheckout = nil
+            stripePaymentSheet = nil
+        }
+    }
+
+    @MainActor
+    private func completeBuyNow(order: Order) {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         placedOrder = order
+        isPlacing = false
         showConfirmation = true
     }
 
@@ -950,6 +1071,7 @@ struct BuyNowSheetView: View {
 enum BuyNowPayment: String, CaseIterable {
     case applePay   = "Apple Pay"
     case creditCard = "Credit / Debit Card"
+    case stripe     = "Pay with Stripe"
     case googlePay  = "Google Pay"
     case payInStore = "Pay In Store"
 
@@ -959,6 +1081,7 @@ enum BuyNowPayment: String, CaseIterable {
         switch self {
         case .applePay:   return "Touch ID or Face ID"
         case .creditCard: return "Visa, Mastercard, Amex"
+        case .stripe:     return "Secure card payment via Stripe"
         case .googlePay:  return "Google Wallet"
         case .payInStore: return "Pay at the boutique"
         }
@@ -968,8 +1091,37 @@ enum BuyNowPayment: String, CaseIterable {
         switch self {
         case .applePay:   return "apple.logo"
         case .creditCard: return "creditcard.fill"
+        case .stripe:     return "creditcard.and.123"
         case .googlePay:  return "g.circle.fill"
         case .payInStore: return "banknote.fill"
+        }
+    }
+}
+
+// MARK: - Stripe Card Form (BuyNow)
+
+private extension BuyNowSheetView {
+
+    var stripeCardFormSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("STRIPE PAYMENT")
+                .font(AppTypography.overline)
+                .tracking(2)
+                .foregroundColor(AppColors.accent)
+
+            HStack(spacing: AppSpacing.xs) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppColors.success)
+                Text("Secured by Stripe")
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.success)
+            }
+
+            Text("Card entry and authentication are handled in Stripe's secure payment sheet after you tap Place Order.")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

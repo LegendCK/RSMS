@@ -62,14 +62,24 @@ struct CategoriesView: View {
                                     Text(gender.rawValue.uppercased())
                                         .font(.system(size: 10, weight: selectedGender == gender ? .bold : .medium))
                                         .tracking(1.5)
-                                        .foregroundColor(selectedGender == gender ? .white : .black)
+                                        .foregroundColor(
+                                            selectedGender == gender
+                                                ? AppColors.textPrimaryLight
+                                                : AppColors.textPrimaryDark
+                                        )
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 7)
-                                        .background(selectedGender == gender ? Color.black : Color.clear)
+                                        .background(
+                                            selectedGender == gender
+                                                ? AppColors.accent
+                                                : AppColors.backgroundSecondary
+                                        )
                                         .clipShape(Capsule())
                                         .overlay(
                                             Capsule().strokeBorder(
-                                                selectedGender == gender ? Color.clear : Color(.systemGray4),
+                                                selectedGender == gender
+                                                    ? AppColors.accent
+                                                    : AppColors.border.opacity(0.6),
                                                 lineWidth: 1
                                             )
                                         )

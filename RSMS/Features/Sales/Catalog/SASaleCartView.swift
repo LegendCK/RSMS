@@ -45,8 +45,9 @@ struct SASaleCartView: View {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 1) {
                         Text("SALE CART")
-                            .font(AppTypography.navTitle)
-                            .foregroundColor(AppColors.textPrimaryDark)
+                            .font(AppTypography.overline)
+                            .tracking(2)
+                            .foregroundColor(AppColors.accent)
                         if cart.itemCount > 0 {
                             Text("\(cart.itemCount) item\(cart.itemCount == 1 ? "" : "s")")
                                 .font(.system(size: 10, weight: .regular))
@@ -442,46 +443,18 @@ struct SASaleCartView: View {
                 }
                 Spacer()
                 Button { cart.showCheckout = true } label: {
-                    Text("Checkout")
+                    Label("Checkout", systemImage: "creditcard.fill")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 28)
-                        .padding(.vertical, 14)
-                        .background(AppColors.accent)
-                        .clipShape(Capsule())
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(AppColors.accent)
+                .buttonBorderShape(.capsule)
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.sm)
-
-            HStack(spacing: AppSpacing.sm) {
-                Button { cart.showCheckout = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "rectangle.3.group.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("Split Payment")
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    .foregroundColor(AppColors.accent)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(AppColors.accent.opacity(0.12))
-                    .clipShape(Capsule())
-                }
-                Spacer()
-            }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
-
-            HStack {
-                Text("Split payment options are available on the next screen.")
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.textSecondaryDark)
-                Spacer()
-            }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.bottom, AppSpacing.md)
         }
-        .background(.ultraThinMaterial)
+        .background(AppColors.backgroundPrimary)
         .overlay(alignment: .top) {
             Divider()
         }

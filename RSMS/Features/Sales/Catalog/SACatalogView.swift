@@ -39,6 +39,7 @@ struct SACatalogView: View {
                             Image(systemName: "cart")
                                 .font(AppTypography.toolbarIcon)
                                 .foregroundColor(AppColors.accent)
+                                .frame(width: 24, height: 24)
                             if cart.itemCount > 0 {
                                 Text("\(cart.itemCount)")
                                     .font(.system(size: 9, weight: .bold))
@@ -47,9 +48,11 @@ struct SACatalogView: View {
                                     .padding(.horizontal, 2)
                                     .background(AppColors.accent)
                                     .clipShape(Capsule())
-                                    .offset(x: 8, y: -6)
+                                    .offset(x: 6, y: -5)
                             }
                         }
+                        .padding(.trailing, 4)
+                        .padding(.top, 2)
                     }
                 }
 
@@ -60,6 +63,7 @@ struct SACatalogView: View {
                             Image(systemName: "slider.horizontal.3")
                                 .font(AppTypography.toolbarIcon)
                                 .foregroundColor(AppColors.accent)
+                                .frame(width: 24, height: 24)
                             if vm.activeFilterCount > 0 {
                                 Text("\(vm.activeFilterCount)")
                                     .font(.system(size: 9, weight: .bold))
@@ -67,9 +71,11 @@ struct SACatalogView: View {
                                     .frame(width: 14, height: 14)
                                     .background(AppColors.accent)
                                     .clipShape(Circle())
-                                    .offset(x: 6, y: -6)
+                                    .offset(x: 5, y: -5)
                             }
                         }
+                        .padding(.trailing, 2)
+                        .padding(.top, 2)
                     }
                 }
             }

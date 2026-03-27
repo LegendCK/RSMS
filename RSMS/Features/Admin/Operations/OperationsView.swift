@@ -48,9 +48,20 @@ private struct ReplenishmentRequest: Identifiable, Decodable {
     }
 }
 
+private struct OperationsInventoryItem: Identifiable {
+    let id: UUID
+    let name: String
+    let brand: String
+    let categoryName: String
+    let imageSource: String
+    let stockCount: Int
+}
+
 struct OperationsView: View {
     @Query(sort: \Product.stockCount, order: .forward) private var allProducts: [Product]
     @State private var selectedSection = 0
+    @State private var remoteInventoryItems: [OperationsInventoryItem] = []
+    @State private var isLoadingInventory = false
 
     // Live replenishment requests from Supabase
     @State private var replenishmentRequests: [ReplenishmentRequest] = []
@@ -58,10 +69,25 @@ struct OperationsView: View {
     @State private var approvingId: UUID? = nil
     @State private var selectedRequest: ReplenishmentRequest? = nil
 
-    private var lowStockProducts: [Product] { allProducts.filter { $0.stockCount <= 3 && $0.stockCount > 0 } }
-    private var outOfStockProducts: [Product] { allProducts.filter { $0.stockCount == 0 } }
-    private var healthyProducts: [Product] { allProducts.filter { $0.stockCount > 3 } }
-    private var totalUnits: Int { allProducts.reduce(0) { $0 + $1.stockCount } }
+    private var inventoryItems: [OperationsInventoryItem] {
+        if !remoteInventoryItems.isEmpty {
+            return remoteInventoryItems
+        }
+        return allProducts.map {
+            OperationsInventoryItem(
+                id: $0.id,
+                name: $0.name,
+                brand: $0.brand,
+                categoryName: $0.categoryName,
+                imageSource: $0.imageList.first ?? $0.imageName,
+                stockCount: $0.stockCount
+            )
+        }
+    }
+    private var lowStockProducts: [OperationsInventoryItem] { inventoryItems.filter { $0.stockCount <= 3 && $0.stockCount > 0 } }
+    private var outOfStockProducts: [OperationsInventoryItem] { inventoryItems.filter { $0.stockCount == 0 } }
+    private var healthyProducts: [OperationsInventoryItem] { inventoryItems.filter { $0.stockCount > 3 } }
+    private var totalUnits: Int { inventoryItems.reduce(0) { $0 + $1.stockCount } }
 
     var body: some View {
         ZStack {
@@ -72,8 +98,7 @@ struct OperationsView: View {
                 // Segment
                 Picker("", selection: $selectedSection) {
                     Text("Inventory").tag(0)
-                    Text("Distribution").tag(1)
-                    Text("Transfers").tag(2)
+                    Text("Transfers").tag(1)
                 }
                 .pickerStyle(.segmented)
                 .padding(AppSpacing.sm)
@@ -89,8 +114,7 @@ struct OperationsView: View {
 
                 switch selectedSection {
                 case 0: inventorySection
-                case 1: distributionSection
-                case 2: transfersSection
+                case 1: transfersSection
                 default: inventorySection
                 }
             }
@@ -147,7 +171,13 @@ struct OperationsView: View {
                 VStack(alignment: .leading, spacing: AppSpacing.sm) {
                     sectionLabel("ALL INVENTORY")
 
-                    ForEach(allProducts) { product in
+                    if isLoadingInventory && remoteInventoryItems.isEmpty {
+                        ProgressView("Syncing inventory…")
+                            .tint(AppColors.accent)
+                            .padding(.vertical, AppSpacing.md)
+                    }
+
+                    ForEach(inventoryItems) { product in
                         inventoryRow(product)
                     }
                 }
@@ -155,6 +185,8 @@ struct OperationsView: View {
                 .padding(.bottom, AppSpacing.xxxl)
             }
         }
+        .task { await loadInventorySnapshot() }
+        .refreshable { await loadInventorySnapshot() }
     }
 
     private func inventoryStat(value: String, label: String, color: Color) -> some View {
@@ -172,7 +204,7 @@ struct OperationsView: View {
         .cornerRadius(AppSpacing.radiusMedium)
     }
 
-    private func stockAlertRow(_ product: Product) -> some View {
+    private func stockAlertRow(_ product: OperationsInventoryItem) -> some View {
         HStack(spacing: AppSpacing.sm) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(product.stockCount == 0 ? AppColors.error : AppColors.warning)
@@ -209,10 +241,10 @@ struct OperationsView: View {
         .cornerRadius(AppSpacing.radiusMedium)
     }
 
-    private func inventoryRow(_ product: Product) -> some View {
+    private func inventoryRow(_ product: OperationsInventoryItem) -> some View {
         HStack(spacing: AppSpacing.sm) {
             ProductArtworkView(
-                imageSource: product.imageName,
+                imageSource: product.imageSource,
                 fallbackSymbol: "bag.fill",
                 cornerRadius: 6
             )
@@ -242,78 +274,6 @@ struct OperationsView: View {
             .font(AppTypography.editLink)
             .foregroundColor(color)
             .frame(width: 32)
-    }
-
-    // MARK: - Distribution Centers
-
-    private var distributionSection: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: AppSpacing.md) {
-                HStack(spacing: AppSpacing.sm) {
-                    inventoryStat(value: "2", label: "Centers", color: AppColors.info)
-                    inventoryStat(value: "43K", label: "Capacity", color: AppColors.accent)
-                    inventoryStat(value: "68%", label: "Utilized", color: AppColors.success)
-                }
-                .padding(.horizontal, AppSpacing.screenHorizontal)
-                .padding(.top, AppSpacing.sm)
-
-                dcCard(name: "East Coast Hub", location: "Newark, NJ", capacity: "25,000", used: "18,200", percent: 0.73, status: "Operational")
-                dcCard(name: "European Hub", location: "Milan, Italy", capacity: "18,000", used: "11,500", percent: 0.64, status: "Operational")
-            }
-            .padding(.bottom, AppSpacing.xxxl)
-        }
-    }
-
-    private func dcCard(name: String, location: String, capacity: String, used: String, percent: Double, status: String) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name)
-                        .font(AppTypography.label)
-                        .foregroundColor(AppColors.textPrimaryDark)
-                    Text(location)
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.textSecondaryDark)
-                }
-                Spacer()
-                Text(status.uppercased())
-                    .font(AppTypography.nano)
-                    .foregroundColor(AppColors.success)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(AppColors.success.opacity(0.12))
-                    .cornerRadius(4)
-            }
-
-            // Utilization bar
-            VStack(alignment: .leading, spacing: 4) {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(AppColors.backgroundTertiary)
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(percent > 0.8 ? AppColors.warning : AppColors.accent)
-                            .frame(width: geo.size.width * percent)
-                    }
-                }
-                .frame(height: 6)
-
-                HStack {
-                    Text("\(used) / \(capacity) units")
-                        .font(AppTypography.caption)
-                        .foregroundColor(AppColors.textSecondaryDark)
-                    Spacer()
-                    Text("\(Int(percent * 100))%")
-                        .font(AppTypography.statSmall)
-                        .foregroundColor(AppColors.accent)
-                }
-            }
-        }
-        .padding(AppSpacing.cardPadding)
-        .background(AppColors.backgroundSecondary)
-        .cornerRadius(AppSpacing.radiusLarge)
-        .overlay(RoundedRectangle(cornerRadius: AppSpacing.radiusLarge).stroke(AppColors.border, lineWidth: 0.5))
-        .padding(.horizontal, AppSpacing.screenHorizontal)
     }
 
     // MARK: - Replenishment Requests (live from Supabase)
@@ -376,6 +336,52 @@ struct OperationsView: View {
                     }
                 } : nil
             )
+        }
+    }
+
+    @MainActor
+    private func loadInventorySnapshot() async {
+        isLoadingInventory = true
+        defer { isLoadingInventory = false }
+        do {
+            async let productsFetch = CatalogService.shared.fetchProducts()
+            let client = SupabaseManager.shared.client
+
+            struct InventoryRow: Decodable {
+                let productId: UUID
+                let quantity: Int
+                enum CodingKeys: String, CodingKey {
+                    case productId = "product_id"
+                    case quantity
+                }
+            }
+
+            async let inventoryFetch: [InventoryRow] = client
+                .from("inventory")
+                .select("product_id,quantity")
+                .execute()
+                .value
+
+            let (products, inventoryRows) = try await (productsFetch, inventoryFetch)
+            var qtyByProduct: [UUID: Int] = [:]
+            for row in inventoryRows {
+                qtyByProduct[row.productId, default: 0] += row.quantity
+            }
+            let localCategoryById = Dictionary(uniqueKeysWithValues: allProducts.map { ($0.id, $0.categoryName) })
+
+            remoteInventoryItems = products.map { dto in
+                OperationsInventoryItem(
+                    id: dto.id,
+                    name: dto.name,
+                    brand: dto.brand ?? "Maison Luxe",
+                    categoryName: localCategoryById[dto.id] ?? "—",
+                    imageSource: dto.resolvedImageURLs.first?.absoluteString ?? "bag.fill",
+                    stockCount: qtyByProduct[dto.id] ?? 0
+                )
+            }
+            .sorted { $0.stockCount < $1.stockCount }
+        } catch {
+            print("[OperationsView] Failed to load inventory snapshot: \(error.localizedDescription)")
         }
     }
 
@@ -479,10 +485,48 @@ struct OperationsView: View {
                 .update(patch)
                 .eq("id", value: req.id.uuidString.lowercased())
                 .execute()
+
+            await updateLinkedOrderAfterApproval(req)
             await loadReplenishmentRequests()
         } catch {
             print("[OperationsView] Approval failed: \(error.localizedDescription)")
         }
+    }
+
+    @MainActor
+    private func updateLinkedOrderAfterApproval(_ req: ReplenishmentRequest) async {
+        guard let orderNumber = extractOrderNumber(from: req.transferNumber) else { return }
+        do {
+            guard let order = try await OrderFulfillmentService.shared.fetchOrderByNumber(orderNumber) else { return }
+            let current = OrderStatusMapper.canonical(order.status)
+            if ["pending", "confirmed"].contains(current) {
+                try await OrderFulfillmentService.shared.updateOrderStatus(
+                    orderId: order.id,
+                    newStatus: "processing",
+                    notes: "Corporate approved replenishment request \(req.transferNumber)."
+                )
+            }
+
+            if let clientId = order.clientId {
+                await NotificationService.shared.createOrderLifecycleNotification(
+                    clientId: clientId,
+                    storeId: order.storeId,
+                    title: "Stock Request Approved",
+                    message: "Order \(orderNumber) has been approved by corporate and is being prepared at the boutique.",
+                    deepLink: "orders"
+                )
+            }
+        } catch {
+            print("[OperationsView] Linked-order update failed for \(req.transferNumber): \(error.localizedDescription)")
+        }
+    }
+
+    private func extractOrderNumber(from transferNumber: String) -> String? {
+        guard transferNumber.hasPrefix("REP-") else { return nil }
+        let stripped = String(transferNumber.dropFirst(4))
+        guard let lastDash = stripped.lastIndex(of: "-") else { return nil }
+        let orderNumber = String(stripped[..<lastDash]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return orderNumber.isEmpty ? nil : orderNumber
     }
 
     private func sectionLabel(_ text: String) -> some View {

@@ -11,9 +11,14 @@ import SwiftData
 import Supabase
 
 struct ManagerInventoryView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var selectedSection = 0
     @State private var showTransferRequest = false
     @State private var showStartCount = false
+    @State private var inventoryRealtimeChannel: RealtimeChannelV2?
+    @State private var transfersRealtimeChannel: RealtimeChannelV2?
+    @State private var discrepanciesRealtimeChannel: RealtimeChannelV2?
 
     var body: some View {
         NavigationStack {
@@ -76,6 +81,179 @@ struct ManagerInventoryView: View {
             .sheet(isPresented: $showStartCount) {
                 StartCountSheet()
             }
+            .task(id: appState.currentStoreId) {
+                await subscribeRealtimeFeeds()
+            }
+            .onDisappear {
+                Task { await unsubscribeRealtimeFeeds() }
+            }
+        }
+    }
+
+    private func subscribeRealtimeFeeds() async {
+        await unsubscribeRealtimeFeeds()
+        guard let storeId = appState.currentStoreId else { return }
+
+        let client = SupabaseManager.shared.client
+        let storeFilter = storeId.uuidString.lowercased()
+
+        let inventoryChannel = client.realtimeV2.channel("manager-inventory-stock:\(storeFilter)")
+        let inventoryInsertions = inventoryChannel.postgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "inventory",
+            filter: .eq("location_id", value: storeFilter)
+        )
+        let inventoryUpdates = inventoryChannel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "inventory",
+            filter: .eq("location_id", value: storeFilter)
+        )
+        let inventoryDeletions = inventoryChannel.postgresChange(
+            DeleteAction.self,
+            schema: "public",
+            table: "inventory",
+            filter: .eq("location_id", value: storeFilter)
+        )
+
+        do {
+            try await inventoryChannel.subscribeWithError()
+            inventoryRealtimeChannel = inventoryChannel
+        } catch {
+            if error is CancellationError { return }
+            print("[ManagerInventoryView] Inventory realtime subscribe failed: \(error)")
+        }
+
+        Task { @MainActor in
+            for await _ in inventoryInsertions {
+                await refreshInventoryFromRealtime()
+            }
+        }
+        Task { @MainActor in
+            for await _ in inventoryUpdates {
+                await refreshInventoryFromRealtime()
+            }
+        }
+        Task { @MainActor in
+            for await _ in inventoryDeletions {
+                await refreshInventoryFromRealtime()
+            }
+        }
+
+        // Transfers can involve this store as source OR destination, so subscribe to table-wide
+        // stream and re-sync local transfers on any change.
+        let transferChannel = client.realtimeV2.channel("manager-inventory-transfers:\(storeFilter)")
+        let transferInsertions = transferChannel.postgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "transfers"
+        )
+        let transferUpdates = transferChannel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "transfers"
+        )
+        let transferDeletions = transferChannel.postgresChange(
+            DeleteAction.self,
+            schema: "public",
+            table: "transfers"
+        )
+
+        do {
+            try await transferChannel.subscribeWithError()
+            transfersRealtimeChannel = transferChannel
+        } catch {
+            if error is CancellationError { return }
+            print("[ManagerInventoryView] Transfers realtime subscribe failed: \(error)")
+        }
+
+        Task { @MainActor in
+            for await _ in transferInsertions {
+                NotificationCenter.default.post(name: .inventoryTransfersUpdated, object: nil)
+            }
+        }
+        Task { @MainActor in
+            for await _ in transferUpdates {
+                NotificationCenter.default.post(name: .inventoryTransfersUpdated, object: nil)
+            }
+        }
+        Task { @MainActor in
+            for await _ in transferDeletions {
+                NotificationCenter.default.post(name: .inventoryTransfersUpdated, object: nil)
+            }
+        }
+
+        let discrepancyChannel = client.realtimeV2.channel("manager-inventory-discrepancies:\(storeFilter)")
+        let discrepancyInsertions = discrepancyChannel.postgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "inventory_discrepancies",
+            filter: .eq("store_id", value: storeFilter)
+        )
+        let discrepancyUpdates = discrepancyChannel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "inventory_discrepancies",
+            filter: .eq("store_id", value: storeFilter)
+        )
+        let discrepancyDeletions = discrepancyChannel.postgresChange(
+            DeleteAction.self,
+            schema: "public",
+            table: "inventory_discrepancies",
+            filter: .eq("store_id", value: storeFilter)
+        )
+
+        do {
+            try await discrepancyChannel.subscribeWithError()
+            discrepanciesRealtimeChannel = discrepancyChannel
+        } catch {
+            if error is CancellationError { return }
+            print("[ManagerInventoryView] Discrepancies realtime subscribe failed: \(error)")
+        }
+
+        Task { @MainActor in
+            for await _ in discrepancyInsertions {
+                NotificationCenter.default.post(name: .inventoryDiscrepanciesUpdated, object: nil)
+            }
+        }
+        Task { @MainActor in
+            for await _ in discrepancyUpdates {
+                NotificationCenter.default.post(name: .inventoryDiscrepanciesUpdated, object: nil)
+            }
+        }
+        Task { @MainActor in
+            for await _ in discrepancyDeletions {
+                NotificationCenter.default.post(name: .inventoryDiscrepanciesUpdated, object: nil)
+            }
+        }
+    }
+
+    private func refreshInventoryFromRealtime() async {
+        guard let storeId = appState.currentStoreId else { return }
+        do {
+            try await StoreAndInventorySyncService.shared.syncInventoryToLocal(
+                storeId: storeId,
+                modelContext: modelContext
+            )
+        } catch {
+            print("[ManagerInventoryView] Realtime inventory sync failed: \(error)")
+        }
+        NotificationCenter.default.post(name: .inventoryStockUpdated, object: nil)
+    }
+
+    private func unsubscribeRealtimeFeeds() async {
+        if let inventoryRealtimeChannel {
+            await inventoryRealtimeChannel.unsubscribe()
+            self.inventoryRealtimeChannel = nil
+        }
+        if let transfersRealtimeChannel {
+            await transfersRealtimeChannel.unsubscribe()
+            self.transfersRealtimeChannel = nil
+        }
+        if let discrepanciesRealtimeChannel {
+            await discrepanciesRealtimeChannel.unsubscribe()
+            self.discrepanciesRealtimeChannel = nil
         }
     }
 }
@@ -505,6 +683,9 @@ struct InvTransfersSubview: View {
         }
         .refreshable { await syncTransfersFromBackend() }
         .task { await syncTransfersFromBackend() }
+        .onReceive(NotificationCenter.default.publisher(for: .inventoryTransfersUpdated)) { _ in
+            Task { await syncTransfersFromBackend() }
+        }
         .sheet(item: $transferToMatch) { transfer in
             ShipmentMatchSheet(transfer: transfer) { result in
                 var lines: [String] = []
@@ -1286,6 +1467,9 @@ struct InvFlaggedSubview: View {
         }
         .refreshable { await syncInventory() }
         .task { await syncInventory() }
+        .onReceive(NotificationCenter.default.publisher(for: .inventoryStockUpdated)) { _ in
+            Task { await syncInventory() }
+        }
         .sheet(isPresented: $showTransferRequest) {
             TransferRequestSheet(
                 isPresented: $showTransferRequest,
@@ -1851,6 +2035,9 @@ struct InvDiscrepanciesSubview: View {
         }
         .refreshable { await loadDiscrepancies() }
         .task { await loadDiscrepancies() }
+        .onReceive(NotificationCenter.default.publisher(for: .inventoryDiscrepanciesUpdated)) { _ in
+            Task { await loadDiscrepancies() }
+        }
         .sheet(item: $selectedDiscrepancy) { disc in
             DiscrepancyDetailSheet(
                 discrepancy: disc,
@@ -2020,6 +2207,11 @@ struct InvDiscrepanciesSubview: View {
             .padding(.top, AppSpacing.md)
             .shadow(color: .black.opacity(0.18), radius: 8, x: 0, y: 4)
     }
+}
+
+extension Notification.Name {
+    static let inventoryTransfersUpdated = Notification.Name("inventoryTransfersUpdated")
+    static let inventoryDiscrepanciesUpdated = Notification.Name("inventoryDiscrepanciesUpdated")
 }
 
 // MARK: - Discrepancy Detail Sheet

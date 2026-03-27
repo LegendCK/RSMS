@@ -18,7 +18,7 @@ struct CreateClientProfileView: View {
     var onSave: (() -> Void)?
 
     private let communicationOptions = ["Email", "Phone", "SMS", "WhatsApp"]
-    private let segments = ["standard", "silver", "gold", "vip", "ultra_vip"]
+    private let segments = ["standard", "silver", "gold", "vip"]
 
     // MARK: - ISO date formatter (yyyy-MM-dd — required by Supabase)
     private static let isoFormatter: DateFormatter = {

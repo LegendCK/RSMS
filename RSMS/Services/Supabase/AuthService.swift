@@ -20,16 +20,23 @@ final class AuthService {
 
     /// Resolves the current session to either a staff `users` profile
     /// or a customer `clients` profile mapped to `UserDTO`.
-    private func fetchMyProfile() async throws -> UserDTO {
+    /// Returns the `UserDTO` plus the raw `ClientDTO` when the user is a customer
+    /// (nil for staff users since they don't have a `clients` row).
+    private func fetchMyProfileFull() async throws -> (UserDTO, ClientDTO?) {
         if let staffProfile = try await fetchStaffProfile() {
-            return staffProfile
+            return (staffProfile, nil)
         }
 
-        if let clientProfile = try await fetchClientProfile() {
-            return clientProfile
+        if let (userDTO, clientDTO) = try await fetchClientProfileFull() {
+            return (userDTO, clientDTO)
         }
 
         throw AuthError.profileNotFound
+    }
+
+    private func fetchMyProfile() async throws -> UserDTO {
+        let (profile, _) = try await fetchMyProfileFull()
+        return profile
     }
 
     /// Attempts to load a staff profile from `users`.
@@ -52,27 +59,28 @@ final class AuthService {
         do {
             // Filter explicitly by auth UID — works with or without RLS SELECT policy.
             let uid = try await client.auth.session.user.id
-            let profile: UserDTO = try await client
+            let profiles: [UserDTO] = try await client
                 .from("users")
                 .select()
                 .eq("id", value: uid.uuidString.lowercased())
-                .single()
+                .limit(1)
                 .execute()
                 .value
-            return profile
+            return profiles.first
         } catch {
             print("[AuthService] fetchStaffProfile fallback failed: \(error.localizedDescription)")
             return nil
         }
     }
 
-    /// Attempts to load a customer profile from `clients` and map it to `UserDTO`.
+    /// Attempts to load a customer profile from `clients` and returns both the raw `ClientDTO`
+    /// (which carries `segment`) and the mapped `UserDTO`.
     ///
     /// Strategy (two-pass):
     /// 1. Query by `id = auth.uid` — works for customers who self-registered (clients.id == auth.uid).
     /// 2. If that fails, fall back to `email = auth.email` — works for clients created offline
     ///    by a sales associate before the customer had a Supabase Auth account.
-    private func fetchClientProfile() async throws -> UserDTO? {
+    private func fetchClientProfileFull() async throws -> (UserDTO, ClientDTO)? {
         let uid: UUID
         let email: String
         do {
@@ -94,7 +102,7 @@ final class AuthService {
             .execute()
             .value {
             print("[AuthService] fetchClientProfile: found by id — \(profile.email)")
-            return UserDTO(clientProfile: profile)
+            return (UserDTO(clientProfile: profile), profile)
         }
 
         // Pass 2: match by email — handles clients pre-created by a sales associate
@@ -114,7 +122,7 @@ final class AuthService {
                 .execute()
                 .value
             print("[AuthService] fetchClientProfile: found by email — \(profile.email)")
-            return UserDTO(clientProfile: profile)
+            return (UserDTO(clientProfile: profile), profile)
         } catch {
             print("[AuthService] fetchClientProfile failed (both passes): \(error.localizedDescription)")
             print("[AuthService] fetchClientProfile raw error: \(error)")

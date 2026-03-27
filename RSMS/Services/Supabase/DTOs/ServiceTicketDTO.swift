@@ -332,7 +332,6 @@ enum RepairStatus: String, CaseIterable, Identifiable {
 enum RepairType: String, CaseIterable, Identifiable {
     case repair         = "repair"
     case authentication = "authentication"
-    case valuation      = "valuation"
     case warrantyClaim  = "warranty_claim"
     case cleaning       = "cleaning"
 
@@ -342,7 +341,6 @@ enum RepairType: String, CaseIterable, Identifiable {
         switch self {
         case .repair:         return "Repair"
         case .authentication: return "Authentication"
-        case .valuation:      return "Valuation"
         case .warrantyClaim:  return "Warranty Claim"
         case .cleaning:       return "Cleaning"
         }
@@ -352,7 +350,6 @@ enum RepairType: String, CaseIterable, Identifiable {
         switch self {
         case .repair:         return "wrench.and.screwdriver"
         case .authentication: return "checkmark.seal"
-        case .valuation:      return "banknote"
         case .warrantyClaim:  return "shield.checkered"
         case .cleaning:       return "sparkles"
         }
