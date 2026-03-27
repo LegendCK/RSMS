@@ -117,17 +117,20 @@ struct MainTabView: View {
 
         do {
             syncErrorMessage = nil
-            try await CustomerCatalogSyncService.shared.refreshLocalCatalog(modelContext: modelContext)
+            try await CustomerCatalogSyncService.shared.refreshLocalCatalog(
+                modelContext: modelContext,
+                allowLocalFallback: appState.isGuest
+            )
             try? await PromotionSyncService.shared.refreshLocalPromotions(modelContext: modelContext)
             if appState.isAuthenticated && !appState.isGuest {
                 try? await WishlistService.shared.hydrateLocalWishlist(modelContext: modelContext)
             }
             isPreparingCatalog = false
         } catch {
-            // Safety: If sync fails but we have cached/seeded categories, allow the app to open.
-            // This prevents Guest users from being stuck on the loading screen due to RLS blocks.
+            // Guests may not have full catalog read access depending on backend policies.
+            // For authenticated users we do NOT fall back to seeded/demo data.
             let localCount = (try? modelContext.fetchCount(FetchDescriptor<Category>())) ?? 0
-            if localCount > 0 {
+            if appState.isGuest && localCount > 0 {
                 print("[MainTabView] Sync failed but local data exists. Proceeding. Error: \(error.localizedDescription)")
                 if appState.isAuthenticated && !appState.isGuest {
                     try? await WishlistService.shared.hydrateLocalWishlist(modelContext: modelContext)

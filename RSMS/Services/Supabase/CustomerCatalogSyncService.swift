@@ -14,7 +14,10 @@ final class CustomerCatalogSyncService {
     static let shared = CustomerCatalogSyncService()
     private init() {}
 
-    func refreshLocalCatalog(modelContext: ModelContext) async throws {
+    /// - Parameter allowLocalFallback:
+    ///   true  -> keep local catalog if remote temporarily returns empty (guest/RLS-safe mode)
+    ///   false -> treat empty remote as an error so authenticated users don't see demo seed data
+    func refreshLocalCatalog(modelContext: ModelContext, allowLocalFallback: Bool = true) async throws {
         let remoteCategories = try await CatalogService.shared.fetchCategories()
         let remoteProducts = try await CatalogService.shared.fetchProducts()
         let remoteCollections = try await CatalogService.shared.fetchCollections()
@@ -24,10 +27,11 @@ final class CustomerCatalogSyncService {
         // We skip synchronization to prevent wiping out the local catalog.
         if remoteCategories.isEmpty {
             let localCount = (try? modelContext.fetchCount(FetchDescriptor<Category>())) ?? 0
-            if localCount > 0 {
+            if localCount > 0 && allowLocalFallback {
                 print("[SyncService] Remote fetch returned 0 categories but local data exists. Skipping sync to prevent wipeout (Guest/RLS safety).")
                 return
             }
+            throw CatalogSyncError.emptyRemoteCatalog
         }
 
         let activeCategories = remoteCategories.filter { $0.isActive }
@@ -44,6 +48,17 @@ final class CustomerCatalogSyncService {
         try cleanOrphanedCartItems(modelContext: modelContext)
 
         try modelContext.save()
+    }
+
+    enum CatalogSyncError: LocalizedError {
+        case emptyRemoteCatalog
+
+        var errorDescription: String? {
+            switch self {
+            case .emptyRemoteCatalog:
+                return "Supabase catalog is empty or inaccessible for this session."
+            }
+        }
     }
 
     private func syncCategories(_ remote: [CategoryDTO], modelContext: ModelContext) throws {

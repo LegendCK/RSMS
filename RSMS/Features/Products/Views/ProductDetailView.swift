@@ -67,6 +67,11 @@ struct ProductDetailView: View {
     @State private var isCheckingWarranty = false
     @State private var warrantyResult: WarrantyLookupResult?
     @State private var warrantyError: String?
+    @State private var productFeedback: [ProductFeedbackDTO] = []
+    @State private var myFeedback: ProductFeedbackDTO?
+    @State private var isLoadingFeedback = false
+    @State private var feedbackError: String?
+    @State private var showFeedbackComposer = false
 
     // MARK: - Variant data
 
@@ -202,6 +207,11 @@ struct ProductDetailView: View {
                         sectionDivider
                         detailsSection
 
+                        if !isAdminMode {
+                            sectionDivider
+                            feedbackSection
+                        }
+
                         if !isAdminMode && appState.isAuthenticated && !appState.isGuest {
                             sectionDivider
                             warrantySection
@@ -249,6 +259,7 @@ struct ProductDetailView: View {
             }
         }
         .task {
+            await loadProductFeedback()
             guard canViewInventory else { return }
             await fetchInventoryItems()
         }
@@ -299,6 +310,18 @@ struct ProductDetailView: View {
                 selectedSize: selectedSizeIndex.map { sizeVariants[$0] }
             )
             .presentationDetents([.fraction(0.85), .large])
+        }
+        .sheet(isPresented: $showFeedbackComposer) {
+            ProductFeedbackComposerSheet(
+                productName: product.name,
+                initialRating: myFeedback?.rating ?? 5,
+                initialTitle: myFeedback?.title ?? "",
+                initialComment: myFeedback?.comment ?? "",
+                onSubmit: { rating, title, comment in
+                    Task { await submitFeedback(rating: rating, title: title, comment: comment) }
+                }
+            )
+            .presentationDetents([.medium, .large])
         }
         .fullScreenCover(isPresented: $showGuestGate) {
             if !isAdminMode {
@@ -720,6 +743,124 @@ struct ProductDetailView: View {
                 detailRow(label: key.capitalized, value: value)
             }
         }
+    }
+
+    // MARK: - Reviews
+
+    private var feedbackSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(alignment: .center) {
+                Text("REVIEWS")
+                    .font(AppTypography.overline)
+                    .tracking(2)
+                    .foregroundColor(AppColors.accent)
+                Spacer()
+                if canWriteFeedback {
+                    Button(myFeedback == nil ? "Write Review" : "Edit Review") {
+                        showFeedbackComposer = true
+                    }
+                    .font(AppTypography.caption)
+                    .foregroundColor(AppColors.accent)
+                }
+            }
+
+            if isLoadingFeedback {
+                ProgressView().tint(AppColors.accent)
+            } else {
+                ratingSummaryRow
+
+                if let feedbackError, !feedbackError.isEmpty {
+                    Text(feedbackError)
+                        .font(AppTypography.caption)
+                        .foregroundColor(AppColors.error)
+                }
+
+                if productFeedback.isEmpty {
+                    Text("No reviews yet. Be the first to share feedback.")
+                        .font(AppTypography.bodyMedium)
+                        .foregroundColor(AppColors.textSecondaryDark)
+                } else {
+                    LazyVStack(spacing: AppSpacing.sm) {
+                        ForEach(productFeedback.prefix(5)) { feedback in
+                            feedbackCard(feedback)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var canWriteFeedback: Bool {
+        !isAdminMode && appState.isAuthenticated && !appState.isGuest && appState.currentClientProfile != nil
+    }
+
+    private var averageFeedbackRating: Double {
+        guard !productFeedback.isEmpty else { return 0 }
+        let total = productFeedback.reduce(0) { $0 + $1.rating }
+        return Double(total) / Double(productFeedback.count)
+    }
+
+    private var ratingSummaryRow: some View {
+        HStack(spacing: AppSpacing.sm) {
+            HStack(spacing: 2) {
+                ForEach(0..<5, id: \.self) { idx in
+                    Image(systemName: idx < Int(round(averageFeedbackRating)) ? "star.fill" : "star")
+                        .font(.system(size: 12))
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+
+            Text(String(format: "%.1f", averageFeedbackRating))
+                .font(AppTypography.label)
+                .foregroundColor(AppColors.textPrimaryDark)
+
+            Text("(\(productFeedback.count) reviews)")
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondaryDark)
+
+            Spacer()
+        }
+    }
+
+    private func feedbackCard(_ feedback: ProductFeedbackDTO) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(feedback.customerName.isEmpty ? "Customer" : feedback.customerName)
+                    .font(AppTypography.label)
+                    .foregroundColor(AppColors.textPrimaryDark)
+                Spacer()
+                Text(feedback.createdAt.formatted(date: .abbreviated, time: .omitted))
+                    .font(AppTypography.micro)
+                    .foregroundColor(AppColors.textSecondaryDark)
+            }
+
+            HStack(spacing: 2) {
+                ForEach(0..<5, id: \.self) { idx in
+                    Image(systemName: idx < feedback.rating ? "star.fill" : "star")
+                        .font(.system(size: 10))
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+
+            if !feedback.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(feedback.title)
+                    .font(AppTypography.bodyMedium)
+                    .foregroundColor(AppColors.textPrimaryDark)
+            }
+            Text(feedback.comment)
+                .font(AppTypography.bodySmall)
+                .foregroundColor(AppColors.textSecondaryDark)
+                .lineLimit(4)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                .fill(AppColors.backgroundSecondary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
+                        .stroke(AppColors.border.opacity(0.35), lineWidth: 1)
+                )
+        )
     }
 
     // MARK: - Inventory Items
@@ -1154,6 +1295,51 @@ struct ProductDetailView: View {
         }
     }
 
+    @MainActor
+    private func loadProductFeedback() async {
+        isLoadingFeedback = true
+        feedbackError = nil
+        defer { isLoadingFeedback = false }
+
+        do {
+            productFeedback = try await ProductFeedbackService.shared.fetchProductFeedback(productId: product.id)
+            if let customerId = appState.currentClientProfile?.id {
+                myFeedback = try await ProductFeedbackService.shared.fetchMyFeedback(
+                    productId: product.id,
+                    customerId: customerId
+                )
+            } else {
+                myFeedback = nil
+            }
+        } catch {
+            feedbackError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func submitFeedback(rating: Int, title: String, comment: String) async {
+        guard let client = appState.currentClientProfile else {
+            feedbackError = "Sign in as a customer to submit feedback."
+            return
+        }
+
+        do {
+            _ = try await ProductFeedbackService.shared.upsertFeedback(
+                productId: product.id,
+                storeId: appState.currentStoreId,
+                customerId: client.id,
+                customerName: client.fullName,
+                rating: rating,
+                title: title,
+                comment: comment
+            )
+            showFeedbackComposer = false
+            await loadProductFeedback()
+        } catch {
+            feedbackError = error.localizedDescription
+        }
+    }
+
     private func fetchInventoryItems() async {
         isFetchingItems = true
         defer { isFetchingItems = false }
@@ -1182,6 +1368,72 @@ struct ProductDetailView: View {
         if let output = url {
             exportAllPDFURL = output
             isExportingAll = true
+        }
+    }
+}
+
+private struct ProductFeedbackComposerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let productName: String
+    let initialRating: Int
+    let initialTitle: String
+    let initialComment: String
+    let onSubmit: (Int, String, String) -> Void
+
+    @State private var rating: Int = 5
+    @State private var title: String = ""
+    @State private var comment: String = ""
+
+    private var canSubmit: Bool {
+        !comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Rating") {
+                    HStack(spacing: 8) {
+                        ForEach(1...5, id: \.self) { index in
+                            Button {
+                                rating = index
+                            } label: {
+                                Image(systemName: index <= rating ? "star.fill" : "star")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(AppColors.accent)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                Section("Headline (Optional)") {
+                    TextField("Summarize your experience", text: $title)
+                }
+
+                Section("Review") {
+                    TextField("Share details about \(productName)", text: $comment, axis: .vertical)
+                        .lineLimit(4...8)
+                }
+            }
+            .navigationTitle("Product Review")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Submit") {
+                        onSubmit(rating, title, comment)
+                    }
+                    .disabled(!canSubmit)
+                }
+            }
+            .onAppear {
+                rating = max(1, min(5, initialRating))
+                title = initialTitle
+                comment = initialComment
+            }
         }
     }
 }
