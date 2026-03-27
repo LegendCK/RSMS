@@ -55,36 +55,39 @@ final class ScanService: ScanServiceProtocol, @unchecked Sendable {
         // Step 1: Pre-fetch for the UI (throws barcodeNotFound if missing)
         let result = try await lookupBarcode(barcode)
         
-        // Step 2: Formulate dynamic status
-        let targetStatus: ProductItemStatus
+        // Step 2 removed: the RPC deduces target status based natively on p_scan_type
+        
+        // Strict Client-Side validation
         switch type {
-        case .out:   targetStatus = .sold
-        case .in:    targetStatus = .inStock
-        case .audit: targetStatus = .inStock // Value is safely ignored by SQL patch
-        case .return: targetStatus = .returned
-        }
-        
-        // Strict Client-Side validation for Returns
-        if type == .return {
+        case .stockIn:
+            if result.itemStatusEnum == .inStock { 
+                throw ScanError.stateWarning("Already in stock — no action needed", result) 
+            }
+        case .stockOut:
+            if result.itemStatusEnum == .sold { 
+                throw ScanError.stateWarning("Item already sold", result) 
+            }
+        case .return:
+            if result.itemStatusEnum == .returned { 
+                throw ScanError.stateWarning("Item already returned", result) 
+            }
             if result.itemStatusEnum == .inStock {
-                throw ScanError.operationFailed("Cannot return item currently in stock")
+                throw ScanError.stateWarning("Item is already in stock — no return needed", result)
             }
-            if result.itemStatusEnum == .returned {
-                throw ScanError.operationFailed("Item already returned")
+            if result.itemStatusEnum == .damaged {
+                throw ScanError.operationFailed("Item cannot be returned — marked damaged")
             }
-            if result.itemStatusEnum != .sold && result.itemStatusEnum != .damaged {
-                throw ScanError.operationFailed("Only sold or damaged items can be returned")
+            if result.itemStatusEnum != .sold {
+                throw ScanError.operationFailed("Only sold items can be returned")
             }
+        case .audit: break
         }
         
-        let rpcScanType = (type == .return) ? "IN" : type.rawValue.uppercased()
-
         // Step 3: Invoke the transaction-safe backend RPC
         let params: [String: String] = [
             "p_barcode": barcode,
             "p_session_id": sessionId.uuidString,
-            "p_target_status": targetStatus.rawValue,
-            "p_scan_type": rpcScanType
+            "p_scan_type": type.dbValue
         ]
         
         do {
@@ -194,7 +197,8 @@ final class ScanService: ScanServiceProtocol, @unchecked Sendable {
     // MARK: - Session Management
 
     func createSession(type: ScanType) async throws -> UUID {
-        let payload = ScanSessionInsertDTO(type: type.rawValue)
+        print("SESSION TYPE SENT:", type.dbValue)
+        let payload = ScanSessionInsertDTO(type: type.dbValue)
 
         struct SessionID: Decodable { let id: UUID }
         let row: SessionID = try await client

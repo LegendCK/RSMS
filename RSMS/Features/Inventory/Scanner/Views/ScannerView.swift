@@ -27,6 +27,10 @@ struct ScannerView: View {
     @State private var showImagePicker  = false     // DEV TOOL
     @State private var isProcessingImage = false    // DEV TOOL
     @State private var flashOverlay     = false     // Success flash
+    @State private var persistentCard: ScanResult?  // Persistent item sheet
+    @State private var selectedRepairItem: ScanResult? // Repair item sheet
+    
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         ZStack {
@@ -86,6 +90,28 @@ struct ScannerView: View {
         .sheet(isPresented: $showImagePicker) {
             ImagePicker { image in
                 Task { await processPickedImage(image) }
+            }
+        }
+        .sheet(item: $selectedRepairItem) { item in
+            RepairIntakeView(
+                scanResult: item,
+                storeId: appState.currentStoreId ?? UUID(),
+                assignedToUserId: appState.currentUserProfile?.id
+            )
+            .environment(appState)
+        }
+        .onChange(of: viewModel.scanState) { _, newValue in
+            switch newValue {
+            case .found(let result):
+                persistentCard = result
+                if viewModel.currentScanType == .return {
+                    selectedRepairItem = result
+                }
+            case .warning(_, let item):
+                if let i = item { persistentCard = i }
+            case .info(_, let item):
+                if let i = item { persistentCard = i }
+            default: break
             }
         }
     }
@@ -179,17 +205,14 @@ struct ScannerView: View {
         VStack(spacing: 10) {
             // Status banner
             statusBanner
-
-            // Recent Scans List
-            if viewModel.sessionActive && !viewModel.recentScans.isEmpty {
-                RecentScansListView(viewModel: viewModel)
-                    .frame(maxHeight: 200) // bounded height
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
             
-            // Scanned item card
-            if case .found(let result) = viewModel.scanState {
-                ScannedItemCard(result: result)
+            // Scanned item card (persistent until closed manually)
+            if let result = persistentCard {
+                ScannedItemCard(result: result, onClose: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                        persistentCard = nil
+                    }
+                })
                     .padding(.horizontal, 16)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -209,13 +232,23 @@ struct ScannerView: View {
     @ViewBuilder
     private var statusBanner: some View {
         switch viewModel.scanState {
-        // duplicate banner is intentionally removed/suppressed
+        case .warning(let msg, _):
+            toastBanner(icon: "exclamationmark.triangle.fill", text: msg, color: Color(red: 0.85, green: 0.65, blue: 0.13))
 
+        case .scanning:
+            toastBanner(icon: "rays", text: "Processing...", color: Color.white.opacity(0.6))
+            
         case .error(let msg):
             toastBanner(icon: "xmark.circle.fill", text: msg, color: Color(red: 1, green: 0.35, blue: 0.35))
             
+        case .info(let msg, _):
+            toastBanner(icon: "info.circle.fill", text: msg, color: .purple)
+            
         case .found(_) where viewModel.currentScanType == .return:
-            toastBanner(icon: "checkmark.circle.fill", text: "Item marked as returned", color: .purple)
+            toastBanner(icon: "checkmark.circle.fill", text: "Item marked as returned", color: .green)
+
+        case .found(_):
+            toastBanner(icon: "checkmark.circle.fill", text: "Scan successful", color: .green)
 
         case .idle where viewModel.sessionActive:
             toastBanner(icon: "viewfinder", text: "Point camera at a barcode", color: Color.white.opacity(0.5))

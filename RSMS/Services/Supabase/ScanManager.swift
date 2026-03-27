@@ -94,7 +94,7 @@ final class ScanManager {
     // MARK: - Configuration
 
     /// Rapid-fire guard: ignore re-detection within this interval (AVFoundation stream).
-    let debounceInterval: TimeInterval = 0.5
+    let debounceInterval: TimeInterval = 0.8
 
     /// Same barcode within this window → duplicate warning. After the window → allowed.
     let duplicateWindowSeconds: TimeInterval = 2.0
@@ -235,6 +235,8 @@ enum ScanError: LocalizedError {
     case barcodeNotFound(String)
     case networkUnavailable
     case operationFailed(String)
+    case stateWarning(String, ScanResultDTO)
+    case stateInfo(String, ScanResultDTO)
 
     var errorDescription: String? {
         switch self {
@@ -246,6 +248,10 @@ enum ScanError: LocalizedError {
             return "Network unavailable. Check your connection."
         case .operationFailed(let detail):
             return "Scan failed: \(detail)"
+        case .stateWarning(let msg, _):
+            return msg
+        case .stateInfo(let msg, _):
+            return msg
         }
     }
 }

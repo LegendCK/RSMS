@@ -17,138 +17,114 @@ import SwiftUI
 struct ScannedItemCard: View {
 
     let result: ScanResult
-
-    @Environment(AppState.self) private var appState
-    @State private var showRepairIntake = false
+    var onClose: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-
-            // MARK: - Header Strip
-            HStack(spacing: AppSpacing.sm) {
-                statusPill
-                Spacer()
-                Text(result.scannedAt.formatted(date: .omitted, time: .shortened))
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.textSecondaryDark)
-            }
-            .padding(.horizontal, AppSpacing.md)
-            .padding(.top, AppSpacing.md)
-            .padding(.bottom, AppSpacing.sm)
-
-            Divider().background(Color.white.opacity(0.08))
-
-            // MARK: - Product Detail Row
-            HStack(alignment: .center, spacing: AppSpacing.md) {
-                productThumbnail
-
-                VStack(alignment: .leading, spacing: 4) {
-                    if let brand = result.brand, !brand.isEmpty {
-                        Text(brand.uppercased())
-                            .font(AppTypography.caption)
-                            .foregroundStyle(AppColors.accent)
-                            .tracking(1.5)
-                    }
-                    Text(result.productName)
-                        .font(AppTypography.heading3)
-                        .foregroundStyle(AppColors.textPrimaryDark)
-                        .lineLimit(2)
-
-                    Text("SKU: \(result.sku)")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(AppColors.textSecondaryDark)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.white.opacity(0.07))
-                        )
+        VStack(alignment: .leading, spacing: 14) {
+            // MARK: - Header (Brand & Close)
+            HStack(alignment: .top) {
+                if let brand = result.brand, !brand.isEmpty {
+                    Text(brand.uppercased())
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(red: 0.85, green: 0.65, blue: 0.13)) // Gold
+                        .tracking(1.5)
                 }
-
                 Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Color.white.opacity(0.4))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
 
+            // MARK: - Middle: Name & Price
+            HStack(alignment: .top, spacing: 12) {
+                Text(result.productName)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .layoutPriority(1)
+                
+                Spacer(minLength: 16)
+                
                 Text(result.formattedPrice)
-                    .font(AppTypography.heading2)
-                    .foregroundStyle(AppColors.textPrimaryDark)
-                    .minimumScaleFactor(0.8)
-            }
-            .padding(.horizontal, AppSpacing.md)
-            .padding(.vertical, AppSpacing.md)
-
-            // MARK: - Barcode Footer
-            HStack {
-                Image(systemName: "barcode")
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppColors.textSecondaryDark)
-                Text(result.barcode)
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundStyle(AppColors.textSecondaryDark)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .truncationMode(.tail)
+                    .multilineTextAlignment(.trailing)
+                    .layoutPriority(2)
             }
-            .padding(.horizontal, AppSpacing.md)
-            .padding(.bottom, AppSpacing.sm)
-
-            // MARK: - Log Repair CTA (Inventory Controller only)
-            if appState.currentUserRole == .inventoryController {
-                Divider().background(Color.white.opacity(0.08))
-
-                Button {
-                    showRepairIntake = true
-                } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: "wrench.and.screwdriver.fill")
-                            .font(.system(size: 12))
-                        Text("Log Repair")
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    .foregroundColor(AppColors.accent)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                }
-                .padding(.horizontal, AppSpacing.md)
-                .padding(.bottom, AppSpacing.xs)
+            .padding(.horizontal, 16)
+            
+            // MARK: - Bottom: SKU, Barcode, Status
+            HStack(spacing: 8) {
+                Text(result.sku)
+                Text("•")
+                Image(systemName: "barcode")
+                    .font(.system(size: 10))
+                Text(result.barcode)
             }
+            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            .foregroundColor(Color.white.opacity(0.5))
+            .padding(.horizontal, 16)
+            
+            // Status Pill
+            statusPill
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
+        .background(Color(red: 17/255, green: 17/255, blue: 20/255).opacity(0.94))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            // Gold accent line (left edge)
+            Rectangle()
+                .fill(Color(red: 0.85, green: 0.65, blue: 0.13))
+                .frame(width: 3)
+            , alignment: .leading
         )
-        // Sheet lives on the card so it always has the correct scanResult
-        .sheet(isPresented: $showRepairIntake) {
-            RepairIntakeView(
-                scanResult:       result,
-                storeId:          appState.currentStoreId ?? UUID(),
-                assignedToUserId: appState.currentUserProfile?.id
-            )
-            .environment(appState)
-        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
+        .clipShape(RoundedRectangle(cornerRadius: 20)) // outer clip to constraint the left edge line
     }
 
     // MARK: - Subviews
 
     private var statusPill: some View {
-        HStack(spacing: 5) {
-            Circle().fill(statusColor).frame(width: 6, height: 6)
-            Text(result.itemStatus.displayName)
-                .font(AppTypography.caption)
-                .foregroundStyle(statusColor)
+        HStack(spacing: 6) {
+            Circle().fill(statusColor).frame(width: 8, height: 8)
+            Text(statusText)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.white)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Capsule().fill(statusColor.opacity(0.15)))
+        .padding(.vertical, 6)
+        .background(Capsule().fill(Color.white.opacity(0.1)))
+    }
+
+    private var statusText: String {
+        switch result.itemStatus {
+        case .inStock: return "IN STOCK"
+        case .sold: return "SOLD"
+        case .returned: return "RETURNED"
+        case .reserved: return "RESERVED"
+        case .damaged: return "DAMAGED"
+        }
     }
 
     private var statusColor: Color {
         switch result.itemStatus {
-        case .inStock:  return .green
-        case .reserved: return .orange
-        case .sold:     return .red
-        case .damaged:  return Color(red: 0.9, green: 0.5, blue: 0.1)
+        case .inStock: return .green
+        case .sold: return .red
         case .returned: return .purple
+        case .reserved: return .orange
+        case .damaged: return Color(red: 0.9, green: 0.5, blue: 0.1)
         }
     }
 
