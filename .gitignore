@@ -33,3 +33,7 @@ playground.xcworkspace
 
 # Crash logs
 *.crash
+
+# Supabase Secrets
+RSMS/Config/SupabaseSecrets.plist
+RSMS/Config/StripeSecrets.plist
