@@ -31,7 +31,7 @@ struct SalesProfileView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(displayName)
                                 .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             Text(appState.currentUserEmail)
                                 .font(.system(size: 13, weight: .light))
                                 .foregroundColor(.secondary)
@@ -115,8 +115,11 @@ struct SalesProfileView: View {
                     Text("PROFILE")
                         .font(.system(size: 12, weight: .bold))
                         .tracking(3)
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
+            }
+            .safeAreaInset(edge: .bottom) {
+                Color.clear.frame(height: 8)
             }
             .alert("Sign Out", isPresented: $showLogoutConfirmation) {
                 Button("Cancel", role: .cancel) { }

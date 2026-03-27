@@ -8,10 +8,12 @@ final class WishlistService {
 
     enum SyncCapabilityError: Error {
         case missingWishlistTable
+        case wishlistForeignKeyMisconfigured
     }
 
     private let client = SupabaseManager.shared.client
     private var hasLoggedMissingTableWarning = false
+    private var hasLoggedForeignKeyWarning = false
 
     private init() {}
 
@@ -55,6 +57,16 @@ final class WishlistService {
         if isMissingWishlistTableError(error) {
             return SyncCapabilityError.missingWishlistTable
         }
+        if let postgrestError = error as? PostgrestError {
+            let code = (postgrestError.code ?? "").uppercased()
+            let message = postgrestError.message.lowercased()
+            let description = error.localizedDescription.lowercased()
+            if code == "23503" &&
+                (message.contains("wishlist_items_user_id_fkey") ||
+                 description.contains("wishlist_items_user_id_fkey")) {
+                return SyncCapabilityError.wishlistForeignKeyMisconfigured
+            }
+        }
         return error
     }
 
@@ -62,6 +74,12 @@ final class WishlistService {
         guard !hasLoggedMissingTableWarning else { return }
         hasLoggedMissingTableWarning = true
         print("[WishlistService] Supabase table 'public.wishlist_items' is missing. Apply migration: supabase/migrations/20260324_wishlist_items.sql")
+    }
+
+    private func logForeignKeyWarningOnce() {
+        guard !hasLoggedForeignKeyWarning else { return }
+        hasLoggedForeignKeyWarning = true
+        print("[WishlistService] Supabase wishlist FK is misconfigured. Apply migration: supabase/migrations/20260327_fix_wishlist_user_fk.sql")
     }
 
     func fetchWishlistProductIDs() async throws -> Set<UUID> {
@@ -85,6 +103,9 @@ final class WishlistService {
             wishedIds = try await fetchWishlistProductIDs()
         } catch SyncCapabilityError.missingWishlistTable {
             logMissingTableWarningOnce()
+            return
+        } catch SyncCapabilityError.wishlistForeignKeyMisconfigured {
+            logForeignKeyWarningOnce()
             return
         }
         let products = try modelContext.fetch(FetchDescriptor<Product>())
@@ -110,6 +131,9 @@ final class WishlistService {
                 if case SyncCapabilityError.missingWishlistTable = normalized {
                     logMissingTableWarningOnce()
                 }
+                if case SyncCapabilityError.wishlistForeignKeyMisconfigured = normalized {
+                    logForeignKeyWarningOnce()
+                }
                 throw normalized
             }
         } else {
@@ -130,6 +154,9 @@ final class WishlistService {
             let normalized = normalizeWishlistError(error)
             if case SyncCapabilityError.missingWishlistTable = normalized {
                 logMissingTableWarningOnce()
+            }
+            if case SyncCapabilityError.wishlistForeignKeyMisconfigured = normalized {
+                logForeignKeyWarningOnce()
             }
             throw normalized
         }

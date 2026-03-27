@@ -272,11 +272,6 @@ struct ProductDetailView: View {
         .if(!isAdminMode) { view in
             view.toolbar(.hidden, for: .tabBar)
         }
-        .safeAreaInset(edge: .bottom) {
-            if isAdminMode {
-                adminManageBar
-            }
-        }
         .navigationDestination(isPresented: $navigateToCart) {
             if !isAdminMode {
                 CartView()
@@ -305,10 +300,9 @@ struct ProductDetailView: View {
             )
             .presentationDetents([.fraction(0.85), .large])
         }
-        .sheet(isPresented: $showGuestGate) {
+        .fullScreenCover(isPresented: $showGuestGate) {
             if !isAdminMode {
                 GuestAuthGateView(pendingAction: guestGateAction)
-                    .presentationDetents([.large])
             }
         }
         .sheet(isPresented: $showAdminManageSheet) {
@@ -406,7 +400,7 @@ struct ProductDetailView: View {
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 8)
                                             .stroke(
-                                                idx == currentImageIndex ? AppColors.accent : Color.white.opacity(0.35),
+                                                idx == currentImageIndex ? AppColors.accent : AppColors.border.opacity(0.7),
                                                 lineWidth: idx == currentImageIndex ? 2.5 : 1
                                             )
                                     )
@@ -800,10 +794,10 @@ struct ProductDetailView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                .fill(Color.white.opacity(0.04))
+                .fill(AppColors.backgroundSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppSpacing.radiusMedium)
-                        .stroke(Color.black.opacity(0.04), lineWidth: 1)
+                        .stroke(AppColors.border.opacity(0.4), lineWidth: 1)
                 )
         )
     }
@@ -843,32 +837,6 @@ struct ProductDetailView: View {
         }
 
         isCheckingWarranty = false
-    }
-
-    // MARK: - Bottom Action Bar
-
-    private var adminManageBar: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Button(action: { showAdminManageSheet = true }) {
-                    Label("Manage Product", systemImage: "slider.horizontal.3")
-                        .font(AppTypography.buttonPrimary)
-                        .foregroundColor(AppColors.textPrimaryLight)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(AppColors.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 12)
-        }
-        .background(
-            Color.white
-                .shadow(color: .black.opacity(0.06), radius: 12, y: -4)
-                .ignoresSafeArea(edges: .bottom)
-        )
     }
 
     private var bottomActionBar: some View {
@@ -949,7 +917,7 @@ struct ProductDetailView: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.65), lineWidth: 1)
+                        .stroke(AppColors.border.opacity(0.45), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.1), radius: 14, y: 6)
         )
@@ -1003,7 +971,7 @@ struct ProductDetailView: View {
                         .foregroundColor((variantStockCount > 0 || hasActiveReservation) ? AppColors.accent : AppColors.accent.opacity(0.3))
                         .frame(maxWidth: .infinity)
                         .frame(height: 42)
-                        .background(Color.white)
+                        .background(AppColors.backgroundPrimary)
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -1041,10 +1009,10 @@ struct ProductDetailView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white)
+                .fill(AppColors.backgroundSecondary)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(AppColors.accent.opacity(0.15), lineWidth: 1)
+                        .stroke(AppColors.border.opacity(0.45), lineWidth: 1)
                 )
         )
     }

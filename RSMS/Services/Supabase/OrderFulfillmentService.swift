@@ -289,8 +289,13 @@ final class OrderFulfillmentService {
             orders[index].itemCount = summary?.itemCount ?? 0
             orders[index].totalQuantity = summary?.totalQuantity ?? 0
 
-            guard let clientId = orders[index].clientId,
-                  let client = clientById[clientId] else {
+            guard let clientId = orders[index].clientId else {
+                orders[index].customerName = orders[index].channel == "in_store" ? "Walk-in Customer" : "Unlinked Customer"
+                continue
+            }
+
+            guard let client = clientById[clientId] else {
+                orders[index].customerName = "Registered Customer"
                 continue
             }
 
@@ -299,7 +304,7 @@ final class OrderFulfillmentService {
                 .filter { !$0.isEmpty }
                 .joined(separator: " ")
 
-            orders[index].customerName = fullName.isEmpty ? "Guest Customer" : fullName
+            orders[index].customerName = fullName.isEmpty ? "Registered Customer" : fullName
             orders[index].customerEmail = client.email
         }
 

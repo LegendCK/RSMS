@@ -124,6 +124,29 @@ final class SalesDashboardViewModel {
         return f.string(from: NSNumber(value: todaySalesTotal)) ?? "₹0"
     }
 
+    /// Compact amount tuned for narrow KPI cards (e.g. ₹26.3L, ₹1.2Cr).
+    var compactTodaySales: String {
+        let value = todaySalesTotal
+        if value >= 10_000_000 {
+            return "₹\(compact(value / 10_000_000))Cr"
+        }
+        if value >= 100_000 {
+            return "₹\(compact(value / 100_000))L"
+        }
+        if value >= 1_000 {
+            return "₹\(compact(value / 1_000))K"
+        }
+        return formattedTodaySales
+    }
+
+    private func compact(_ value: Double) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.minimumFractionDigits = 0
+        f.maximumFractionDigits = 1
+        return f.string(from: NSNumber(value: value)) ?? String(format: "%.1f", value)
+    }
+
     private func iso8601() -> ISO8601DateFormatter {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

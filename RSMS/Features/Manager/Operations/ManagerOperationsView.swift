@@ -41,6 +41,11 @@ struct ManagerOperationsView: View {
     @State private var orderToTag: OrderDTO? = nil       // drives Tag to Event sheet
     @State private var selectedOrder: OrderDTO? = nil    // drives Order Detail sheet
 
+    // Realtime channels for live Supabase sync
+    @State private var ordersRealtimeChannel: RealtimeChannelV2?
+    @State private var discrepanciesRealtimeChannel: RealtimeChannelV2?
+    @State private var eventsRealtimeChannel: RealtimeChannelV2?
+
     var body: some View {
         ZStack {
             AppColors.backgroundPrimary.ignoresSafeArea()
@@ -48,12 +53,12 @@ struct ManagerOperationsView: View {
             VStack(spacing: 0) {
                 // Dropdown Card selector with background blur
                 Menu {
-                    Button(action: { selectedSection = 5 }) { Label("Fulfillment", systemImage: selectedSection == 5 ? "checkmark" : "") }
-                    Button(action: { selectedSection = 0 }) { Label("Sales", systemImage: selectedSection == 0 ? "checkmark" : "") }
-                    Button(action: { selectedSection = 1 }) { Label("BOPIS", systemImage: selectedSection == 1 ? "checkmark" : "") }
-                    Button(action: { selectedSection = 2 }) { Label("Discrepancies", systemImage: selectedSection == 2 ? "checkmark" : "") }
-                    Button(action: { selectedSection = 3 }) { Label("VIP Events", systemImage: selectedSection == 3 ? "checkmark" : "") }
-                    Button(action: { selectedSection = 4 }) { Label("Activity", systemImage: selectedSection == 4 ? "checkmark" : "") }
+                    Button(action: { selectedSection = 5 }) { menuOptionLabel("Fulfillment", isSelected: selectedSection == 5) }
+                    Button(action: { selectedSection = 0 }) { menuOptionLabel("Sales", isSelected: selectedSection == 0) }
+                    Button(action: { selectedSection = 1 }) { menuOptionLabel("BOPIS", isSelected: selectedSection == 1) }
+                    Button(action: { selectedSection = 2 }) { menuOptionLabel("Discrepancies", isSelected: selectedSection == 2) }
+                    Button(action: { selectedSection = 3 }) { menuOptionLabel("VIP Events", isSelected: selectedSection == 3) }
+                    Button(action: { selectedSection = 4 }) { menuOptionLabel("Activity", isSelected: selectedSection == 4) }
                 } label: {
                     HStack {
                         Text(
@@ -146,9 +151,13 @@ struct ManagerOperationsView: View {
             }
         }
         .task {
+            await subscribeRealtimeFeeds()
             await loadLiveDiscrepancies()
             await loadLiveEvents()
             await loadLiveOrders()
+        }
+        .onDisappear {
+            Task { await unsubscribeRealtimeFeeds() }
         }
         // Additional un-conflicted sheets
         .sheet(isPresented: $showAddStock) {
@@ -229,11 +238,11 @@ struct ManagerOperationsView: View {
                 let avgOrder = todayOrders.isEmpty ? 0.0 : todayRevenue / Double(todayOrders.count)
 
                 HStack(spacing: AppSpacing.sm) {
-                    miniStat(value: formattedAmount(todayRevenue),
+                    miniStat(value: abbreviatedCurrency(todayRevenue),
                              label: "Today",   color: AppColors.accent)
                     miniStat(value: "\(todayOrders.count)",
                              label: "Txns",    color: AppColors.secondary)
-                    miniStat(value: formattedAmount(avgOrder),
+                    miniStat(value: abbreviatedCurrency(avgOrder),
                              label: "Avg",     color: AppColors.success)
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -341,10 +350,11 @@ struct ManagerOperationsView: View {
 
     private func loadLiveOrders() async {
         guard let storeId = appState.currentStoreId else { return }
+        if Task.isCancelled { return }
         isLoadingOrders = true
         defer { isLoadingOrders = false }
         do {
-            liveOrders = try await SupabaseManager.shared.client
+            var fetched: [OrderDTO] = try await SupabaseManager.shared.client
                 .from("orders")
                 .select()
                 .eq("store_id", value: storeId.uuidString.lowercased())
@@ -352,8 +362,76 @@ struct ManagerOperationsView: View {
                 .limit(50)
                 .execute()
                 .value
+            await enrichOrdersWithCustomerDetails(&fetched)
+            liveOrders = fetched
         } catch {
+            if isExpectedCancellation(error) { return }
             print("[ManagerOperationsView] Failed to load orders: \(error)")
+        }
+    }
+
+    private func enrichOrdersWithCustomerDetails(_ orders: inout [OrderDTO]) async {
+        let clientIds = Array(Set(orders.compactMap(\.clientId)))
+        guard !clientIds.isEmpty else {
+            for idx in orders.indices where orders[idx].clientId == nil {
+                orders[idx].customerName = orders[idx].channel == "in_store" ? "Walk-in Customer" : "Unlinked Customer"
+            }
+            return
+        }
+
+        struct ClientLite: Decodable {
+            let id: UUID
+            let firstName: String?
+            let lastName: String?
+            let email: String?
+
+            enum CodingKeys: String, CodingKey {
+                case id
+                case firstName = "first_name"
+                case lastName = "last_name"
+                case email
+            }
+        }
+
+        let clientsById: [UUID: ClientLite]
+        do {
+            let clients: [ClientLite] = try await SupabaseManager.shared.client
+                .from("clients")
+                .select("id, first_name, last_name, email")
+                .in("id", values: clientIds.map { $0.uuidString.lowercased() })
+                .execute()
+                .value
+            clientsById = Dictionary(uniqueKeysWithValues: clients.map { ($0.id, $0) })
+        } catch {
+            print("[ManagerOperationsView] Failed to enrich customers for orders: \(error)")
+            for idx in orders.indices {
+                if orders[idx].clientId != nil {
+                    orders[idx].customerName = "Registered Customer"
+                } else {
+                    orders[idx].customerName = orders[idx].channel == "in_store" ? "Walk-in Customer" : "Unlinked Customer"
+                }
+            }
+            return
+        }
+
+        for idx in orders.indices {
+            guard let clientId = orders[idx].clientId else {
+                orders[idx].customerName = orders[idx].channel == "in_store" ? "Walk-in Customer" : "Unlinked Customer"
+                continue
+            }
+
+            guard let client = clientsById[clientId] else {
+                orders[idx].customerName = "Registered Customer"
+                continue
+            }
+
+            let fullName = [client.firstName ?? "", client.lastName ?? ""]
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+
+            orders[idx].customerName = fullName.isEmpty ? "Registered Customer" : fullName
+            orders[idx].customerEmail = client.email
         }
     }
 
@@ -363,6 +441,175 @@ struct ManagerOperationsView: View {
         fmt.currencyCode = "INR"
         fmt.maximumFractionDigits = 0
         return fmt.string(from: NSNumber(value: value)) ?? "₹\(Int(value))"
+    }
+
+    private func abbreviatedCurrency(_ value: Double) -> String {
+        if value >= 1_00_00_000 {
+            return "₹\(String(format: "%.2f", value / 1_00_00_000))Cr"
+        } else if value >= 1_00_000 {
+            return "₹\(String(format: "%.2f", value / 1_00_000))L"
+        } else if value >= 1_000 {
+            return "₹\(String(format: "%.1f", value / 1_000))K"
+        } else {
+            return "₹\(Int(value))"
+        }
+    }
+
+
+
+    private func subscribeRealtimeFeeds() async {
+        await unsubscribeRealtimeFeeds()
+        guard let storeId = appState.currentStoreId else { return }
+
+        let client = SupabaseManager.shared.client
+        let storeFilter = storeId.uuidString.lowercased()
+
+        let ordersChannel = client.realtimeV2.channel("manager-operations-orders:\(storeFilter)")
+        let orderInsertions = ordersChannel.postgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "orders",
+            filter: .eq("store_id", value: storeFilter)
+        )
+        let orderUpdates = ordersChannel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "orders",
+            filter: .eq("store_id", value: storeFilter)
+        )
+        let orderDeletions = ordersChannel.postgresChange(
+            DeleteAction.self,
+            schema: "public",
+            table: "orders",
+            filter: .eq("store_id", value: storeFilter)
+        )
+
+        do {
+            try await ordersChannel.subscribeWithError()
+            ordersRealtimeChannel = ordersChannel
+        } catch {
+            if error is CancellationError { return }
+            print("[ManagerOperationsView] Orders realtime subscribe failed: \(error)")
+        }
+
+        Task { @MainActor in
+            for await _ in orderInsertions {
+                await loadLiveOrders()
+            }
+        }
+        Task { @MainActor in
+            for await _ in orderUpdates {
+                await loadLiveOrders()
+            }
+        }
+        Task { @MainActor in
+            for await _ in orderDeletions {
+                await loadLiveOrders()
+            }
+        }
+
+        let discrepancyChannel = client.realtimeV2.channel("manager-operations-discrepancies:\(storeFilter)")
+        let discrepancyInsertions = discrepancyChannel.postgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "inventory_discrepancies",
+            filter: .eq("store_id", value: storeFilter)
+        )
+        let discrepancyUpdates = discrepancyChannel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "inventory_discrepancies",
+            filter: .eq("store_id", value: storeFilter)
+        )
+        let discrepancyDeletions = discrepancyChannel.postgresChange(
+            DeleteAction.self,
+            schema: "public",
+            table: "inventory_discrepancies",
+            filter: .eq("store_id", value: storeFilter)
+        )
+
+        do {
+            try await discrepancyChannel.subscribeWithError()
+            discrepanciesRealtimeChannel = discrepancyChannel
+        } catch {
+            if error is CancellationError { return }
+            print("[ManagerOperationsView] Discrepancy realtime subscribe failed: \(error)")
+        }
+
+        Task { @MainActor in
+            for await _ in discrepancyInsertions {
+                await loadLiveDiscrepancies()
+            }
+        }
+        Task { @MainActor in
+            for await _ in discrepancyUpdates {
+                await loadLiveDiscrepancies()
+            }
+        }
+        Task { @MainActor in
+            for await _ in discrepancyDeletions {
+                await loadLiveDiscrepancies()
+            }
+        }
+
+        let eventsChannel = client.realtimeV2.channel("manager-operations-events:\(storeFilter)")
+        let eventInsertions = eventsChannel.postgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "boutique_events",
+            filter: .eq("store_id", value: storeFilter)
+        )
+        let eventUpdates = eventsChannel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "boutique_events",
+            filter: .eq("store_id", value: storeFilter)
+        )
+        let eventDeletions = eventsChannel.postgresChange(
+            DeleteAction.self,
+            schema: "public",
+            table: "boutique_events",
+            filter: .eq("store_id", value: storeFilter)
+        )
+
+        do {
+            try await eventsChannel.subscribeWithError()
+            eventsRealtimeChannel = eventsChannel
+        } catch {
+            if error is CancellationError { return }
+            print("[ManagerOperationsView] Event realtime subscribe failed: \(error)")
+        }
+
+        Task { @MainActor in
+            for await _ in eventInsertions {
+                await loadLiveEvents()
+            }
+        }
+        Task { @MainActor in
+            for await _ in eventUpdates {
+                await loadLiveEvents()
+            }
+        }
+        Task { @MainActor in
+            for await _ in eventDeletions {
+                await loadLiveEvents()
+            }
+        }
+    }
+
+    private func unsubscribeRealtimeFeeds() async {
+        if let ordersRealtimeChannel {
+            await ordersRealtimeChannel.unsubscribe()
+            self.ordersRealtimeChannel = nil
+        }
+        if let discrepanciesRealtimeChannel {
+            await discrepanciesRealtimeChannel.unsubscribe()
+            self.discrepanciesRealtimeChannel = nil
+        }
+        if let eventsRealtimeChannel {
+            await eventsRealtimeChannel.unsubscribe()
+            self.eventsRealtimeChannel = nil
+        }
     }
 
     // MARK: - Fulfillment (Order Processing for IC)
@@ -405,6 +652,16 @@ struct ManagerOperationsView: View {
                 .shadow(color: isSelected ? AppColors.accent.opacity(0.3) : Color.clear, radius: 6, x: 0, y: 3)
         }
         .buttonStyle(.plain)
+    }
+
+    private func menuOptionLabel(_ title: String, isSelected: Bool) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            if isSelected {
+                Image(systemName: "checkmark")
+            }
+        }
     }
 
     // MARK: - Discrepancies (Live)
@@ -706,13 +963,22 @@ struct ManagerOperationsView: View {
 
     private func loadLiveEvents() async {
         guard let storeId = appState.currentStoreId else { return }
+        if Task.isCancelled { return }
         isLoadingEvents = true
         defer { isLoadingEvents = false }
         do {
             liveEvents = try await EventSalesService.shared.fetchEvents(storeId: storeId)
         } catch {
+            if isExpectedCancellation(error) { return }
             print("[ManagerOperationsView] Failed to load events: \(error)")
         }
+    }
+
+    private func isExpectedCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        let message = error.localizedDescription.lowercased()
+        return message == "cancelled" || message.contains("code=-999")
     }
 
     // MARK: - Activity Log
@@ -720,28 +986,59 @@ struct ManagerOperationsView: View {
     private var activitySection: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
-                activityRow(action: "Sale Completed", detail: "TXN-4821 — Perpetual Chronograph — $12,500", by: "Alexander C.", time: "11:42 AM")
-                Divider().background(AppColors.border)
-                activityRow(action: "Inventory Count", detail: "Pearl Earrings — discrepancy flagged (6→5)", by: "Daniel Park", time: "10:30 AM")
-                Divider().background(AppColors.border)
-                activityRow(action: "Sale Completed", detail: "TXN-4820 — Classic Flap, Silk Scarf — $5,740", by: "Isabella M.", time: "10:15 AM")
-                Divider().background(AppColors.border)
-                activityRow(action: "Store Opened", detail: "Fifth Avenue Boutique — daily check complete", by: "James Beaumont", time: "9:00 AM")
-                Divider().background(AppColors.border)
-                activityRow(action: "VIP Confirmed", detail: "Mrs. Chen — private viewing 3:00 PM", by: "Alexander C.", time: "8:45 AM")
-                Divider().background(AppColors.border)
-                activityRow(action: "Transfer Received", detail: "Sport Diver ×2 from Newark DC", by: "Daniel Park", time: "Yesterday")
+                if liveActivityItems.isEmpty && (isLoadingOrders || isLoadingDiscrepancies || isLoadingEvents) {
+                    HStack {
+                        Spacer()
+                        ProgressView("Loading activity…")
+                            .tint(AppColors.accent)
+                            .padding(.vertical, AppSpacing.xl)
+                        Spacer()
+                    }
+                } else if liveActivityItems.isEmpty {
+                    VStack(spacing: AppSpacing.xs) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 24, weight: .light))
+                            .foregroundColor(AppColors.neutral500)
+                        Text("No recent activity")
+                            .font(AppTypography.label)
+                            .foregroundColor(AppColors.textPrimaryDark)
+                        Text("Operational events will appear here as your store receives updates.")
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondaryDark)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.horizontal, AppSpacing.screenHorizontal)
+                    .padding(.vertical, AppSpacing.xl)
+                } else {
+                    ForEach(Array(liveActivityItems.enumerated()), id: \.element.id) { index, item in
+                        activityRow(
+                            action: item.action,
+                            detail: item.detail,
+                            by: item.by,
+                            time: relativeTimeLabel(for: item.timestamp),
+                            dotColor: item.dotColor
+                        )
+                        if index < liveActivityItems.count - 1 {
+                            Divider().background(AppColors.border)
+                        }
+                    }
+                }
             }
             .managerCardSurface(cornerRadius: AppSpacing.radiusMedium)
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.sm)
             .padding(.bottom, AppSpacing.xxxl)
         }
+        .refreshable {
+            await loadLiveOrders()
+            await loadLiveDiscrepancies()
+            await loadLiveEvents()
+        }
     }
 
-    private func activityRow(action: String, detail: String, by: String, time: String) -> some View {
+    private func activityRow(action: String, detail: String, by: String, time: String, dotColor: Color) -> some View {
         HStack(spacing: AppSpacing.sm) {
-            Circle().fill(AppColors.accent).frame(width: 5, height: 5)
+            Circle().fill(dotColor).frame(width: 5, height: 5)
             VStack(alignment: .leading, spacing: 1) {
                 HStack {
                     Text(action).font(AppTypography.label).foregroundColor(AppColors.textPrimaryDark)
@@ -755,20 +1052,114 @@ struct ManagerOperationsView: View {
         .padding(.horizontal, AppSpacing.sm).padding(.vertical, AppSpacing.xs + 2)
     }
 
+    private var liveActivityItems: [OperationsActivityItem] {
+        let orderItems: [OperationsActivityItem] = liveOrders.map { order in
+            let channelLabel = orderChannelLabel(order.channel)
+            let orderNumber = order.orderNumber ?? "#\(order.id.uuidString.prefix(8))"
+            let action: String
+            let dotColor: Color
+
+            switch OrderStatusMapper.canonical(order.status) {
+            case "completed", "delivered":
+                action = "Sale Completed"
+                dotColor = AppColors.success
+            case "cancelled":
+                action = "Order Cancelled"
+                dotColor = AppColors.error
+            case "processing", "shipped", "ready_for_pickup":
+                action = "Order Processing"
+                dotColor = AppColors.secondary
+            default:
+                action = "Order Received"
+                dotColor = AppColors.accent
+            }
+
+            return OperationsActivityItem(
+                action: action,
+                detail: "\(orderNumber) — \(channelLabel) — \(formattedAmount(order.grandTotal))",
+                by: order.customerName,
+                timestamp: order.createdAt,
+                dotColor: dotColor
+            )
+        }
+
+        let discrepancyItems: [OperationsActivityItem] = liveDiscrepancies.map { item in
+            let delta = item.reportedQuantity - item.systemQuantity
+            let action: String
+            let dotColor: Color
+            switch item.status {
+            case "approved":
+                action = "Discrepancy Approved"
+                dotColor = AppColors.success
+            case "rejected":
+                action = "Discrepancy Rejected"
+                dotColor = AppColors.error
+            default:
+                action = "Inventory Count"
+                dotColor = AppColors.warning
+            }
+
+            return OperationsActivityItem(
+                action: action,
+                detail: "\(item.productName) — delta \(delta >= 0 ? "+" : "")\(delta)",
+                by: item.reportedByName.isEmpty ? "Staff" : item.reportedByName,
+                timestamp: item.updatedAt,
+                dotColor: dotColor
+            )
+        }
+
+        let eventItems: [OperationsActivityItem] = liveEvents.map { event in
+            let dotColor: Color
+            switch event.status {
+            case "Completed":
+                dotColor = AppColors.success
+            case "Cancelled":
+                dotColor = AppColors.error
+            case "In Progress":
+                dotColor = AppColors.secondary
+            default:
+                dotColor = AppColors.accent
+            }
+
+            return OperationsActivityItem(
+                action: "Event Updated",
+                detail: "\(event.eventName) — \(event.status)",
+                by: "Manager",
+                timestamp: event.updatedAt,
+                dotColor: dotColor
+            )
+        }
+
+        return (orderItems + discrepancyItems + eventItems)
+            .sorted { $0.timestamp > $1.timestamp }
+            .prefix(30)
+            .map { $0 }
+    }
+
+    private func relativeTimeLabel(for date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
     // MARK: - Helpers
 
     private func miniStat(value: String, label: String, color: Color) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.system(size: 30, weight: .bold, design: .rounded))
                 .foregroundColor(color)
+                .lineLimit(2)
+                .minimumScaleFactor(0.45)
+                .multilineTextAlignment(.center)
             Text(label)
                 .font(.system(size: 11, weight: .medium))
                 .tracking(0.4)
                 .foregroundColor(AppColors.textSecondaryDark)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, AppSpacing.sm)
+        .padding(.vertical, AppSpacing.md)
+        .frame(minHeight: 94)
         .background(AppColors.backgroundSecondary.opacity(0.85))
         .clipShape(RoundedRectangle(cornerRadius: AppSpacing.radiusMedium, style: .continuous))
         .overlay(
@@ -790,6 +1181,15 @@ struct ManagerOperationsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, AppSpacing.screenHorizontal)
     }
+}
+
+private struct OperationsActivityItem: Identifiable {
+    let id = UUID()
+    let action: String
+    let detail: String
+    let by: String
+    let timestamp: Date
+    let dotColor: Color
 }
 
 #Preview {

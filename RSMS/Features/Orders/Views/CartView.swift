@@ -98,9 +98,8 @@ struct CartView: View {
         .navigationDestination(isPresented: $navigateToCheckout) {
             CheckoutView()
         }
-        .sheet(isPresented: $showGuestAuthGate) {
+        .fullScreenCover(isPresented: $showGuestAuthGate) {
             GuestAuthGateView(pendingAction: "Add to Bag")
-                .presentationDetents([.large])
         }
         .onChange(of: appState.shouldNavigateHome) { _, newValue in
             guard newValue else { return }

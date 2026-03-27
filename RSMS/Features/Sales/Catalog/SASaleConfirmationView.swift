@@ -69,7 +69,7 @@ struct SASaleConfirmationView: View {
                         // Fulfillment mode badge
                         Label(
                             cart.completedIsHandover ? "Handed Over in Store" : "Ordered for Delivery",
-                            systemImage: cart.completedIsHandover ? "bag.fill.badge.checkmark" : "shippingbox.fill"
+                            systemImage: cart.completedIsHandover ? "bag.fill" : "shippingbox.fill"
                         )
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(cart.completedIsHandover ? AppColors.success : AppColors.accent)

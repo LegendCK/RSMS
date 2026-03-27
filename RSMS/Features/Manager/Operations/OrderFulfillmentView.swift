@@ -18,6 +18,7 @@
 
 import SwiftUI
 import SwiftData
+import Supabase
 
 // MARK: - OrderFulfillmentView
 
@@ -30,8 +31,7 @@ struct OrderFulfillmentView: View {
     @State private var selectedFilter: FulfillFilter = .pending
     @State private var errorMessage = ""
     @State private var showError = false
-    private let glassCardRadius: CGFloat = 20
-    private let innerCardRadius: CGFloat = 14
+    @State private var realtimeChannel: RealtimeChannelV2?
 
     enum FulfillFilter: String, CaseIterable {
         case pending    = "New"
@@ -53,46 +53,18 @@ struct OrderFulfillmentView: View {
         }
     }
 
-    private var pendingCount: Int {
-        orders.filter { ["confirmed", "pending"].contains(OrderStatusMapper.canonical($0.status)) }.count
-    }
-    private var processingCount: Int {
-        orders.filter { OrderStatusMapper.canonical($0.status) == "processing" }.count
-    }
-    private var shippedCount: Int {
-        orders.filter { ["shipped", "ready_for_pickup"].contains(OrderStatusMapper.canonical($0.status)) }.count
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: AppSpacing.md) {
-                HStack(spacing: AppSpacing.sm) {
-                    statCell(value: "\(pendingCount)", label: "New", color: AppColors.warning)
-                    statCell(value: "\(processingCount)", label: "Processing", color: AppColors.accent)
-                    statCell(value: "\(shippedCount)", label: "Shipped", color: AppColors.success)
-                }
-
+            VStack(spacing: AppSpacing.sm) {
                 filterRow
             }
-            .padding(AppSpacing.md)
-            .liquidGlass(
-                config: .thin,
-                backgroundColor: AppColors.backgroundSecondary,
-                cornerRadius: glassCardRadius
-            )
+            .padding(.horizontal, AppSpacing.md)
+            .padding(.vertical, AppSpacing.sm)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: glassCardRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.12), Color.clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .blendMode(.screen)
-                    .allowsHitTesting(false)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(AppColors.border.opacity(0.35), lineWidth: 1)
             )
-            .liquidShadow(LiquidShadow.subtle)
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.top, AppSpacing.sm)
             .padding(.bottom, AppSpacing.xs)
@@ -124,7 +96,13 @@ struct OrderFulfillmentView: View {
                 .refreshable { await loadOrders() }
             }
         }
-        .task { await loadOrders() }
+        .task {
+            await subscribeToLiveOrders()
+            await loadOrders()
+        }
+        .onDisappear {
+            Task { await unsubscribeRealtime() }
+        }
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -149,36 +127,21 @@ struct OrderFulfillmentView: View {
             withAnimation(.easeInOut(duration: 0.15)) { selectedFilter = filter }
         } label: {
             Text(filter.rawValue)
-                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                 .tracking(0.2)
-                .foregroundColor(isSelected ? .white : AppColors.textPrimaryDark)
+                .foregroundColor(isSelected ? AppColors.textPrimaryLight : AppColors.textPrimaryDark)
                 .padding(.horizontal, 14)
                 .frame(height: 34)
                 .background(
                     Capsule()
-                        .fill(isSelected ? AppColors.accent : Color(uiColor: .secondarySystemFill))
+                        .fill(isSelected ? AppColors.accent : AppColors.backgroundSecondary)
                 )
                 .overlay(
                     Capsule()
-                        .stroke(isSelected ? AppColors.accent.opacity(0.0) : AppColors.border.opacity(0.22), lineWidth: 1)
+                        .stroke(isSelected ? AppColors.accent.opacity(0.65) : AppColors.border.opacity(0.45), lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
-    }
-
-    private func statCell(value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.system(size: 24, weight: .semibold, design: .rounded))
-                .foregroundColor(color)
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .tracking(0.5)
-                .foregroundColor(Color(uiColor: .secondaryLabel))
-        }
-        .frame(maxWidth: .infinity, minHeight: 78)
-        .background(color.opacity(0.08))
-        .liquidGlass(config: .ultraThin, backgroundColor: color.opacity(0.1), cornerRadius: innerCardRadius)
     }
 
     private var emptyState: some View {
@@ -202,19 +165,91 @@ struct OrderFulfillmentView: View {
         }
     }
 
+
+
+    private func subscribeToLiveOrders() async {
+        await unsubscribeRealtime()
+        guard let storeId = appState.currentStoreId else { return }
+
+        let storeFilter = storeId.uuidString.lowercased()
+        let channel = SupabaseManager.shared.client
+            .realtimeV2
+            .channel("order-fulfillment:\(storeFilter)")
+
+        let insertions = channel.postgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "orders",
+            filter: .eq("store_id", value: storeFilter)
+        )
+        let updates = channel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "orders",
+            filter: .eq("store_id", value: storeFilter)
+        )
+        let deletions = channel.postgresChange(
+            DeleteAction.self,
+            schema: "public",
+            table: "orders",
+            filter: .eq("store_id", value: storeFilter)
+        )
+
+        do {
+            try await channel.subscribeWithError()
+            realtimeChannel = channel
+        } catch {
+            if isExpectedCancellation(error) { return }
+            print("[OrderFulfillmentView] Realtime subscribe failed: \(error)")
+            return
+        }
+
+        Task { @MainActor in
+            for await _ in insertions {
+                await loadOrders()
+            }
+        }
+        Task { @MainActor in
+            for await _ in updates {
+                await loadOrders()
+            }
+        }
+        Task { @MainActor in
+            for await _ in deletions {
+                await loadOrders()
+            }
+        }
+    }
+
+    private func unsubscribeRealtime() async {
+        if let channel = realtimeChannel {
+            await channel.unsubscribe()
+            realtimeChannel = nil
+        }
+    }
+
     // MARK: - Data
 
     @MainActor
     private func loadOrders() async {
         guard let storeId = appState.currentStoreId else { return }
+        if Task.isCancelled { return }
         isLoading = orders.isEmpty
         defer { isLoading = false }
         do {
             orders = try await OrderFulfillmentService.shared.fetchFulfillmentOrders(storeId: storeId)
         } catch {
+            if isExpectedCancellation(error) { return }
             errorMessage = "Failed to load orders: \(error.localizedDescription)"
             showError = true
         }
+    }
+
+    private func isExpectedCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        let message = error.localizedDescription.lowercased()
+        return message == "cancelled" || message.contains("code=-999")
     }
 }
 

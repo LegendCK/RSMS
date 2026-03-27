@@ -350,7 +350,7 @@ struct SASaleCheckoutView: View {
                                       ? AppColors.success.opacity(0.12)
                                       : AppColors.backgroundTertiary)
                                 .frame(width: 40, height: 40)
-                            Image(systemName: "bag.fill.badge.checkmark")
+                            Image(systemName: "bag.fill")
                                 .font(.system(size: 16, weight: .light))
                                 .foregroundColor(cart.isHandoverNow ? AppColors.success : AppColors.neutral500)
                         }
@@ -869,7 +869,7 @@ struct SASaleCheckoutView: View {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 sectionLabel("FULFILLMENT")
                 HStack(spacing: AppSpacing.md) {
-                    Image(systemName: cart.isHandoverNow ? "bag.fill.badge.checkmark" : "shippingbox.fill")
+                    Image(systemName: cart.isHandoverNow ? "bag.fill" : "shippingbox.fill")
                         .font(.system(size: 18, weight: .light))
                         .foregroundColor(cart.isHandoverNow ? AppColors.success : AppColors.accent)
                         .frame(width: 24)
