@@ -49,6 +49,9 @@ struct CategoriesView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
                     .padding(.bottom, 28)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Browse Collections, \(categories.count) categories")
+                    .accessibilityAddTraits(.isHeader)
 
                     // Gender filter pills
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -85,6 +88,8 @@ struct CategoriesView: View {
                                         )
                                 }
                                 .buttonStyle(PlainButtonStyle())
+                                .accessibilityLabel("\(gender.rawValue) filter\(selectedGender == gender ? ", selected" : "")")
+                                .accessibilityAddTraits(selectedGender == gender ? [.isButton, .isSelected] : .isButton)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -165,6 +170,9 @@ struct CategoriesView: View {
         .padding(.vertical, 18)
         .background(AppColors.backgroundPrimary)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(category.name). \(category.categoryDescription)")
+        .accessibilityHint("Double tap to browse \(category.name) products")
     }
 
     private func sfSymbol(for category: Category) -> String {

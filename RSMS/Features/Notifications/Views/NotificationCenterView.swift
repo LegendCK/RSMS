@@ -67,6 +67,8 @@ struct NotificationCenterView: View {
                     }
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppColors.accent)
+                    .accessibilityLabel("Mark all \(unreadCount) notifications as read")
+                    .accessibilityHint("Double tap to mark all unread notifications as read")
                 }
             }
         }
@@ -137,6 +139,7 @@ struct NotificationCenterView: View {
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(iconColor(item.notificationCategory))
                 }
+                .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {
@@ -161,12 +164,16 @@ struct NotificationCenterView: View {
                         .fill(AppColors.accent)
                         .frame(width: 8, height: 8)
                         .padding(.top, 4)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.vertical, 4)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.isRead ? "" : "Unread, ")\(item.notificationCategory.rawValue) notification: \(item.title). \(item.message). \(relativeTime(item.createdAt))")
+        .accessibilityHint("Double tap to open. Swipe left to mark as read.")
     }
 
     // MARK: - Empty State
@@ -176,6 +183,7 @@ struct NotificationCenterView: View {
             Image(systemName: "bell.slash")
                 .font(.system(size: 36, weight: .light))
                 .foregroundColor(AppColors.neutral500)
+                .accessibilityHidden(true)
             Text("No notifications yet")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.primary)
@@ -185,6 +193,8 @@ struct NotificationCenterView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No notifications yet. Event invitations and order updates will appear here.")
     }
 
     // MARK: - Actions

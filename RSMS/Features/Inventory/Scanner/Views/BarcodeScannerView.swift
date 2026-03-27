@@ -32,6 +32,10 @@ struct BarcodeScannerView: UIViewRepresentable {
         uiView.onBarcodeDetected = onBarcodeDetected
     }
 
+    static func dismantleUIView(_ uiView: BarcodeCameraView, coordinator: Coordinator) {
+        uiView.stopSession()
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     class Coordinator {}
@@ -46,14 +50,25 @@ final class BarcodeCameraView: UIView {
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private let videoDataOutput = AVCaptureVideoDataOutput()
     private let context = CIContext(options: [.workingColorSpace: NSNull()]) // Force strip color space issues
+    private let sessionQueue = DispatchQueue(label: "rsms.barcode.session", qos: .userInitiated)
+    private let processingQueue = DispatchQueue(label: "rsms.barcode.processing", qos: .userInitiated)
     private var lastScanTime: TimeInterval = 0
     private let scanDebounceInterval: TimeInterval = 0.5
+    private var isConfigured = false
 
     // MARK: - Setup
 
     /// Starts the capture session directly.
     /// Caller (ScannerView via CameraPermissionManager) guarantees authorization.
     func startSession() {
+        guard !isConfigured else {
+            sessionQueue.async { [weak self] in
+                guard let self, !self.captureSession.isRunning else { return }
+                self.captureSession.startRunning()
+            }
+            return
+        }
+
         setupCaptureSession()
     }
 
@@ -71,10 +86,11 @@ final class BarcodeCameraView: UIView {
         // Use video data output for Vision processing instead of metadata output
         if captureSession.canAddOutput(videoDataOutput) {
             captureSession.addOutput(videoDataOutput)
-            videoDataOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "video.processing"))
+            videoDataOutput.setSampleBufferDelegate(self, queue: processingQueue)
         }
 
         captureSession.commitConfiguration()
+        isConfigured = true
 
         // Preview layer
         let preview = AVCaptureVideoPreviewLayer(session: captureSession)
@@ -83,9 +99,37 @@ final class BarcodeCameraView: UIView {
         layer.insertSublayer(preview, at: 0)
         previewLayer = preview
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        sessionQueue.async { [weak self] in
             self?.captureSession.startRunning()
         }
+    }
+
+    func stopSession() {
+        onBarcodeDetected = nil
+        videoDataOutput.setSampleBufferDelegate(nil, queue: nil)
+
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+
+            if self.captureSession.isRunning {
+                self.captureSession.stopRunning()
+            }
+
+            self.captureSession.beginConfiguration()
+            self.captureSession.inputs.forEach { self.captureSession.removeInput($0) }
+            self.captureSession.outputs.forEach { self.captureSession.removeOutput($0) }
+            self.captureSession.commitConfiguration()
+            self.isConfigured = false
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.previewLayer?.removeFromSuperlayer()
+            self?.previewLayer = nil
+        }
+    }
+
+    deinit {
+        stopSession()
     }
 
     // MARK: - Layout

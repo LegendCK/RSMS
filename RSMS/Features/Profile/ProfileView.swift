@@ -54,6 +54,8 @@ struct ProfileView: View {
                         Spacer()
                     }
                     .padding(.vertical, 8)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(appState.isGuest ? "Guest user, browsing as guest" : "\(appState.currentUserName), \(appState.currentUserEmail), \(appState.currentUserRole.rawValue)")
                 }
 
                 // Account section

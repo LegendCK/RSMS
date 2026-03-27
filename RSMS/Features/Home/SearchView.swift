@@ -51,6 +51,7 @@ struct SearchView: View {
                         )
                         .frame(maxWidth: .infinity, alignment: .center)
                         .listRowBackground(Color.clear)
+                        .accessibilityLabel("No results found for \(searchText)")
                     }
                 } else {
                     Section("\(filteredProducts.count) Result\(filteredProducts.count == 1 ? "" : "s")") {
@@ -96,6 +97,7 @@ struct SearchView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppColors.accent)
             }
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(category.name)
@@ -108,6 +110,9 @@ struct SearchView: View {
             Spacer()
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(category.name), \(category.parsedProductTypes.count) product types")
+        .accessibilityHint("Double tap to browse \(category.name) products")
     }
 
     private func resultRow(_ product: Product) -> some View {
@@ -118,6 +123,7 @@ struct SearchView: View {
                 cornerRadius: 10
             )
             .frame(width: 56, height: 56)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(product.brand.uppercased())
@@ -140,6 +146,9 @@ struct SearchView: View {
                 .foregroundStyle(AppColors.accent)
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(product.brand) \(product.name), \(product.formattedPrice)")
+        .accessibilityHint("Double tap to view product details")
     }
 }
 

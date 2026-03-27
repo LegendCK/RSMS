@@ -61,6 +61,7 @@ struct ProductListView: View {
                         Text("\(filteredProducts.count) items")
                             .font(.system(size: 11, weight: .light))
                             .foregroundColor(AppColors.textSecondaryDark)
+                            .accessibilityLabel("\(filteredProducts.count) \(filteredProducts.count == 1 ? "item" : "items") available")
 
                         Spacer()
 
@@ -86,6 +87,8 @@ struct ProductListView: View {
                                     .foregroundColor(AppColors.textPrimaryDark)
                             }
                         }
+                        .accessibilityLabel("Sort products, currently \(sortOption.rawValue)")
+                        .accessibilityHint("Double tap to change sort order")
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 14)
@@ -119,6 +122,8 @@ struct ProductListView: View {
                                         )
                                 }
                                 .buttonStyle(PlainButtonStyle())
+                                .accessibilityLabel("\(gender.rawValue) filter\(selectedGender == gender ? ", selected" : "")")
+                                .accessibilityAddTraits(selectedGender == gender ? [.isButton, .isSelected] : .isButton)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -220,6 +225,9 @@ struct ProductListView: View {
             .background(AppColors.backgroundPrimary)
         }
         .background(AppColors.backgroundPrimary)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(product.brand) \(product.name), \(product.formattedPrice)\(isOutOfStock ? ", out of stock" : "")\(product.isLimitedEdition ? ", limited edition" : "")")
+        .accessibilityHint("Double tap to view product details")
     }
 }
 

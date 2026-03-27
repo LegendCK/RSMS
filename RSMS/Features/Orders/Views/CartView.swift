@@ -144,10 +144,12 @@ struct CartView: View {
             Image(systemName: "bag")
                 .font(AppTypography.iconDecorative)
                 .foregroundColor(AppColors.neutral600)
+                .accessibilityHidden(true)
             VStack(spacing: AppSpacing.xs) {
                 Text("Your Bag is Empty")
                     .font(AppTypography.heading2)
                     .foregroundColor(AppColors.textPrimaryDark)
+                    .accessibilityAddTraits(.isHeader)
                 Text("Browse our collections and add items to your bag")
                     .font(AppTypography.bodyMedium)
                     .foregroundColor(AppColors.textSecondaryDark)
@@ -155,6 +157,7 @@ struct CartView: View {
             }
             SecondaryButton(title: "Continue Shopping") { appState.navigateToHome() }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
+                .accessibilityHint("Double tap to browse products")
         }
         .padding(.horizontal, AppSpacing.xxl)
     }
@@ -249,11 +252,14 @@ struct CartView: View {
                             .foregroundColor(item.quantity > 1 ? AppColors.accent : AppColors.neutral600)
                     }
                     .disabled(item.quantity <= 1)
+                    .accessibilityLabel("Decrease quantity")
+                    .accessibilityHint(item.quantity > 1 ? "Current quantity is \(item.quantity)" : "Minimum quantity reached")
 
                     Text("\(item.quantity)")
                         .font(AppTypography.label)
                         .foregroundColor(AppColors.textPrimaryDark)
                         .frame(minWidth: 24)
+                        .accessibilityLabel("Quantity: \(item.quantity)")
 
                     Button {
                         if item.quantity < 10 {
@@ -267,6 +273,8 @@ struct CartView: View {
                             .foregroundColor(item.quantity < 10 ? AppColors.accent : AppColors.neutral600)
                     }
                     .disabled(item.quantity >= 10)
+                    .accessibilityLabel("Increase quantity")
+                    .accessibilityHint(item.quantity < 10 ? "Current quantity is \(item.quantity)" : "Maximum quantity reached")
 
                     Spacer()
                 }
@@ -287,6 +295,8 @@ struct CartView: View {
                     .background(AppColors.backgroundTertiary)
                     .clipShape(Circle())
             }
+            .accessibilityLabel("Remove \(item.productName) from bag")
+            .accessibilityHint("Double tap to remove this item")
         }
         .padding(AppSpacing.cardPadding)
         .background(AppColors.backgroundSecondary)
@@ -408,12 +418,15 @@ struct CartView: View {
                         .background(AppColors.accent)
                         .cornerRadius(AppSpacing.radiusMedium)
                     }
+                    .accessibilityLabel("Checkout, total \(formatCurrency(total))")
+                    .accessibilityHint("Double tap to proceed to secure checkout")
                 }
 
-                Text("Estimated delivery: 5–7 business days")
+                Text("Estimated delivery: 5 to 7 business days")
                     .font(AppTypography.pico)
                     .foregroundColor(AppColors.textSecondaryDark)
                     .frame(maxWidth: .infinity, alignment: .center)
+                    .accessibilityLabel("Estimated delivery: 5 to 7 business days")
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.vertical, AppSpacing.md)

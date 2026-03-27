@@ -5,6 +5,8 @@ struct CustomerAppointmentsView: View {
     @State private var vm = CustomerAppointmentsViewModel()
     @State private var selectedSection = 0 // 0 upcoming, 1 past
     @State private var showSignIn = false
+    @State private var loadTask: Task<Void, Never>?
+    @State private var actionTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -15,13 +17,14 @@ struct CustomerAppointmentsView: View {
                     unavailableState
                 } else {
                     VStack(spacing: 0) {
-                        Picker("", selection: $selectedSection) {
+                        Picker("Appointment filter", selection: $selectedSection) {
                             Text("Upcoming").tag(0)
                             Text("Past").tag(1)
                         }
                         .pickerStyle(.segmented)
                         .padding(.horizontal, AppSpacing.screenHorizontal)
                         .padding(.vertical, AppSpacing.sm)
+                        .accessibilityHint("Switch between upcoming and past appointments")
 
                         ScrollView {
                             if vm.isLoading && currentList.isEmpty {
@@ -63,17 +66,22 @@ struct CustomerAppointmentsView: View {
                             Image(systemName: "calendar.badge.plus")
                                 .foregroundColor(AppColors.accent)
                         }
+                        .accessibilityLabel("Book new appointment")
+                        .accessibilityHint("Double tap to schedule a new boutique appointment")
                     }
                 }
             }
             .task {
-                await vm.loadAppointments(clientId: appState.currentUserProfile?.id)
+                loadTask?.cancel()
+                let clientId = appState.currentUserProfile?.id
+                loadTask = Task { await vm.loadAppointments(clientId: clientId) }
             }
             // ── Book new appointment ─────────────────────────────────────────
             .sheet(isPresented: $vm.showBookingSheet) {
                 if let clientId = appState.currentUserProfile?.id {
                     CustomerBookAppointmentSheet(clientId: clientId) {
-                        Task { await vm.loadAppointments(clientId: clientId) }
+                        actionTask?.cancel()
+                        actionTask = Task { await vm.loadAppointments(clientId: clientId) }
                     }
                 }
             }
@@ -84,7 +92,8 @@ struct CustomerAppointmentsView: View {
             )) {
                 Button("Yes, Cancel", role: .destructive) {
                     if let appt = vm.appointmentToCancel {
-                        Task { await vm.cancelAppointment(appt) }
+                        actionTask?.cancel()
+                        actionTask = Task { await vm.cancelAppointment(appt) }
                     }
                     vm.appointmentToCancel = nil
                 }
@@ -100,7 +109,8 @@ struct CustomerAppointmentsView: View {
                 set: { vm.appointmentToReschedule = $0 }
             )) { appt in
                 CustomerRescheduleSheet(appointment: appt) { newDate in
-                    Task { await vm.requestReschedule(appt, newDate: newDate) }
+                    actionTask?.cancel()
+                    actionTask = Task { await vm.requestReschedule(appt, newDate: newDate) }
                 }
             }
             // ── Success feedback ─────────────────────────────────────────────
@@ -125,6 +135,12 @@ struct CustomerAppointmentsView: View {
             .fullScreenCover(isPresented: $showSignIn) {
                 GuestAuthGateView(pendingAction: "manage your appointments")
             }
+            .onDisappear {
+                loadTask?.cancel()
+                loadTask = nil
+                actionTask?.cancel()
+                actionTask = nil
+            }
         }
     }
 
@@ -141,6 +157,7 @@ struct CustomerAppointmentsView: View {
             Image(systemName: selectedSection == 0 ? "calendar.badge.clock" : "calendar.badge.checkmark")
                 .font(AppTypography.emptyStateIcon)
                 .foregroundColor(AppColors.accent.opacity(0.55))
+                .accessibilityHidden(true)
             Text(selectedSection == 0 ? "No upcoming appointments" : "No past appointments")
                 .font(AppTypography.bodyMedium)
                 .foregroundColor(AppColors.textSecondaryDark)
@@ -149,6 +166,7 @@ struct CustomerAppointmentsView: View {
                     vm.showBookingSheet = true
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
+                .accessibilityHint("Double tap to schedule a new boutique appointment")
             }
         }
         .frame(maxWidth: .infinity)
@@ -208,6 +226,7 @@ struct CustomerAppointmentsView: View {
                     .padding(.vertical, 4)
                     .background(statusColor(appointment.status).opacity(0.12))
                     .clipShape(Capsule())
+                    .accessibilityLabel("Status: \(vm.statusLabel(appointment.status))")
             }
 
             GoldDivider()
@@ -218,6 +237,7 @@ struct CustomerAppointmentsView: View {
                     .foregroundColor(AppColors.textSecondaryDark)
                 Text("•")
                     .foregroundColor(AppColors.textSecondaryDark)
+                    .accessibilityHidden(true)
                 Text("\(appointment.durationMinutes) min")
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
@@ -245,6 +265,8 @@ struct CustomerAppointmentsView: View {
                             .background(AppColors.accent.opacity(0.1))
                             .clipShape(Capsule())
                     }
+                    .accessibilityLabel("Reschedule appointment at \(vm.storeName(for: appointment))")
+                    .accessibilityHint("Double tap to choose a new date and time")
 
                     Spacer(minLength: 0)
 
@@ -259,6 +281,8 @@ struct CustomerAppointmentsView: View {
                             .background(AppColors.error.opacity(0.1))
                             .clipShape(Capsule())
                     }
+                    .accessibilityLabel("Cancel appointment at \(vm.storeName(for: appointment))")
+                    .accessibilityHint("Double tap to cancel this appointment. This cannot be undone.")
                 }
             }
         }
@@ -272,6 +296,8 @@ struct CustomerAppointmentsView: View {
         // Dim the card while a request is in flight
         .opacity(vm.isProcessing ? 0.6 : 1)
         .animation(.easeInOut(duration: 0.2), value: vm.isProcessing)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(vm.normalizedType(appointment.type)) appointment at \(vm.storeName(for: appointment)), \(appointment.scheduledAt.formatted(date: .abbreviated, time: .shortened)), \(vm.statusLabel(appointment.status)), \(appointment.durationMinutes) minutes")
     }
 
     private func statusColor(_ status: String) -> Color {

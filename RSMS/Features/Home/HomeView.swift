@@ -131,6 +131,8 @@ struct HomeView: View {
                             .font(.system(size: 17, weight: .light))
                             .foregroundStyle(.primary)
                     }
+                    .accessibilityLabel(unreadCount > 0 ? "Notifications, \(unreadCount) unread" : "Notifications")
+                    .accessibilityHint("Double tap to view notifications")
                     CartShortcutButton()
                 }
             }
@@ -211,6 +213,8 @@ struct HomeView: View {
         }
         .padding(.top, 16)
         .padding(.bottom, 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Promotional banners, \(banners.count) banners, showing banner \(currentBanner + 1)")
     }
 
     private func bannerCard(_ data: BannerData) -> some View {
@@ -253,6 +257,8 @@ struct HomeView: View {
                         .background(AppColors.accent)
                         .clipShape(Capsule())
                 }
+                .accessibilityLabel("\(data.buttonText) — \(data.title.replacingOccurrences(of: "\n", with: " "))")
+                .accessibilityHint(data.subtitle)
                 .padding(.top, 2)
             }
             .padding(.horizontal, 22)
@@ -374,6 +380,10 @@ struct HomeView: View {
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 1)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(product.brand) \(product.name), \(product.formattedPrice)\(isOutOfStock ? ", out of stock" : "")\(product.isLimitedEdition ? ", limited edition" : "")")
+        .accessibilityHint("Double tap to view product details")
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - New Arrivals
@@ -479,6 +489,10 @@ struct HomeView: View {
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 1)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(product.brand) \(product.name), \(product.formattedPrice)\(isOutOfStock ? ", out of stock" : "")\(product.isLimitedEdition ? ", limited edition" : "")")
+        .accessibilityHint("Double tap to view product details")
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Gender Filter Section
@@ -518,6 +532,9 @@ struct HomeView: View {
                             )
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel("\(gender.rawValue) filter\(selectedGender == gender ? ", selected" : "")")
+                    .accessibilityAddTraits(selectedGender == gender ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityHint("Double tap to filter products by \(gender.rawValue)")
                 }
             }
             .padding(.horizontal, 20)
@@ -535,6 +552,7 @@ struct HomeView: View {
                 .tracking(1.5)
                 .foregroundColor(AppColors.textPrimaryDark)
                 .shadow(color: AppColors.border.opacity(0.25), radius: 1, x: 0, y: 1)
+                .accessibilityAddTraits(.isHeader)
             Spacer()
             Button(action: action) {
                 HStack(spacing: 3) {
@@ -546,6 +564,7 @@ struct HomeView: View {
                         .foregroundColor(AppColors.accent)
                 }
             }
+            .accessibilityLabel("View all \(title.lowercased()) products")
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)
@@ -579,6 +598,8 @@ struct HomeView: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(product.isWishlisted ? "Remove \(product.name) from wishlist" : "Add \(product.name) to wishlist")
+        .accessibilityHint("Double tap to \(product.isWishlisted ? "remove from" : "add to") your wishlist")
     }
 
     private func toggleWishlist(_ product: Product) {

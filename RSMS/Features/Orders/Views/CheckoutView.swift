@@ -261,6 +261,9 @@ struct CheckoutView: View {
             }
         }
         .transition(.opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Placing your order. Please wait.")
+        .accessibilityAddTraits(.updatesFrequently)
     }
 
     // MARK: - Step Indicator
@@ -287,15 +290,20 @@ struct CheckoutView: View {
                         .font(AppTypography.caption)
                         .foregroundColor(idx <= currentStep ? AppColors.accent : AppColors.neutral600)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Step \(idx + 1): \(steps[idx]), \(idx < currentStep ? "completed" : idx == currentStep ? "current step" : "upcoming")")
                 if idx < steps.count - 1 {
                     Rectangle()
                         .fill(idx < currentStep ? AppColors.accent : AppColors.neutral700.opacity(0.4))
                         .frame(height: 1)
                         .padding(.horizontal, 8)
+                        .accessibilityHidden(true)
                 }
             }
         }
         .padding(.horizontal, AppSpacing.screenHorizontal)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Checkout progress: step \(currentStep + 1) of \(steps.count), \(steps[currentStep])")
     }
 
     // MARK: - Step 0: Delivery
@@ -460,6 +468,10 @@ struct CheckoutView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(subtitle)\(selectedFulfillment == type ? ", selected" : "")")
+        .accessibilityHint("Double tap to select \(title)")
+        .accessibilityAddTraits(selectedFulfillment == type ? [.isSelected] : [])
     }
 
     private func checkoutAddressRow(_ addr: SavedAddress) -> some View {

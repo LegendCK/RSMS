@@ -50,5 +50,9 @@ struct CartShortcutButton: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(itemCount > 0 ? "Shopping bag, \(itemCount) \(itemCount == 1 ? "item" : "items")" : "Shopping bag, empty")
+        .accessibilityHint("Double tap to open your shopping bag")
+        .accessibilityAddTraits(.isButton)
     }
 }

@@ -102,6 +102,7 @@ private extension CustomerServiceTicketsView {
             Image(systemName: "wrench.and.screwdriver")
                 .font(AppTypography.emptyStateIcon)
                 .foregroundColor(AppColors.textSecondaryDark.opacity(0.5))
+                .accessibilityHidden(true)
             Text("No Service Tickets")
                 .font(AppTypography.heading3)
                 .foregroundColor(AppColors.textPrimaryDark)
@@ -119,6 +120,8 @@ private extension CustomerServiceTicketsView {
                     .padding(.horizontal, AppSpacing.screenHorizontal)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No service tickets. Service tickets are created when you bring a product in for repair, authentication, or other services.")
     }
 
     var ticketList: some View {
@@ -170,6 +173,8 @@ private extension CustomerServiceTicketsView {
         .frame(maxWidth: .infinity)
         .padding(.vertical, AppSpacing.sm)
         .liquidGlass(config: .thin, backgroundColor: AppColors.backgroundSecondary, cornerRadius: AppSpacing.radiusMedium)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(count) \(label) tickets")
     }
 
     func customerTicketCard(_ ticket: ServiceTicketDTO) -> some View {
@@ -183,6 +188,7 @@ private extension CustomerServiceTicketsView {
                         Image(systemName: ticket.ticketType.icon)
                             .font(AppTypography.iconSmall)
                             .foregroundColor(AppColors.accent)
+                            .accessibilityHidden(true)
                         Text(ticket.ticketType.displayName)
                             .font(AppTypography.bodySmall)
                             .foregroundColor(AppColors.textPrimaryDark)
@@ -197,6 +203,7 @@ private extension CustomerServiceTicketsView {
 
             // Progress indicator
             progressBar(for: ticket.ticketStatus)
+                .accessibilityLabel("Progress: \(ticket.ticketStatus.displayName)")
 
             if let condition = ticket.conditionNotes, !condition.isEmpty {
                 Text(condition)
@@ -220,6 +227,9 @@ private extension CustomerServiceTicketsView {
         .padding(AppSpacing.cardPadding)
         .liquidGlass(config: .regular, backgroundColor: AppColors.backgroundSecondary, cornerRadius: AppSpacing.radiusMedium)
         .liquidShadow(LiquidShadow.subtle)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(ticket.ticketType.displayName) ticket \(ticket.displayTicketNumber), status: \(ticket.ticketStatus.displayName)\(ticket.estimatedCost != nil ? ", estimated cost INR \(String(format: "%.0f", ticket.estimatedCost!))" : ""), created \(ticket.createdAt.formatted(date: .abbreviated, time: .omitted))")
+        .accessibilityHint("Double tap to view ticket details")
     }
 
     func progressBar(for status: RepairStatus) -> some View {

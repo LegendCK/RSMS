@@ -29,6 +29,8 @@ struct CustomerBookAppointmentSheet: View {
     @State private var isSubmitting = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var loadTask: Task<Void, Never>?
+    @State private var submitTask: Task<Void, Never>?
 
     private var minimumDate: Date {
         Calendar.current.date(byAdding: .hour, value: 2, to: Date()) ?? Date()
@@ -199,7 +201,8 @@ struct CustomerBookAppointmentSheet: View {
 
                         // ── Submit ────────────────────────────────────────────
                         PrimaryButton(title: isSubmitting ? "Submitting…" : "Request Appointment") {
-                            Task { await submit() }
+                            submitTask?.cancel()
+                            submitTask = Task { await submit() }
                         }
                         .disabled(!isFormValid || isSubmitting)
                         .opacity(isFormValid ? 1 : 0.5)
@@ -219,7 +222,10 @@ struct CustomerBookAppointmentSheet: View {
                 }
                 // Removed cancel/close button as per design update
             }
-            .task { await loadStores() }
+            .task {
+                loadTask?.cancel()
+                loadTask = Task { await loadStores() }
+            }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -237,12 +243,19 @@ struct CustomerBookAppointmentSheet: View {
                     }
                 }
             }
+            .onDisappear {
+                loadTask?.cancel()
+                loadTask = nil
+                submitTask?.cancel()
+                submitTask = nil
+            }
         }
     }
 
     // MARK: - Private
 
     private func loadStores() async {
+        guard !Task.isCancelled else { return }
         isLoadingStores = true
         defer { isLoadingStores = false }
         do {
@@ -250,14 +263,18 @@ struct CustomerBookAppointmentSheet: View {
             if selectedStoreId == nil, let first = stores.first {
                 selectedStoreId = first.id
             }
+            loadTask = nil
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
             showError = true
+            loadTask = nil
         }
     }
 
     private func submit() async {
         guard let storeId = selectedStoreId else { return }
+        guard !Task.isCancelled else { return }
         isSubmitting = true
         defer { isSubmitting = false }
         do {
@@ -273,11 +290,14 @@ struct CustomerBookAppointmentSheet: View {
                 videoLink: nil
             )
             _ = try await AppointmentService.shared.createAppointment(payload)
+            submitTask = nil
             onBooked()
             dismiss()
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
             showError = true
+            submitTask = nil
         }
     }
 }

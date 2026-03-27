@@ -254,6 +254,8 @@ struct ProductDetailView: View {
                         .padding(10)
                         .background(.black.opacity(0.40), in: Circle())
                 }
+                .accessibilityLabel("Close")
+                .accessibilityHint("Double tap to close product details")
                 .padding(.top, 16)
                 .padding(.leading, 16)
             }
@@ -455,6 +457,7 @@ struct ProductDetailView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(.ultraThinMaterial, in: Capsule())
+                        .accessibilityLabel("Image \(min(currentImageIndex + 1, galleryImages.count)) of \(galleryImages.count)")
                 }
                 .padding(.top, 14)
                 .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -478,6 +481,8 @@ struct ProductDetailView: View {
                                 .frame(width: 36, height: 36)
                                 .background(.ultraThinMaterial, in: Circle())
                         }
+                        .accessibilityLabel(product.isWishlisted ? "Remove from wishlist" : "Add to wishlist")
+                        .accessibilityHint("Double tap to \(product.isWishlisted ? "remove from" : "add to") your wishlist")
                     }
                     .padding(.top, 56)
                     .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -496,6 +501,9 @@ struct ProductDetailView: View {
                     .padding(.trailing, 14)
                     .padding(.bottom, 14)
                     .onTapGesture { showGallery = true }
+                    .accessibilityLabel("View full screen gallery")
+                    .accessibilityHint("Double tap to open image gallery")
+                    .accessibilityAddTraits(.isButton)
             }
         }
         .clipped()
@@ -542,7 +550,11 @@ struct ProductDetailView: View {
                     .font(.system(size: 11, weight: .light))
                     .foregroundColor(AppColors.textSecondaryDark)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Rating: \(String(format: "%.1f", product.rating)) out of 5 stars")
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Price + Stock
@@ -552,6 +564,7 @@ struct ProductDetailView: View {
             Text(product.formattedPrice)
                 .font(AppTypography.priceDisplay)
                 .foregroundColor(AppColors.textPrimaryDark)
+                .accessibilityLabel("Price: \(product.formattedPrice)")
 
             Spacer()
 
@@ -559,10 +572,13 @@ struct ProductDetailView: View {
                 Circle()
                     .fill(stockColor)
                     .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
                 Text(stockLabel)
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.textSecondaryDark)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Stock status: \(stockLabel)")
             .animation(.easeInOut(duration: 0.2), value: selectedColorIndex)
             .animation(.easeInOut(duration: 0.2), value: selectedSizeIndex)
         }
@@ -581,11 +597,16 @@ struct ProductDetailView: View {
                     .font(AppTypography.overline)
                     .foregroundColor(AppColors.textSecondaryDark)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Colour: \(colorVariants[selectedColorIndex])")
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppSpacing.sm) {
                     ForEach(colorVariants.indices, id: \.self) { idx in
                         colorChip(index: idx)
+                            .accessibilityLabel("\(colorVariants[idx])\(selectedColorIndex == idx ? ", selected" : "")")
+                            .accessibilityAddTraits(selectedColorIndex == idx ? [.isButton, .isSelected] : .isButton)
+                            .accessibilityHint("Double tap to select \(colorVariants[idx])")
                     }
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -603,16 +624,21 @@ struct ProductDetailView: View {
                     .font(AppTypography.overline)
                     .tracking(2)
                     .foregroundColor(AppColors.accent)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button("Size Guide") {}
                     .font(AppTypography.caption)
                     .foregroundColor(AppColors.accent)
+                    .accessibilityLabel("View size guide")
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppSpacing.xs) {
                     ForEach(sizeVariants.indices, id: \.self) { idx in
                         sizeChip(index: idx)
+                            .accessibilityLabel("Size \(sizeVariants[idx])\(selectedSizeIndex == idx ? ", selected" : "")")
+                            .accessibilityAddTraits(selectedSizeIndex == idx ? [.isButton, .isSelected] : .isButton)
+                            .accessibilityHint("Double tap to select size \(sizeVariants[idx])")
                     }
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -629,6 +655,7 @@ struct ProductDetailView: View {
                 .font(AppTypography.overline)
                 .tracking(2)
                 .foregroundColor(AppColors.accent)
+                .accessibilityAddTraits(.isHeader)
             Text(product.productDescription)
                 .font(AppTypography.bodyLarge)
                 .foregroundColor(AppColors.textSecondaryDark)
@@ -644,6 +671,7 @@ struct ProductDetailView: View {
                 .font(AppTypography.overline)
                 .tracking(2)
                 .foregroundColor(AppColors.accent)
+                .accessibilityAddTraits(.isHeader)
 
             detailRow(label: "Brand",    value: product.brand)
             detailRow(label: "Category", value: product.categoryName)
@@ -1103,6 +1131,12 @@ struct ProductDetailView: View {
             }
             .opacity((variantStockCount > 0 || hasActiveReservation) ? 1 : 0.45)
             .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
+            .accessibilityLabel(
+                (variantStockCount > 0 || hasActiveReservation)
+                ? (addedToBag ? "Added to bag" : (cartItemQuantity > 0 ? "Add another to bag" : "Add to bag"))
+                : "Out of stock"
+            )
+            .accessibilityHint((variantStockCount > 0 || hasActiveReservation) ? "Double tap to add this item to your shopping bag" : "This item is currently unavailable")
 
             // Secondary row: Buy Now + Reserve
             HStack(spacing: 10) {
@@ -1120,6 +1154,8 @@ struct ProductDetailView: View {
                         )
                 }
                 .disabled((variantStockCount == 0 && !hasActiveReservation) && !appState.isGuest)
+                .accessibilityLabel(hasActiveReservation ? "Buy reserved item" : "Buy now")
+                .accessibilityHint("Double tap to purchase this item directly")
 
                 Button(action: { handleReserve() }) {
                     Text(hasActiveReservation ? "Reserved" : "Reserve")
@@ -1132,6 +1168,8 @@ struct ProductDetailView: View {
                 }
                 .disabled((variantStockCount == 0 || hasActiveReservation) && !appState.isGuest)
                 .opacity((variantStockCount > 0 && !hasActiveReservation) ? 1 : 0.45)
+                .accessibilityLabel(hasActiveReservation ? "Already reserved" : "Reserve in boutique")
+                .accessibilityHint(hasActiveReservation ? "This item is already reserved for you" : "Double tap to reserve this item at a boutique")
             }
 
             // Store availability hint
