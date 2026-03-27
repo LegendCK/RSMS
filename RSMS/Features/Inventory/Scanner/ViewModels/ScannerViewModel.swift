@@ -9,13 +9,13 @@
 
 import SwiftUI
 
-// MARK: - ScanState
-
 enum ScanState: Equatable {
     case idle
+    case scanning
     case found(ScanResult)
-    case duplicate(String)   // Human-readable "Already scanned: <barcode>"
-    case error(String)       // Human-readable error from ScanError.errorDescription
+    case warning(String, ScanResult?)
+    case error(String)
+    case info(String, ScanResult?)
 }
 
 // MARK: - ScannerViewModel
@@ -27,10 +27,9 @@ final class ScannerViewModel {
     // MARK: - State
 
     var scanState: ScanState = .idle
+    var currentScanItem: ScanResult? = nil
     var sessionActive: Bool = false
-    var recentScans: [ScanResult] = []
-    var highlightedScanId: UUID? = nil
-    var currentScanType: ScanType = .in
+    var currentScanType: ScanType = .stockIn
     var isStartingSession: Bool = false
     var totalSessionScans: Int = 0
 
@@ -55,9 +54,11 @@ final class ScannerViewModel {
 
         do {
             try await manager.startSession(type: currentScanType)
-            sessionActive = true
-            scanState     = .idle
-            recentScans   = []
+            triggerFeedback(.success)
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                sessionActive = true
+                scanState     = .idle
+            }
             totalSessionScans = 0
         } catch {
             scanState = .error("Failed to start session: \(error.localizedDescription)")
@@ -93,23 +94,11 @@ final class ScannerViewModel {
             return
 
         case .duplicate:
-            // Just highlight the duplicate scan briefly
             triggerFeedback(.warning)
-            
-            if let existing = recentScans.first(where: { $0.barcode == barcode }) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                    highlightedScanId = existing.id
-                }
-                
-                Task {
-                    try? await Task.sleep(for: .seconds(1.5))
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        if self.highlightedScanId == existing.id {
-                            self.highlightedScanId = nil
-                        }
-                    }
-                }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                scanState = .warning("Already scanned", currentScanItem)
             }
+            scheduleClearState(after: 2)
             return
 
         case .noActiveSession:
@@ -122,26 +111,32 @@ final class ScannerViewModel {
         }
 
         // Dispatch async scan — keeps UI responsive
+        scanState = .scanning
         Task {
             do {
                 let result = try await manager.process(barcode: barcode)
                 triggerFeedback(.success)
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                    currentScanItem = result
                     scanState = .found(result)
-                    recentScans.insert(result, at: 0)
                     totalSessionScans += 1
-                    
-                    if recentScans.count > 50 {
-                        recentScans = Array(recentScans.prefix(50))
-                    }
                 }
-                // Auto-dismiss the result card after 5 seconds
-                scheduleClearState(after: 5, clearFound: true)
+                // No auto-dismissal. The user must explicitly close it.
             } catch let scanErr as ScanError {
-                triggerFeedback(.error)
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                    // ScanError.barcodeNotFound already contains "Unknown barcode: <value>"
-                    scanState = .error(scanErr.errorDescription ?? "Unknown error.")
+                    switch scanErr {
+                    case .stateWarning(let msg, let dto):
+                        triggerFeedback(.warning)
+                        let item = ScanResult(from: dto, barcode: barcode, scanType: currentScanType)
+                        scanState = .warning(msg, item)
+                    case .stateInfo(let msg, let dto):
+                        triggerFeedback(.warning)
+                        let item = ScanResult(from: dto, barcode: barcode, scanType: currentScanType)
+                        scanState = .info(msg, item)
+                    default:
+                        triggerFeedback(.error)
+                        scanState = .error(scanErr.errorDescription ?? "Unknown error.")
+                    }
                 }
                 scheduleClearState(after: 4)
             } catch _ as URLError {
@@ -153,7 +148,12 @@ final class ScannerViewModel {
             } catch {
                 triggerFeedback(.error)
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                    scanState = .error(error.localizedDescription)
+                    let msg = error.localizedDescription
+                    if msg.lowercased().contains("already") || msg.lowercased().contains("duplicate") {
+                        scanState = .warning(msg, currentScanItem)
+                    } else {
+                        scanState = .error(msg)
+                    }
                 }
                 scheduleClearState(after: 4)
             }

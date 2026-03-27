@@ -30,15 +30,24 @@ enum ProductItemStatus: String, Codable, CaseIterable {
 }
 
 enum ScanType: String, Codable, CaseIterable {
-    case `in`  = "IN"
-    case out   = "OUT"
-    case audit = "AUDIT"
-    case `return` = "RETURN"
+    case stockIn
+    case stockOut
+    case audit
+    case `return`
+
+    var dbValue: String {
+        switch self {
+        case .stockIn: return "IN"
+        case .stockOut: return "OUT"
+        case .audit: return "AUDIT"
+        case .return: return "RETURN"
+        }
+    }
 
     var displayName: String {
         switch self {
-        case .in:    return "Stock In"
-        case .out:   return "Stock Out"
+        case .stockIn: return "Stock In"
+        case .stockOut: return "Stock Out"
         case .audit: return "Audit"
         case .return: return "Return"
         }
@@ -111,7 +120,7 @@ extension ScanLogInsertDTO {
     init(barcode: String, sessionId: UUID, type: ScanType) {
         self.barcode    = barcode
         self.sessionId  = sessionId
-        self.type       = type.rawValue
+        self.type       = type.dbValue
     }
 }
 

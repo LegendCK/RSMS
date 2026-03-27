@@ -23,7 +23,15 @@ struct ScanResultDTO: Codable {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = "INR"
-        return formatter.string(from: NSNumber(value: price)) ?? "₹\(price)"
+        formatter.maximumFractionDigits = 0 // Remove unnecessary ".00"
+        
+        let lakhs = price / 100000.0
+        if lakhs >= 1.0 {
+            let str = String(format: "₹%.1fL", lakhs).replacingOccurrences(of: ".0L", with: "L")
+            return str
+        }
+        
+        return formatter.string(from: NSNumber(value: price)) ?? "₹\(Int(price))"
     }
 
     var itemStatusEnum: ProductItemStatus {

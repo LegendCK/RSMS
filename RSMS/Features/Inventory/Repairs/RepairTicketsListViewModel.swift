@@ -63,6 +63,10 @@ final class RepairTicketsListViewModel {
         self.init(storeId: storeId, service: ServiceTicketService.shared)
     }
 
+    func refresh() {
+        Task { await load() }
+    }
+
     // MARK: - Load
 
     func load() async {
