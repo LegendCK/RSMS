@@ -162,6 +162,8 @@ struct WishlistView: View {
                     .frame(width: 36, height: 36)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(product.name) from wishlist")
+            .accessibilityHint("Double tap to remove from your wishlist")
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .semibold))
@@ -170,6 +172,9 @@ struct WishlistView: View {
         .padding(AppSpacing.cardPadding)
         .background(AppColors.backgroundSecondary)
         .cornerRadius(AppSpacing.radiusMedium)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(product.brand) \(product.name), \(product.formattedPrice), \(product.stockCount > 0 ? "in stock" : "out of stock")")
+        .accessibilityHint("Double tap to view product details")
     }
 
     private func hydrateFromBackend() async {

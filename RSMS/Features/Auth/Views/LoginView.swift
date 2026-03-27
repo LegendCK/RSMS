@@ -32,6 +32,9 @@ struct LoginView: View {
                                 .tracking(6)
                                 .foregroundColor(.primary)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Maison Luxe")
+                        .accessibilityAddTraits(.isHeader)
                         .padding(.top, 72)
                         .padding(.bottom, 36)
 
@@ -44,6 +47,8 @@ struct LoginView: View {
                                 .font(.system(size: 15, weight: .regular))
                                 .foregroundColor(.secondary)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(.isHeader)
                         .padding(.bottom, 44)
 
                         // ── Form Fields ──────────────────────────────
@@ -97,6 +102,8 @@ struct LoginView: View {
                                 .clipShape(Capsule())
                             }
                             .disabled(viewModel.isLoading)
+                            .accessibilityLabel(viewModel.isLoading ? "Signing in" : "Sign In")
+                            .accessibilityHint("Double tap to sign in to your account")
 
                             orDivider
 
@@ -105,6 +112,7 @@ struct LoginView: View {
                                 Text("New to Maison Luxe?")
                                     .font(.system(size: 13, weight: .regular))
                                     .foregroundColor(.secondary)
+                                    .accessibilityHidden(true)
 
                                 Button { showSignUp = true } label: {
                                     Text("CREATE ACCOUNT")
@@ -133,6 +141,8 @@ struct LoginView: View {
                                     .underline()
                                     .foregroundColor(.secondary)
                             }
+                            .accessibilityLabel("Browse as Guest")
+                            .accessibilityHint("Double tap to browse without signing in")
 
                             Text("Staff accounts are provisioned by management")
                                 .font(.system(size: 12, weight: .regular))
@@ -246,6 +256,8 @@ func authPasswordField(
                 .font(.system(size: 15, weight: .light))
                 .foregroundColor(.secondary)
         }
+        .accessibilityLabel(showPassword.wrappedValue ? "Hide password" : "Show password")
+        .accessibilityHint("Double tap to \(showPassword.wrappedValue ? "hide" : "show") password")
     }
     .padding(.bottom, 14)
     .overlay(alignment: .bottom) {

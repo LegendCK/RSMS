@@ -95,6 +95,8 @@ struct EmailOTPVerificationView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .disabled(viewModel.isLoading || !viewModel.isValid)
+                    .accessibilityLabel(viewModel.isLoading ? "Verifying code" : "Verify")
+                    .accessibilityHint(viewModel.isValid ? "Double tap to verify your code" : "Enter all 6 digits to verify")
                     .padding(.horizontal, 32)
                     .padding(.bottom, 60)
                 }
@@ -142,6 +144,9 @@ struct EmailOTPVerificationView: View {
             }
             .contentShape(Rectangle())
             .onTapGesture { isCodeFocused = true }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Verification code input, \(viewModel.otpCode.count) of 6 digits entered")
+            .accessibilityHint("Tap to enter your 6-digit verification code")
         }
         .onAppear { isCodeFocused = true }
     }
@@ -189,11 +194,14 @@ struct EmailOTPVerificationView: View {
                 Text("Didn't receive the code?")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
+                    .accessibilityHidden(true)
                 Button("Resend") {
                     viewModel.resendOTP()
                 }
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(AppColors.accent)
+                .accessibilityLabel("Resend verification code")
+                .accessibilityHint("Double tap to send a new code to your email")
             }
         }
     }

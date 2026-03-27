@@ -25,10 +25,12 @@ struct RecommendedForYouSection: View {
                     Image(systemName: "sparkles")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(AppColors.accent)
+                        .accessibilityHidden(true)
                     Text("RECOMMENDED FOR YOU")
                         .font(.system(size: 13, weight: .black))
                         .tracking(2)
                         .foregroundColor(.primary)
+                        .accessibilityAddTraits(.isHeader)
                     Spacer()
                 }
                 .padding(.horizontal, 20)
@@ -123,6 +125,9 @@ struct RecommendedForYouSection: View {
                 .stroke(AppColors.border.opacity(0.35), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 1)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Recommended: \(product.brand) \(product.name), \(product.formattedPrice)")
+        .accessibilityHint("Double tap to view product details")
     }
 
     @ViewBuilder
