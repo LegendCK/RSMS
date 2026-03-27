@@ -139,6 +139,8 @@ struct OrderDetailView: View {
                             .font(.subheadline)
                             .foregroundColor(AppColors.success)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Tax exempt, \(formatCurrency(order.tax))")
                 } else {
                     summaryRow(label: "Tax", value: formatCurrency(order.tax))
                 }
@@ -158,10 +160,14 @@ struct OrderDetailView: View {
                         .font(.headline)
                         .foregroundColor(AppColors.accent)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Order total: \(order.formattedTotal)")
+                .accessibilityAddTraits(.isSummaryElement)
             } header: {
                 Label("Summary", systemImage: "indianrupeesign.circle")
                     .font(.footnote.weight(.semibold))
                     .textCase(nil)
+                    .accessibilityAddTraits(.isHeader)
             }
 
             // ── Tax Exemption (if applicable) ────────────────────────
@@ -306,6 +312,7 @@ struct OrderDetailView: View {
                 Text(order.orderNumber)
                     .font(.title2.bold())
                     .foregroundColor(.primary)
+                    .accessibilityAddTraits(.isHeader)
 
                 Text("Placed \(formattedDate(order.createdAt))")
                     .font(.subheadline)
@@ -316,6 +323,7 @@ struct OrderDetailView: View {
                     Circle()
                         .fill(statusColor(order.status))
                         .frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
                     Text(order.status.rawValue.capitalized)
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(statusColor(order.status))

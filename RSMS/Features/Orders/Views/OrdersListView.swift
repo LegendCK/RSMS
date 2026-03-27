@@ -58,6 +58,8 @@ struct OrdersListView: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal, AppSpacing.screenHorizontal)
                 .padding(.vertical, AppSpacing.md)
+                .accessibilityLabel("Order filter")
+                .accessibilityHint("Select to filter orders by status")
 
                 if filteredOrders.isEmpty {
                     emptyState
@@ -116,6 +118,7 @@ struct OrdersListView: View {
                     .font(AppTypography.emptyStateIcon)
                     .foregroundColor(AppColors.neutral600)
             }
+            .accessibilityHidden(true)
 
             VStack(spacing: AppSpacing.xs) {
                 Text("No Orders Yet")
@@ -130,6 +133,8 @@ struct OrdersListView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No orders yet. Your order history will appear here.")
     }
 
     // MARK: - Order Row
@@ -185,10 +190,14 @@ struct OrdersListView: View {
                     Image(systemName: "chevron.right")
                         .font(AppTypography.chevron)
                         .foregroundColor(AppColors.neutral600)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(AppSpacing.cardPadding)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Order \(order.orderNumber), \(order.status.rawValue), \(orderItemsSummary(order)), \(order.formattedTotal), \(order.fulfillmentType.rawValue), placed \(formattedDate(order.createdAt))")
+        .accessibilityHint("Double tap to view order details")
     }
 
     // MARK: - Helpers

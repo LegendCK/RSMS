@@ -32,6 +32,8 @@ struct ClientProfileEditView: View {
     @State private var showError = false
     @State private var showSuccessBanner = false
     @State private var errorMessage = ""
+    @State private var loadTask: Task<Void, Never>?
+    @State private var saveTask: Task<Void, Never>?
 
     // MARK: - ISO date formatter (yyyy-MM-dd — required by Supabase)
     private static let isoFormatter: DateFormatter = {
@@ -155,17 +157,25 @@ struct ClientProfileEditView: View {
             }
         }
         .task {
-            await loadProfile()
+            loadTask?.cancel()
+            loadTask = Task { await loadProfile() }
         }
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage)
         }
+        .onDisappear {
+            loadTask?.cancel()
+            loadTask = nil
+            saveTask?.cancel()
+            saveTask = nil
+        }
     }
 
     @MainActor
     private func loadProfile() async {
+        guard !Task.isCancelled else { return }
         isInitialLoading = true
         defer { isInitialLoading = false }
 
@@ -191,9 +201,12 @@ struct ClientProfileEditView: View {
             postalCode = profile.postalCode ?? ""
             country = profile.country ?? ""
             marketingOptIn = profile.marketingOptIn
+            loadTask = nil
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
             showError = true
+            loadTask = nil
         }
     }
 
@@ -211,7 +224,8 @@ struct ClientProfileEditView: View {
         let dob = Self.isoFormatter.string(from: dobDate)
 
         isLoading = true
-        Task { @MainActor in
+        saveTask?.cancel()
+        saveTask = Task { @MainActor in
             defer { isLoading = false }
 
             do {
@@ -237,12 +251,13 @@ struct ClientProfileEditView: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     showSuccessBanner = true
                 }
-
-                try? await Task.sleep(nanoseconds: 900_000_000)
+                saveTask = nil
                 dismiss()
             } catch {
+                guard !Task.isCancelled else { return }
                 errorMessage = error.localizedDescription
                 showError = true
+                saveTask = nil
             }
         }
     }

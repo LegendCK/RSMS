@@ -273,6 +273,7 @@ struct CreateUserSheet: View {
     @State private var errorMessage = ""
     @State private var showSuccess = false
     @State private var createdName = ""
+    @State private var createTask: Task<Void, Never>?
 
     private let creatableRoles: [UserRole] = [
         .boutiqueManager,
@@ -411,7 +412,8 @@ struct CreateUserSheet: View {
 
                         // Create button
                         Button {
-                            Task { await createUser() }
+                            createTask?.cancel()
+                            createTask = Task { await createUser() }
                         } label: {
                             HStack(spacing: 8) {
                                 if isCreating {
@@ -457,6 +459,10 @@ struct CreateUserSheet: View {
                 Button("Done") { dismiss() }
             } message: {
                 Text("\(createdName)'s account has been provisioned. Share the temporary password so they can log in.")
+            }
+            .onDisappear {
+                createTask?.cancel()
+                createTask = nil
             }
         }
     }
@@ -506,6 +512,8 @@ struct CreateUserSheet: View {
 
     @MainActor
     private func createUser() async {
+        guard !Task.isCancelled else { return }
+
         let trimmedName           = name.trimmingCharacters(in: .whitespaces)
         let trimmedCorporateEmail = corporateEmail.trimmingCharacters(in: .whitespaces).lowercased()
         let trimmedPersonalEmail  = personalEmail.trimmingCharacters(in: .whitespaces).lowercased()
@@ -535,6 +543,8 @@ struct CreateUserSheet: View {
                 personalEmail: trimmedPersonalEmail
             )
 
+            guard !Task.isCancelled else { return }
+
             // 2 — Mirror into local SwiftData so UserManagementView refreshes instantly
             let local = User(
                 name: dto.fullName,
@@ -561,9 +571,12 @@ struct CreateUserSheet: View {
 
             createdName = dto.fullName
             showSuccess = true
+            createTask = nil
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
             showError = true
+            createTask = nil
         }
     }
 }

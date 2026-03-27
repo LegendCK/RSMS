@@ -5,6 +5,9 @@ struct CustomerBookAppointmentView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var vm = CustomerBookAppointmentViewModel()
     @State private var showSuccess = false
+    @State private var loadTask: Task<Void, Never>?
+    @State private var availabilityTask: Task<Void, Never>?
+    @State private var submitTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -30,7 +33,8 @@ struct CustomerBookAppointmentView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Submit") {
-                    Task {
+                    submitTask?.cancel()
+                    submitTask = Task {
                         if await vm.submitAppointmentRequest(clientId: appState.currentUserProfile?.id) != nil {
                             showSuccess = true
                         }
@@ -42,11 +46,13 @@ struct CustomerBookAppointmentView: View {
         }
         .task {
             if canBook {
-                await vm.loadStores()
+                loadTask?.cancel()
+                loadTask = Task { await vm.loadStores() }
             }
         }
         .onChange(of: vm.selectedStoreId) { _, _ in
-            Task { await vm.refreshAvailabilityForSelectedStore() }
+            availabilityTask?.cancel()
+            availabilityTask = Task { await vm.refreshAvailabilityForSelectedStore() }
         }
         .alert("Request Submitted", isPresented: $showSuccess) {
             Button("OK") { dismiss() }
@@ -65,6 +71,14 @@ struct CustomerBookAppointmentView: View {
                     ProgressView().tint(AppColors.accent)
                 }
             }
+        }
+        .onDisappear {
+            loadTask?.cancel()
+            loadTask = nil
+            availabilityTask?.cancel()
+            availabilityTask = nil
+            submitTask?.cancel()
+            submitTask = nil
         }
     }
 

@@ -6,6 +6,8 @@ struct MyExchangeRequestsView: View {
     @State private var tickets: [ServiceTicketDTO] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var loadTask: Task<Void, Never>?
+    @State private var pollingTask: Task<Void, Never>?
 
     private var exchangeTickets: [ServiceTicketDTO] {
         tickets.filter { ticket in
@@ -63,11 +65,24 @@ struct MyExchangeRequestsView: View {
         .navigationTitle("My Exchange Requests")
         .toolbar(.hidden, for: .tabBar)
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadTickets() }
-        .task { await startPolling() }
+        .task {
+            loadTask?.cancel()
+            loadTask = Task { await loadTickets() }
+        }
+        .task {
+            pollingTask?.cancel()
+            pollingTask = Task { await startPolling() }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
-            Task { await loadTickets() }
+            loadTask?.cancel()
+            loadTask = Task { await loadTickets() }
+        }
+        .onDisappear {
+            loadTask?.cancel()
+            loadTask = nil
+            pollingTask?.cancel()
+            pollingTask = nil
         }
     }
 
@@ -121,6 +136,7 @@ struct MyExchangeRequestsView: View {
 
     @MainActor
     private func loadTickets() async {
+        guard !Task.isCancelled else { return }
         guard !isLoading else { return }
         guard !appState.isGuest,
               let clientId = appState.currentUserProfile?.id ?? appState.currentClientProfile?.id else {
@@ -134,8 +150,11 @@ struct MyExchangeRequestsView: View {
 
         do {
             tickets = try await ServiceTicketService.shared.fetchTickets(clientId: clientId)
+            loadTask = nil
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
+            loadTask = nil
         }
     }
 
@@ -145,6 +164,7 @@ struct MyExchangeRequestsView: View {
             guard scenePhase == .active else { continue }
             await loadTickets()
         }
+        pollingTask = nil
     }
 
     private func exchangeStatusDisplayName(for raw: String) -> String {

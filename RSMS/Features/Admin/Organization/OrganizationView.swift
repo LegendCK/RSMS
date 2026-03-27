@@ -953,6 +953,7 @@ struct OrgManageStaffSheet: View {
     @State private var role: UserRole
     @State private var isActive: Bool
     @State private var selectedStoreId: UUID?
+    @State private var saveTask: Task<Void, Never>?
 
     init(user: User, availableStores: [StoreLocation]) {
         self.user = user
@@ -1009,13 +1010,19 @@ struct OrgManageStaffSheet: View {
                         user.storeId = selectedStoreId
                         user.isActive = isActive
                         try? modelContext.save()
-                        Task {
+                        saveTask?.cancel()
+                        saveTask = Task {
                             _ = try? await StaffSyncService.shared.updateStaffIfExists(user)
+                            guard !Task.isCancelled else { return }
                             dismiss()
                         }
                     }
                     .foregroundColor(AppColors.accent)
                 }
+            }
+            .onDisappear {
+                saveTask?.cancel()
+                saveTask = nil
             }
         }
     }
@@ -1103,7 +1110,7 @@ struct OrgCreateStaffSheet: View {
     @State private var selectedStoreId: UUID?
     @State private var errorMessage: String?
     @State private var isCreating = false
-    @State private var successMessage: String?
+    @State private var createTask: Task<Void, Never>?
 
     private let creatableRoles: [UserRole] = [
         .boutiqueManager,
@@ -1182,17 +1189,6 @@ struct OrgCreateStaffSheet: View {
                             .foregroundColor(AppColors.error)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-
-                    if let successMessage {
-                        HStack(spacing: AppSpacing.xs) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(AppColors.success)
-                            Text(successMessage)
-                                .font(AppTypography.caption)
-                                .foregroundColor(AppColors.success)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
                 .padding(.top, AppSpacing.sm)
@@ -1207,7 +1203,8 @@ struct OrgCreateStaffSheet: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        Task { await createStaff() }
+                        createTask?.cancel()
+                        createTask = Task { await createStaff() }
                     } label: {
                         if isCreating {
                             ProgressView().tint(AppColors.accent)
@@ -1219,6 +1216,10 @@ struct OrgCreateStaffSheet: View {
                     .opacity((isFormValid && !isCreating) ? 1 : 0.45)
                     .foregroundColor(AppColors.accent)
                 }
+            }
+            .onDisappear {
+                createTask?.cancel()
+                createTask = nil
             }
         }
     }
@@ -1235,9 +1236,9 @@ struct OrgCreateStaffSheet: View {
 
     private func createStaff() async {
         guard isFormValid else { return }
+        guard !Task.isCancelled else { return }
         isCreating = true
         errorMessage = nil
-        successMessage = nil
         defer { isCreating = false }
 
         let trimmedCorporateEmail = corporateEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -1255,6 +1256,8 @@ struct OrgCreateStaffSheet: View {
                 personalEmail: trimmedPersonalEmail
             )
 
+            guard !Task.isCancelled else { return }
+
             let newUser = User(
                 name: dto.fullName,
                 email: dto.email,
@@ -1269,14 +1272,14 @@ struct OrgCreateStaffSheet: View {
             modelContext.insert(newUser)
             try? modelContext.save()
 
-            successMessage = "Staff account created for \(dto.email)"
             onCreated(newUser)
-
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            createTask = nil
             dismiss()
 
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
+            createTask = nil
         }
     }
 
