@@ -18,6 +18,7 @@ struct ScannedItemCard: View {
 
     let result: ScanResult
     var onClose: () -> Void
+    var onLogRepair: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -75,7 +76,29 @@ struct ScannedItemCard: View {
             // Status Pill
             statusPill
                 .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+                
+            // MARK: - Log Repair Button
+            Button(action: {
+                onLogRepair?()
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                        .foregroundColor(Color(red: 0.85, green: 0.65, blue: 0.13))
+                    Text("Log Repair")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color(red: 0.11, green: 0.11, blue: 0.12)) // #1C1C1E
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(red: 0.85, green: 0.65, blue: 0.13), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
         }
         .background(Color(red: 17/255, green: 17/255, blue: 20/255).opacity(0.94))
         .clipShape(RoundedRectangle(cornerRadius: 20))

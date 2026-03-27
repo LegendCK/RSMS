@@ -29,6 +29,7 @@ struct ScannerView: View {
     @State private var flashOverlay     = false     // Success flash
     @State private var persistentCard: ScanResult?  // Persistent item sheet
     @State private var selectedRepairItem: ScanResult? // Repair item sheet
+    @State private var isRepairSheetOpen = false    // Blocks auto-dismiss
     
     @Environment(AppState.self) private var appState
 
@@ -92,13 +93,18 @@ struct ScannerView: View {
                 Task { await processPickedImage(image) }
             }
         }
-        .sheet(item: $selectedRepairItem) { item in
+        .sheet(item: $selectedRepairItem, onDismiss: {
+            isRepairSheetOpen = false
+        }) { item in
             RepairIntakeView(
                 scanResult: item,
                 storeId: appState.currentStoreId ?? UUID(),
                 assignedToUserId: appState.currentUserProfile?.id
             )
             .environment(appState)
+            .onAppear {
+                isRepairSheetOpen = true
+            }
         }
         .onChange(of: viewModel.scanState) { _, newValue in
             switch newValue {
@@ -212,6 +218,12 @@ struct ScannerView: View {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                         persistentCard = nil
                     }
+                    if !isRepairSheetOpen {
+                        viewModel.scanState = .idle
+                    }
+                }, onLogRepair: {
+                    selectedRepairItem = result
+                    isRepairSheetOpen = true
                 })
                     .padding(.horizontal, 16)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
