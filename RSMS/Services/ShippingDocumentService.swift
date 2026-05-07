@@ -131,7 +131,7 @@ enum ShippingDocumentService {
                      x: left + 230, y: y, width: 100)
             drawText("Qty", .systemFont(ofSize: 10, weight: .semibold), .darkGray,
                      x: left + 340, y: y, width: 50, alignment: .center)
-            drawText("Price", .systemFont(ofSize: 10, weight: .semibold), .darkGray,
+            drawText("Line Total", .systemFont(ofSize: 10, weight: .semibold), .darkGray,
                      x: left + 400, y: y, width: 130, alignment: .right)
             y += 16
 
